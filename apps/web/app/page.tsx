@@ -4,6 +4,7 @@ import { CategoryGrid } from '@/components/CategoryGrid';
 import { DownloadBand } from '@/components/DownloadBand';
 import { Faq, faqJsonLd } from '@/components/Faq';
 import { Icon } from '@/components/Icon';
+import { HeroArt } from '@/components/HeroArt';
 
 const steps = [
   { n: '1', t: 'Elige el servicio', d: 'Busca lo que necesitas y compara profesionales por precio, reseñas y disponibilidad.' },
@@ -24,7 +25,8 @@ export default function HomePage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
 
       <section className="hero">
-        <div className="container stack gap-24">
+        <div className="container hero-grid">
+        <div className="stack gap-24">
           <span className="eyebrow">Guayaquil · Samborondón · Daule</span>
           <h1>¿Qué necesitas resolver hoy en tu hogar?</h1>
           <form action="/buscar" className="search" role="search">
@@ -40,6 +42,8 @@ export default function HomePage() {
               <li key={p.t}><Icon name={p.icon} size={18} color="#9A5B34" strokeWidth={2} />{p.t}</li>
             ))}
           </ul>
+        </div>
+        <HeroArt />
         </div>
       </section>
 

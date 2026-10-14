@@ -207,3 +207,20 @@ details p { margin-top: 10px; color: var(--text-2); }
 /* Garantías bajo el buscador */
 .trust-row { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 14.5px; font-weight: 600; color: var(--text-2); }
 .trust-row li { display: flex; align-items: center; gap: 8px; }
+
+/* Portada con ilustración */
+.hero-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: center; }
+.hero-art { position: relative; width: 100%; max-width: 520px; aspect-ratio: 520 / 440; justify-self: end; }
+.hero-chip {
+  position: absolute; display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 10px 14px; box-shadow: 0 10px 30px rgba(28, 26, 26, .10); white-space: nowrap;
+}
+.hero-chip-top { top: 6%; right: -2%; }
+.hero-chip-left { top: 44%; left: -4%; }
+.hero-chip-bottom { bottom: 2%; right: 4%; }
+.hero-chip-icon { width: 34px; height: 34px; border-radius: 10px; background: var(--success-soft); display: flex; align-items: center; justify-content: center; }
+@media (max-width: 900px) {
+  .hero-grid { grid-template-columns: minmax(0, 1fr); }
+  .hero-art { display: none; }
+}
