@@ -1,12 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { categories, cities } from '@hulul/shared';
 
 /**
  * Formulario de registro de profesionales.
  * Pendiente: guardar la solicitud en Firestore (colección `applications`)
  * cuando se conecte Firebase. Por ahora solo confirma en pantalla.
+ * Al guardarla, registrar también la aceptación como prueba del
+ * consentimiento: fecha, PRIVACY_VERSION y si aceptó promociones.
  */
 export function JoinForm() {
   const [sent, setSent] = useState(false);
@@ -54,6 +57,21 @@ export function JoinForm() {
         <label htmlFor="experiencia">Cuéntanos tu experiencia</label>
         <textarea id="experiencia" name="experiencia" rows={4} />
       </div>
+
+      <div className="stack gap-12" style={{ paddingTop: 4 }}>
+        <label className="check">
+          <input type="checkbox" name="acepta_privacidad" required />
+          <span>
+            He leído y acepto la <Link href="/legal/privacidad" target="_blank">Política de privacidad</Link> y los{' '}
+            <Link href="/legal/terminos" target="_blank">Términos y condiciones</Link>. Autorizo a HULUL a tratar mis datos para revisar mi solicitud y verificar mi perfil.
+          </span>
+        </label>
+        <label className="check">
+          <input type="checkbox" name="acepta_promociones" />
+          <span>Quiero recibir novedades y promociones de HULUL (opcional).</span>
+        </label>
+      </div>
+
       <button type="submit" className="btn btn-primary">Quiero ser profesional HULUL</button>
     </form>
   );

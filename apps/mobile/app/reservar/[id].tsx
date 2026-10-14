@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
+import { Checkbox } from '@/components/Checkbox';
 import { formatUSD, getProfessional, quote, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
@@ -20,6 +21,8 @@ export default function BookingScreen() {
   const [notes, setNotes] = useState('');
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
   const [error, setError] = useState('');
+  const [agreed, setAgreed] = useState(false);
+  const [agreeError, setAgreeError] = useState(false);
 
   if (!pro) {
     return (
@@ -36,6 +39,10 @@ export default function BookingScreen() {
   const onConfirm = () => {
     if (address.trim().length < 8) {
       setError('Escribe la dirección completa para que el profesional pueda llegar.');
+      return;
+    }
+    if (!agreed) {
+      setAgreeError(true);
       return;
     }
     confirm({ professionalId: pro.id, dayIndex: day, slotIndex: slot, hours, address, notes, payment, total: q.total });
@@ -147,6 +154,16 @@ export default function BookingScreen() {
               <Text style={s.totalText}>{formatUSD(q.total)}</Text>
             </View>
           </View>
+
+          <View style={{ gap: 6 }}>
+            <Checkbox checked={agreed} onChange={(v) => { setAgreed(v); setAgreeError(false); }}>
+              <Body style={{ fontSize: 13.5 }}>
+                Acepto que HULUL comparta mi nombre, la dirección y la descripción del trabajo con {pro.name} para realizar este servicio, según la{' '}
+                <Link href="/privacidad" style={s.link}>Política de privacidad</Link>.
+              </Body>
+            </Checkbox>
+            {agreeError && <Text style={s.error}>Marca la casilla para confirmar la reserva.</Text>}
+          </View>
         </ScrollView>
 
         <View style={s.footer}>
@@ -185,6 +202,7 @@ const s = StyleSheet.create({
   stepperText: { fontSize: 20, color: c.text },
   input: { minHeight: 50, paddingHorizontal: 14, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, fontFamily: font.body, fontSize: 14.5, color: c.text },
   error: { fontFamily: font.bodySemi, fontSize: 13, color: c.primary },
+  link: { color: c.primary, fontFamily: font.bodyBold, textDecorationLine: 'underline' },
   pay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 52, paddingHorizontal: 16, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   payText: { fontFamily: font.bodySemi, fontSize: 14, color: c.text },
   radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: '#A39C95' },

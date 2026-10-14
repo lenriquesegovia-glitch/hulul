@@ -5,3 +5,4 @@ export * from './pricing';
 export * from './models';
 export * from './demo-data';
 export * from './icons';
+export * from './legal';

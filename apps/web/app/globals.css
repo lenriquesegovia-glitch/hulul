@@ -139,7 +139,24 @@ details p { margin-top: 10px; color: var(--text-2); }
 .footer a:hover { color: var(--primary); }
 .footer h3 { font-family: var(--font-body); font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
 
+/* Aviso de cookies */
+.cookie-banner {
+  position: fixed; z-index: 50; left: 16px; right: 16px; bottom: 16px;
+  max-width: 560px; max-height: calc(100vh - 32px); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+  padding: 22px; box-shadow: 0 12px 40px rgba(28, 26, 26, .18);
+}
+.cookie-option { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
+.cookie-option input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--primary); flex-shrink: 0; }
+.link-button { background: none; border: none; padding: 0; font: inherit; color: var(--text-2); cursor: pointer; text-align: left; }
+.link-button:hover { color: var(--primary); }
+
+/* Casillas de aceptación */
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; color: var(--text-2); cursor: pointer; }
+.check input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--primary); flex-shrink: 0; }
+
 @media (max-width: 640px) {
+  .cookie-banner { left: 10px; right: 10px; bottom: 10px; padding: 18px; }
   .section { padding: 44px 0; }
   .hero { padding: 44px 0 36px; }
   .band { padding: 28px 22px; }

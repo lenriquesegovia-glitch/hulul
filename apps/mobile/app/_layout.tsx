@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -11,12 +11,38 @@ import { Manrope_600SemiBold } from '@expo-google-fonts/manrope/600SemiBold';
 import { Manrope_700Bold } from '@expo-google-fonts/manrope/700Bold';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BookingProvider } from '@/lib/booking';
+import { PrivacyProvider, usePrivacy } from '@/lib/privacy';
 import { c } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
+/** Pantallas que se pueden ver sin haber aceptado la política. */
+const OPEN_ROUTES = ['bienvenida', 'privacidad'];
+
+function Navigator({ fontsLoaded }: { fontsLoaded: boolean }) {
+  const { ready, consent } = usePrivacy();
+  const segments = useSegments();
+  const loaded = fontsLoaded && ready;
+
+  useEffect(() => {
+    if (!loaded) return;
+    SplashScreen.hideAsync();
+    const current = segments[0] ?? '';
+    if (!consent && !OPEN_ROUTES.includes(current)) router.replace('/bienvenida');
+  }, [loaded, consent, segments]);
+
+  if (!loaded) return null;
+
+  return (
+    <>
+      <StatusBar style="dark" />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.background } }} />
+    </>
+  );
+}
+
 export default function RootLayout() {
-  const [loaded] = useFonts({
+  const [fontsLoaded] = useFonts({
     Montserrat_700Bold,
     Montserrat_800ExtraBold,
     Manrope_500Medium,
@@ -24,18 +50,13 @@ export default function RootLayout() {
     Manrope_700Bold,
   });
 
-  useEffect(() => {
-    if (loaded) SplashScreen.hideAsync();
-  }, [loaded]);
-
-  if (!loaded) return null;
-
   return (
     <SafeAreaProvider>
-      <BookingProvider>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.background } }} />
-      </BookingProvider>
+      <PrivacyProvider>
+        <BookingProvider>
+          <Navigator fontsLoaded={fontsLoaded} />
+        </BookingProvider>
+      </PrivacyProvider>
     </SafeAreaProvider>
   );
 }

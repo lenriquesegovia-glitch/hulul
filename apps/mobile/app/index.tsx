@@ -99,6 +99,10 @@ export default function Home() {
             </Pressable>
           ))}
         </View>
+
+        <Pressable accessibilityRole="link" onPress={() => router.push('/privacidad')} style={{ alignSelf: 'center', paddingVertical: 12 }}>
+          <Text style={{ fontFamily: font.bodySemi, fontSize: 13, color: c.textMuted, textDecorationLine: 'underline' }}>Política de privacidad</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { categories, cities } from '@hulul/shared';
 import { Logo } from './Logo';
+import { CookieSettingsButton } from './CookieConsent';
 
 export function Footer() {
   const active = cities.filter((c) => c.activa);
@@ -35,6 +36,8 @@ export function Footer() {
               <li><Link href="/#preguntas">Preguntas frecuentes</Link></li>
               <li><Link href="/legal/terminos">Términos y condiciones</Link></li>
               <li><Link href="/legal/privacidad">Política de privacidad</Link></li>
+              <li><Link href="/legal/cookies">Política de cookies</Link></li>
+              <li><CookieSettingsButton /></li>
             </ul>
           </div>
         </div>
