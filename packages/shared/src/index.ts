@@ -6,3 +6,4 @@ export * from './models';
 export * from './demo-data';
 export * from './icons';
 export * from './legal';
+export * from './booking';

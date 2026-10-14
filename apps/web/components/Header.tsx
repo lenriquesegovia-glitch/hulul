@@ -7,11 +7,12 @@ export function Header() {
       <div className="container header-inner">
         <Logo />
         <nav className="nav" aria-label="Principal">
-          <Link href="/#servicios">Servicios</Link>
-          <Link href="/#como-funciona">Cómo funciona</Link>
-          <Link href="/profesionales">Soy profesional</Link>
-          <Link href="/#descargar" className="btn btn-primary" style={{ minHeight: 44 }}>
-            Descargar app
+          <Link href="/#servicios" className="nav-secondary">Servicios</Link>
+          <Link href="/#como-funciona" className="nav-secondary">Cómo funciona</Link>
+          <Link href="/profesionales" className="nav-pro">Soy profesional</Link>
+          <Link href="/#descargar" className="nav-secondary">Descargar app</Link>
+          <Link href="/#servicios" className="btn btn-primary" style={{ minHeight: 44 }}>
+            Reservar
           </Link>
         </nav>
       </div>

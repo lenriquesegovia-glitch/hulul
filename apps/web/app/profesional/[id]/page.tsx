@@ -51,6 +51,10 @@ export default async function ProfessionalPage({ params }: { params: Promise<Par
             </div>
           </div>
 
+          <Link href={`/reservar/${pro.id}`} className="btn btn-primary" style={{ alignSelf: 'flex-start', minHeight: 52, fontSize: 16 }}>
+            Reservar ahora · ${pro.hourlyRate}/hora
+          </Link>
+
           <div className="grid-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
             <div className="card" style={{ textAlign: 'center' }}><div className="price">★ {formatRating(pro.rating)}</div><div className="muted">{pro.reviewCount} reseñas</div></div>
             <div className="card" style={{ textAlign: 'center' }}><div className="price">{pro.jobsDone}</div><div className="muted">servicios</div></div>
@@ -72,6 +76,7 @@ export default async function ProfessionalPage({ params }: { params: Promise<Par
 
           <div className="stack gap-12">
             <h2 style={{ fontSize: 22 }}>Reseñas</h2>
+            {/* Reseñas de ejemplo: se reemplazan por las reales de Firestore. */}
             {demoReviews.map((r) => (
               <div key={r.clientName} className="card stack gap-8">
                 <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -84,7 +89,14 @@ export default async function ProfessionalPage({ params }: { params: Promise<Par
           </div>
         </div>
       </section>
-      <DownloadBand title={`Reserva a ${pro.name} desde la app`} />
+      <section className="section-sm">
+        <div className="container" style={{ maxWidth: 880 }}>
+          <Link href={`/reservar/${pro.id}`} className="btn btn-primary" style={{ width: '100%', minHeight: 54, fontSize: 16 }}>
+            Reservar a {pro.name}
+          </Link>
+        </div>
+      </section>
+      <DownloadBand />
     </>
   );
 }

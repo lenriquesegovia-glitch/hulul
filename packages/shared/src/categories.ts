@@ -21,6 +21,8 @@ export type IconName =
 export interface Category {
   slug: CategorySlug;
   name: string;
+  /** Nombre para los botones de categoría, con guion opcional (\u00AD) donde puede cortarse. */
+  tileName?: string;
   /** Nombre en frase para SEO: "Climatización a domicilio". */
   seoName: string;
   sub: string;
@@ -65,6 +67,7 @@ export const categories: Category[] = [
   {
     slug: 'electrodomesticos',
     name: 'Electrodomésticos',
+    tileName: 'Electro\u00ADdomésticos',
     seoName: 'Reparación de electrodomésticos a domicilio',
     sub: 'Lavadoras, refrigeradoras, cocinas y secadoras',
     icon: 'washer',

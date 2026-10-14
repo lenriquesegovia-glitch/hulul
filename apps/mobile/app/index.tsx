@@ -67,7 +67,7 @@ export default function Home() {
               style={({ pressed }) => [s.tile, pressed && { borderColor: c.copper }]}
             >
               <Icon name={cat.icon} size={26} color={c.copper} />
-              <Text style={s.tileText} numberOfLines={1}>{cat.name}</Text>
+              <Text style={s.tileText} numberOfLines={2}>{cat.tileName ?? cat.name}</Text>
             </Pressable>
           ))}
           {shown.length === 0 && <Body muted>No encontramos ese servicio.</Body>}
@@ -120,7 +120,7 @@ const s = StyleSheet.create({
   searchInput: { flex: 1, fontFamily: font.body, fontSize: 15, color: c.text },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   tile: { width: '23%', flexGrow: 1, alignItems: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 4, borderRadius: 16, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
-  tileText: { fontFamily: font.bodySemi, fontSize: 11.5, color: c.text },
+  tileText: { fontFamily: font.bodySemi, fontSize: 11.5, color: c.text, textAlign: 'center' },
   promise: { gap: 12, padding: 18, borderRadius: radius.lg, backgroundColor: c.surfaceWarm, borderWidth: 1, borderColor: c.border },
   promiseRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   listItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: radius.md, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },

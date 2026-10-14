@@ -12,9 +12,9 @@ const steps = [
 ];
 
 const promises = [
-  { icon: 'shield' as const, t: 'Profesionales verificados', d: 'Revisamos cédula, referencias y experiencia antes de que aparezcan.' },
-  { icon: 'card' as const, t: 'Pago protegido', d: 'Tu dinero queda retenido hasta que apruebes el servicio.' },
-  { icon: 'clock' as const, t: 'Sin presupuestos ni esperas', d: 'Precio por hora visible y reserva en minutos, incluso para hoy.' },
+  { icon: 'shield' as const, t: 'Profesionales verificados' },
+  { icon: 'clock' as const, t: 'Precio claro, sin presupuestos' },
+  { icon: 'card' as const, t: 'Pago protegido' },
 ];
 
 export default function HomePage() {
@@ -27,9 +27,6 @@ export default function HomePage() {
         <div className="container stack gap-24">
           <span className="eyebrow">Guayaquil · Samborondón · Daule</span>
           <h1>¿Qué necesitas resolver hoy en tu hogar?</h1>
-          <p className="lead">
-            Técnicos de aire acondicionado, plomeros, electricistas, limpieza, belleza y más. Reserva a domicilio con precio claro y pago protegido.
-          </p>
           <form action="/buscar" className="search" role="search">
             <Icon name="search" size={20} color="#6B6560" />
             <label htmlFor="q" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
@@ -38,6 +35,11 @@ export default function HomePage() {
             <input id="q" name="q" type="search" placeholder="Aire acondicionado, limpieza, uñas…" />
             <button type="submit" className="btn btn-primary">Buscar</button>
           </form>
+          <ul className="trust-row" aria-label="Por qué HULUL">
+            {promises.map((p) => (
+              <li key={p.t}><Icon name={p.icon} size={18} color="#9A5B34" strokeWidth={2} />{p.t}</li>
+            ))}
+          </ul>
         </div>
       </section>
 
@@ -45,18 +47,6 @@ export default function HomePage() {
         <div className="container stack gap-24">
           <h2 style={{ fontSize: 30 }}>Servicios a domicilio</h2>
           <CategoryGrid />
-        </div>
-      </section>
-
-      <section className="section">
-        <div className="container grid-3">
-          {promises.map((p) => (
-            <div key={p.t} className="card stack gap-12">
-              <span className="cat-icon"><Icon name={p.icon} size={24} color="#9A5B34" /></span>
-              <h3 style={{ fontSize: 19 }}>{p.t}</h3>
-              <p className="muted">{p.d}</p>
-            </div>
-          ))}
         </div>
       </section>
 

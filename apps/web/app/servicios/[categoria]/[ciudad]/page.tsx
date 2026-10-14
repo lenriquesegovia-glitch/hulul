@@ -105,7 +105,7 @@ export default async function CategoryCityPage({ params }: { params: Promise<Par
         </div>
       </section>
 
-      <DownloadBand title={`Reserva ${cat.name.toLowerCase()} en ${city.name} desde la app`} />
+      <DownloadBand title={`Reserva ${cat.name.toLowerCase()} en ${city.name} sin salir de casa`} />
 
       <section className="section-sm">
         <div className="container stack gap-24">
