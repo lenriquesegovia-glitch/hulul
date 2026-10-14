@@ -1,0 +1,22 @@
+{
+  "name": "hulul",
+  "private": true,
+  "version": "0.1.0",
+  "description": "HULUL — servicios del hogar a domicilio en Ecuador (web y app)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "overrides": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-worklets": "0.10.1"
+  },
+  "scripts": {
+    "web": "npm run dev -w @hulul/web",
+    "web:build": "npm run build -w @hulul/web",
+    "app": "npm run start -w @hulul/mobile",
+    "typecheck": "npm run typecheck -w @hulul/shared && npm run typecheck -w @hulul/mobile"
+  }
+}

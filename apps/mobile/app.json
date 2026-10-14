@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "HULUL",
+    "slug": "hulul",
+    "scheme": "hulul",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.hulul.app"
+    },
+    "android": {
+      "package": "com.hulul.app"
+    },
+    "plugins": ["expo-router", "expo-font"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -1,0 +1,103 @@
+import Link from 'next/link';
+import { categories, cities } from '@hulul/shared';
+import { CategoryGrid } from '@/components/CategoryGrid';
+import { DownloadBand } from '@/components/DownloadBand';
+import { Faq, faqJsonLd } from '@/components/Faq';
+import { Icon } from '@/components/Icon';
+
+const steps = [
+  { n: '1', t: 'Elige el servicio', d: 'Busca lo que necesitas y compara profesionales por precio, reseñas y disponibilidad.' },
+  { n: '2', t: 'Reserva y paga', d: 'Elige día, hora y cuántas horas. Ves el total antes de pagar con tarjeta, transferencia o DeUna.' },
+  { n: '3', t: 'Aprueba el trabajo', d: 'Sigue al profesional en la app. El pago se libera cuando confirmas que todo quedó bien.' },
+];
+
+const promises = [
+  { icon: 'shield' as const, t: 'Profesionales verificados', d: 'Revisamos cédula, referencias y experiencia antes de que aparezcan.' },
+  { icon: 'card' as const, t: 'Pago protegido', d: 'Tu dinero queda retenido hasta que apruebes el servicio.' },
+  { icon: 'clock' as const, t: 'Sin presupuestos ni esperas', d: 'Precio por hora visible y reserva en minutos, incluso para hoy.' },
+];
+
+export default function HomePage() {
+  const active = cities.filter((c) => c.activa);
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+
+      <section className="hero">
+        <div className="container stack gap-24">
+          <span className="eyebrow">Guayaquil · Samborondón · Daule</span>
+          <h1>¿Qué necesitas resolver hoy en tu hogar?</h1>
+          <p className="lead">
+            Técnicos de aire acondicionado, plomeros, electricistas, limpieza, belleza y más. Reserva a domicilio con precio claro y pago protegido.
+          </p>
+          <form action="/buscar" className="search" role="search">
+            <Icon name="search" size={20} color="#6B6560" />
+            <label htmlFor="q" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+              Buscar servicio
+            </label>
+            <input id="q" name="q" type="search" placeholder="Aire acondicionado, limpieza, uñas…" />
+            <button type="submit" className="btn btn-primary">Buscar</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="servicios" className="section-sm">
+        <div className="container stack gap-24">
+          <h2 style={{ fontSize: 30 }}>Servicios a domicilio</h2>
+          <CategoryGrid />
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="container grid-3">
+          {promises.map((p) => (
+            <div key={p.t} className="card stack gap-12">
+              <span className="cat-icon"><Icon name={p.icon} size={24} color="#9A5B34" /></span>
+              <h3 style={{ fontSize: 19 }}>{p.t}</h3>
+              <p className="muted">{p.d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="como-funciona" className="section" style={{ background: 'var(--surface-warm)' }}>
+        <div className="container stack gap-32">
+          <h2 style={{ fontSize: 30 }}>Cómo funciona</h2>
+          <div className="grid-3">
+            {steps.map((s) => (
+              <div key={s.n} className="stack gap-12">
+                <span className="avatar" style={{ width: 44, height: 44, background: 'var(--primary)', color: '#fff' }}>{s.n}</span>
+                <h3 style={{ fontSize: 19 }}>{s.t}</h3>
+                <p style={{ color: 'var(--text-2)' }}>{s.d}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <DownloadBand />
+
+      <section className="section">
+        <div className="container stack gap-16">
+          <h2 style={{ fontSize: 24 }}>Servicios populares por ciudad</h2>
+          <div className="link-cloud">
+            {active.flatMap((city) =>
+              categories.slice(0, 5).map((cat) => (
+                <Link key={`${cat.slug}-${city.slug}`} href={`/servicios/${cat.slug}/${city.slug}`}>
+                  {cat.name} en {city.name}
+                </Link>
+              )),
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section id="preguntas" className="section" style={{ paddingTop: 0 }}>
+        <div className="container stack gap-16" style={{ maxWidth: 820 }}>
+          <h2 style={{ fontSize: 30 }}>Preguntas frecuentes</h2>
+          <Faq />
+        </div>
+      </section>
+    </>
+  );
+}
