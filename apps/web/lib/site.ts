@@ -1,3 +1,10 @@
+/**
+ * Modo demostración: muestra un aviso de "versión de prueba" y pide a Google
+ * que no indexe el sitio. Desactívalo poniendo NEXT_PUBLIC_DEMO_MODE=false
+ * cuando la web muestre profesionales y reseñas reales.
+ */
+export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE !== 'false';
+
 /** URL pública del sitio. Configúrala en Vercel con NEXT_PUBLIC_SITE_URL. */
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hululapp.com';
 

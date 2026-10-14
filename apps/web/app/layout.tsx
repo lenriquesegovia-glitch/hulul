@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
-import { SITE_URL } from '@/lib/site';
+import { DEMO_MODE, SITE_URL } from '@/lib/site';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -19,6 +19,7 @@ export const metadata: Metadata = {
     siteName: 'HULUL',
   },
   alternates: { canonical: '/' },
+  robots: DEMO_MODE ? { index: false, follow: false } : undefined,
 };
 
 export const viewport: Viewport = {
@@ -37,6 +38,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
+        {DEMO_MODE && (
+          <div role="note" style={{ background: '#1C1A1A', color: '#FAF7F2', fontSize: 13.5, textAlign: 'center', padding: '8px 16px' }}>
+            Versión de prueba: los profesionales, precios y reseñas que ves son de ejemplo.
+          </div>
+        )}
         <Header />
         <main>{children}</main>
         <Footer />
