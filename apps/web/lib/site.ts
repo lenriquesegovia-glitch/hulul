@@ -6,7 +6,7 @@
 export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE !== 'false';
 
 /** URL pública del sitio. Configúrala en Vercel con NEXT_PUBLIC_SITE_URL. */
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hululapp.com';
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hululec.com';
 
 /** Enlaces de descarga. Reemplazar cuando la app esté publicada en las tiendas. */
 export const APP_STORE_URL = '#descargar';

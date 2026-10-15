@@ -90,5 +90,5 @@ En `apps/web/lib/site.ts`: enlaces de App Store y Google Play, y número de What
 3. **App del profesional**: disponibilidad, aceptar o rechazar trabajos y ganancias.
 4. **Facturación electrónica SRI**.
 5. **Google Maps**: dirección del cliente y seguimiento en vivo.
-6. **Publicación**: web en Vercel con `hululapp.com` y app en las tiendas con EAS Build.
+6. **Publicación**: web en Vercel con `hululec.com` y app en las tiendas con EAS Build.
 7. **Legal**: términos y condiciones y política de privacidad (LOPDP), redactados por un abogado.

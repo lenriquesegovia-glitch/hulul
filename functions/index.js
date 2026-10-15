@@ -6,7 +6,7 @@
  *  - el cliente recibe la confirmación de su reserva por correo.
  *
  * Los correos salen por Gmail (una cuenta propia de HULUL) o, cuando exista el
- * dominio, por Resend desde reservas@hululapp.com. Cambiar de uno a otro es
+ * dominio, por Resend desde reservas@hululec.com. Cambiar de uno a otro es
  * cambiar MAIL_PROVIDER y FROM_EMAIL. La contraseña se guarda como secreto en
  * Google (MAIL_PASSWORD), nunca en el código.
  */
@@ -74,7 +74,7 @@ function layout(title, body) {
     <h1 style="font-size:20px;margin:0 0 16px">${title}</h1>
     ${body}
   </div>
-  <p style="font-size:12px;color:#6B6560;margin-top:16px">HULUL · Servicios del hogar · hululapp.com</p>
+  <p style="font-size:12px;color:#6B6560;margin-top:16px">HULUL · Servicios del hogar · hululec.com</p>
 </div></body></html>`;
 }
 

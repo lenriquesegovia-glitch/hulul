@@ -2,7 +2,7 @@
 export const brand = {
   name: 'HULUL',
   tagline: 'Servicios del hogar',
-  domain: 'hululapp.com',
+  domain: 'hululec.com',
   colors: {
     background: '#FAF7F2',
     surface: '#FFFFFF',

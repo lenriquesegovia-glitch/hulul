@@ -13,7 +13,7 @@ export const company = {
   razonSocial: '[RAZÓN SOCIAL DE HULUL]',
   ruc: '[RUC]',
   direccion: '[DIRECCIÓN DEL DOMICILIO LEGAL], Guayaquil, Ecuador',
-  emailPrivacidad: 'privacidad@hululapp.com',
+  emailPrivacidad: 'privacidad@hululec.com',
   /** Delegado de protección de datos, si se designa. */
   delegado: '[NOMBRE DEL DELEGADO DE PROTECCIÓN DE DATOS, si aplica]',
   pasarelaPago: '[PASARELA DE PAGOS: Payphone, Kushki o Datafast]',
@@ -47,7 +47,7 @@ export const privacyPolicy: LegalSection[] = [
     id: 'responsable',
     title: '1. Quién es responsable de tus datos',
     body: [
-      { p: `${company.razonSocial} (en adelante, "HULUL"), con RUC ${company.ruc} y domicilio en ${company.direccion}, es responsable del tratamiento de los datos personales que se recogen a través del sitio web hululapp.com, el dominio hulul.ec y las aplicaciones móviles de HULUL (en conjunto, la "Plataforma").` },
+      { p: `${company.razonSocial} (en adelante, "HULUL"), con RUC ${company.ruc} y domicilio en ${company.direccion}, es responsable del tratamiento de los datos personales que se recogen a través del sitio web hululec.com y las aplicaciones móviles de HULUL (en conjunto, la "Plataforma").` },
       { p: `Para cualquier asunto sobre tus datos puedes escribirnos a ${company.emailPrivacidad}.` },
       { p: `Delegado de protección de datos: ${company.delegado}.` },
       { p: 'Esta política se rige por la Ley Orgánica de Protección de Datos Personales del Ecuador (LOPDP) y su Reglamento. Si resides fuera del Ecuador, revisa también la sección 11.' },
