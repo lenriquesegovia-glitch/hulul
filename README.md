@@ -59,8 +59,14 @@ Proyecto: **hulul-59081** (cuenta personal, separado de ARCSEG).
 
 - La configuración pública está en `packages/shared/src/firebase.ts`.
 - Las reservas se guardan en la colección `bookings` y las solicitudes de profesionales en `applications`, con la prueba de aceptación de la política de privacidad (versión y fecha).
-- Las reglas de seguridad están en `firestore.rules`: hay que copiarlas en la consola de Firebase → Firestore → **Reglas** → **Publicar** cada vez que cambien.
+- Las reglas de seguridad están en `firestore.rules` y se publican con `publicar-firebase.bat`.
 - La analítica (Google Analytics) solo se activa para quien acepta las cookies de analítica.
+- `functions/` tiene los avisos por correo: cada reserva nueva te llega con un botón para escribir al cliente por WhatsApp, y el cliente recibe su confirmación. Lo mismo con cada solicitud de profesional.
+
+**Publicar en Firebase (Windows)**
+
+1. Una sola vez: `configurar-correo.bat` (inicia sesión y guarda la contraseña de aplicación de Gmail como secreto).
+2. Cada vez que cambien las reglas o las funciones: `publicar-firebase.bat`.
 
 ## Datos de demostración
 

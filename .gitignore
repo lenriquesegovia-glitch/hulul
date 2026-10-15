@@ -13,3 +13,7 @@ npm-debug.log*
 ios/
 android/
 next-env.d.ts
+functions/node_modules/
+functions/.env*
+.firebase/
+firebase-debug.log
