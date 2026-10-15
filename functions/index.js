@@ -5,9 +5,10 @@
  *  - te llega un correo con los datos y un botón para escribir al cliente por WhatsApp;
  *  - el cliente recibe la confirmación de su reserva por correo.
  *
- * Los correos salen desde reservas@hululapp.com a través de Resend (servicio de
- * correos automáticos). La clave de Resend se guarda como secreto en Google
- * (RESEND_API_KEY), nunca en el código.
+ * Los correos salen por Gmail (una cuenta propia de HULUL) o, cuando exista el
+ * dominio, por Resend desde reservas@hululapp.com. Cambiar de uno a otro es
+ * cambiar MAIL_PROVIDER y FROM_EMAIL. La contraseña se guarda como secreto en
+ * Google (MAIL_PASSWORD), nunca en el código.
  */
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { defineSecret, defineString } from 'firebase-functions/params';
@@ -18,9 +19,10 @@ import nodemailer from 'nodemailer';
 const REGION = 'southamerica-east1';
 const PROJECT = 'hulul-59081';
 
-const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
-const FROM_EMAIL = defineString('FROM_EMAIL', { default: 'reservas@hululapp.com', description: 'Remitente de los correos automáticos' });
-const NOTIFY_TO = defineString('NOTIFY_TO', { default: 'reservas@hululapp.com', description: 'Correo donde recibes los avisos de reservas' });
+const MAIL_PASSWORD = defineSecret('MAIL_PASSWORD');
+const MAIL_PROVIDER = defineString('MAIL_PROVIDER', { default: 'gmail', description: 'gmail o resend' });
+const FROM_EMAIL = defineString('FROM_EMAIL', { description: 'Correo de HULUL que envía los avisos' });
+const NOTIFY_TO = defineString('NOTIFY_TO', { description: 'Correo donde recibes los avisos de reservas' });
 
 const CATEGORIES = {
   climatizacion: 'Climatización', plomeria: 'Plomería', electricidad: 'Electricidad',
@@ -50,11 +52,17 @@ function waNumber(phone) {
 }
 
 function transport() {
+  if (MAIL_PROVIDER.value() === 'resend') {
+    return nodemailer.createTransport({
+      host: 'smtp.resend.com',
+      port: 465,
+      secure: true,
+      auth: { user: 'resend', pass: MAIL_PASSWORD.value() },
+    });
+  }
   return nodemailer.createTransport({
-    host: 'smtp.resend.com',
-    port: 465,
-    secure: true,
-    auth: { user: 'resend', pass: RESEND_API_KEY.value() },
+    service: 'gmail',
+    auth: { user: FROM_EMAIL.value(), pass: MAIL_PASSWORD.value() },
   });
 }
 
@@ -155,7 +163,7 @@ export function applicationEmail(a, { from, notifyTo }) {
 const senders = () => ({ from: `HULUL <${FROM_EMAIL.value()}>`, notifyTo: NOTIFY_TO.value() });
 
 export const avisoReserva = onDocumentCreated(
-  { document: 'bookings/{id}', region: REGION, secrets: [RESEND_API_KEY] },
+  { document: 'bookings/{id}', region: REGION, secrets: [MAIL_PASSWORD] },
   async (event) => {
     const b = event.data?.data();
     if (!b) return;
@@ -166,7 +174,7 @@ export const avisoReserva = onDocumentCreated(
 );
 
 export const avisoProfesional = onDocumentCreated(
-  { document: 'applications/{id}', region: REGION, secrets: [RESEND_API_KEY] },
+  { document: 'applications/{id}', region: REGION, secrets: [MAIL_PASSWORD] },
   async (event) => {
     const a = event.data?.data();
     if (!a) return;
