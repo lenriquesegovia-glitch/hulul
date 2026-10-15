@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { Checkbox } from '@/components/Checkbox';
-import { formatUSD, getProfessional, quote, type PaymentMethod } from '@hulul/shared';
+import { dayAvailable, firstAvailable, formatUSD, getProfessional, quote, slotAvailable, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
@@ -13,9 +13,11 @@ export default function BookingScreen() {
   const pro = getProfessional(id);
   const { confirm } = useBooking();
 
-  const days = useMemo(() => nextDays(7), []);
-  const [day, setDay] = useState(0);
-  const [slot, setSlot] = useState(1);
+  const now = useMemo(() => new Date(), []);
+  const days = useMemo(() => nextDays(7, now), [now]);
+  const first = useMemo(() => firstAvailable(now), [now]);
+  const [day, setDay] = useState(first.day);
+  const [slot, setSlot] = useState(first.slot);
   const [hours, setHours] = useState(2);
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
@@ -41,8 +43,17 @@ export default function BookingScreen() {
   const q = quote(pro.hourlyRate, hours, pro.minimumBooking);
   const belowMinimum = pro.hourlyRate * hours < pro.minimumBooking;
 
+  const pickDay = (i: number) => {
+    setDay(i);
+    if (!slotAvailable(i, slot, now)) setSlot(SLOTS.findIndex((_, k) => slotAvailable(i, k, now)));
+  };
+
   const onConfirm = async () => {
     if (sending) return;
+    if (slot < 0 || !slotAvailable(day, slot, new Date())) {
+      setError('Esa hora ya no está disponible. Elige otra hora de llegada.');
+      return;
+    }
     if (address.trim().length < 8) {
       setError('Escribe la dirección completa para que el profesional pueda llegar.');
       return;
@@ -106,8 +117,9 @@ export default function BookingScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {days.map((d, i) => {
                 const on = i === day;
+                const off = !dayAvailable(i, now);
                 return (
-                  <Pressable key={i} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={d.long} onPress={() => setDay(i)} style={[s.day, on && s.on]}>
+                  <Pressable key={i} disabled={off} accessibilityRole="button" accessibilityState={{ selected: on, disabled: off }} accessibilityLabel={d.long} onPress={() => pickDay(i)} style={[s.day, on && s.on, off && s.off]}>
                     <Text style={[s.dayTop, on && s.onText]}>{d.top}</Text>
                     <Text style={[s.dayNum, on && s.onText]}>{d.num}</Text>
                   </Pressable>
@@ -121,9 +133,10 @@ export default function BookingScreen() {
             <View style={s.slots}>
               {SLOTS.map((t, i) => {
                 const on = i === slot;
+                const off = !slotAvailable(day, i, now);
                 return (
-                  <Pressable key={t} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => setSlot(i)} style={[s.slot, on && s.on]}>
-                    <Text style={[s.slotText, on && s.onText]}>{t}</Text>
+                  <Pressable key={t} disabled={off} accessibilityRole="button" accessibilityState={{ selected: on, disabled: off }} onPress={() => setSlot(i)} style={[s.slot, on && s.on, off && s.off]}>
+                    <Text style={[s.slotText, on && s.onText, off && { textDecorationLine: 'line-through' }]}>{t}</Text>
                   </Pressable>
                 );
               })}
@@ -264,6 +277,7 @@ const s = StyleSheet.create({
   onText: { color: c.onPrimary },
   slots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   slot: { width: '31%', flexGrow: 1, height: 46, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center' },
+  off: { opacity: 0.38 },
   slotText: { fontFamily: font.bodyBold, fontSize: 14, color: c.text },
   hoursBox: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   hoursTitle: { fontFamily: font.bodyBold, fontSize: 15, color: c.text },

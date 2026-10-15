@@ -34,3 +34,29 @@ export function nextDays(n = 7, from: Date = new Date()): BookingDay[] {
     };
   });
 }
+
+/** Anticipación mínima para reservar hoy: el profesional necesita tiempo para llegar. */
+export const LEAD_TIME_HOURS = 2;
+
+/** ¿Se puede reservar esa hora? Las de hoy deben empezar al menos 2 horas después de ahora. */
+export function slotAvailable(dayIndex: number, slotIndex: number, now: Date = new Date()): boolean {
+  if (dayIndex > 0) return true;
+  const [h, m] = SLOTS[slotIndex].split(':').map(Number);
+  const start = new Date(now);
+  start.setHours(h, m, 0, 0);
+  return start.getTime() - now.getTime() >= LEAD_TIME_HOURS * 3_600_000;
+}
+
+/** ¿Queda alguna hora libre ese día? */
+export function dayAvailable(dayIndex: number, now: Date = new Date()): boolean {
+  return SLOTS.some((_, i) => slotAvailable(dayIndex, i, now));
+}
+
+/** Primer día y hora que se pueden reservar. */
+export function firstAvailable(now: Date = new Date()): { day: number; slot: number } {
+  for (let d = 0; d < 2; d++) {
+    const s = SLOTS.findIndex((_, i) => slotAvailable(d, i, now));
+    if (s >= 0) return { day: d, slot: s };
+  }
+  return { day: 1, slot: 0 };
+}

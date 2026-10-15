@@ -1,4 +1,5 @@
 :root {
+  color-scheme: only light;
   --bg: #FAF7F2;
   --surface: #FFFFFF;
   --surface-warm: #F6EDE6;
@@ -157,6 +158,8 @@ details p { margin-top: 10px; color: var(--text-2); }
 .chip-day { min-width: 64px; height: 72px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; flex-shrink: 0; }
 .slot-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .chip-slot { height: 48px; border-radius: 12px; font-weight: 700; font-size: 15px; }
+.chip-day:disabled, .chip-slot:disabled { opacity: .38; cursor: not-allowed; text-decoration: line-through; }
+.chip-day:disabled { text-decoration: none; }
 .chip-day.on, .chip-slot.on { background: var(--text); color: #fff; border-color: var(--text); }
 .chip-day:hover:not(.on), .chip-slot:hover:not(.on) { border-color: var(--copper); }
 .stepper { width: 44px; height: 44px; border-radius: 22px; font-size: 20px; }

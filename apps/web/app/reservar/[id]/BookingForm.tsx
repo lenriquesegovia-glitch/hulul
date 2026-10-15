@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import {
+  dayAvailable,
+  firstAvailable,
   formatUSD,
   getCategory,
   getProfessional,
@@ -12,6 +14,7 @@ import {
   PAYMENT_OPTIONS,
   quote,
   SLOTS,
+  slotAvailable,
   type PaymentMethod,
 } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
@@ -25,10 +28,27 @@ import { DEMO_MODE } from '@/lib/site';
 export function BookingForm({ proId }: { proId: string }) {
   const pro = getProfessional(proId)!;
   const cat = getCategory(pro.category)!;
-  const days = useMemo(() => nextDays(7), []);
+  // La hora real se toma en el navegador, no al publicar la página.
+  const [now, setNow] = useState<Date | null>(null);
+  const days = useMemo(() => (now ? nextDays(7, now) : []), [now]);
 
   const [day, setDay] = useState(0);
-  const [slot, setSlot] = useState(1);
+  const [slot, setSlot] = useState(-1);
+
+  useEffect(() => {
+    const n = new Date();
+    const first = firstAvailable(n);
+    setNow(n);
+    setDay(first.day);
+    setSlot(first.slot);
+  }, []);
+
+  const pickDay = (i: number) => {
+    setDay(i);
+    if (now && (slot < 0 || !slotAvailable(i, slot, now))) {
+      setSlot(SLOTS.findIndex((_, s) => slotAvailable(i, s, now)));
+    }
+  };
   const [hours, setHours] = useState(2);
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
   const [done, setDone] = useState<{ name: string; id: string } | null>(null);
@@ -43,6 +63,10 @@ export function BookingForm({ proId }: { proId: string }) {
     if (sending) return;
     const data = new FormData(e.currentTarget);
     const get = (k: string) => String(data.get(k) ?? '').trim();
+    if (slot < 0 || !slotAvailable(day, slot, new Date())) {
+      setError('Esa hora ya no está disponible. Elige otra hora de llegada.');
+      return;
+    }
     setSending(true);
     setError('');
     try {
@@ -97,7 +121,7 @@ export function BookingForm({ proId }: { proId: string }) {
         <div className="card stack gap-12">
           <h3 style={{ fontSize: 18 }}>Qué sigue</h3>
           <ol className="stack gap-8" style={{ margin: 0, paddingLeft: 20, color: 'var(--text-2)' }}>
-            <li>Te enviamos la confirmación por WhatsApp y correo.</li>
+            <li>{DEMO_MODE ? 'Te contactaremos por WhatsApp para confirmar (en la versión final llegará automático por WhatsApp y correo).' : 'Te enviamos la confirmación por WhatsApp y correo.'}</li>
             <li>El día del servicio verás cuando el profesional esté en camino.</li>
             <li>Al terminar, apruebas el trabajo y recién ahí se libera el pago.</li>
           </ol>
@@ -115,7 +139,8 @@ export function BookingForm({ proId }: { proId: string }) {
         <div className="chip-row" role="radiogroup" aria-label="Día">
           {days.map((d, i) => (
             <button key={i} type="button" role="radio" aria-checked={i === day} aria-label={d.long}
-              className={`chip-day ${i === day ? 'on' : ''}`} onClick={() => setDay(i)}>
+              disabled={!now || !dayAvailable(i, now)}
+              className={`chip-day ${i === day ? 'on' : ''}`} onClick={() => pickDay(i)}>
               <span style={{ fontSize: 12, fontWeight: 700 }}>{d.top}</span>
               <span style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 700 }}>{d.num}</span>
             </button>
@@ -125,6 +150,7 @@ export function BookingForm({ proId }: { proId: string }) {
         <div className="slot-grid" role="radiogroup" aria-label="Hora de llegada">
           {SLOTS.map((t, i) => (
             <button key={t} type="button" role="radio" aria-checked={i === slot}
+              disabled={!now || !slotAvailable(day, i, now)}
               className={`chip-slot ${i === slot ? 'on' : ''}`} onClick={() => setSlot(i)}>{t}</button>
           ))}
         </div>
@@ -155,7 +181,7 @@ export function BookingForm({ proId }: { proId: string }) {
 
       <fieldset className="stack gap-16 fs">
         <legend className="fs-title">3. Tus datos</legend>
-        <p className="muted" style={{ fontSize: 14 }}>No necesitas descargar la app. Te enviaremos la confirmación por WhatsApp y correo.</p>
+        <p className="muted" style={{ fontSize: 14 }}>No necesitas descargar la app. Usaremos estos datos para confirmar tu reserva.</p>
         <div className="field">
           <label htmlFor="nombre">Nombre y apellido</label>
           <input id="nombre" name="nombre" required minLength={2} maxLength={120} autoComplete="name" />
@@ -211,7 +237,7 @@ export function BookingForm({ proId }: { proId: string }) {
       </div>
 
       {error && <p role="alert" style={{ color: 'var(--primary)', fontWeight: 600 }}>{error}</p>}
-      <button type="submit" className="btn btn-primary" style={{ minHeight: 54, fontSize: 16 }} disabled={sending} aria-busy={sending}>
+      <button type="submit" className="btn btn-primary" style={{ minHeight: 54, fontSize: 16 }} disabled={sending || slot < 0} aria-busy={sending}>
         {sending ? 'Registrando tu reserva…' : `Confirmar y pagar ${formatUSD(q.total)}`}
       </button>
     </form>
