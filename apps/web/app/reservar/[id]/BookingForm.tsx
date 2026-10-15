@@ -19,8 +19,8 @@ import { DEMO_MODE } from '@/lib/site';
 
 /**
  * Reserva desde la web, el mismo flujo que la app.
- * Pendiente con Firebase: crear el documento en `bookings` (con la prueba
- * del consentimiento: fecha y PRIVACY_VERSION) y redirigir a la pasarela de pago.
+ * Guarda la reserva en Firestore (`bookings`) con la prueba del consentimiento.
+ * Pendiente: redirigir a la pasarela de pago antes de confirmar.
  */
 export function BookingForm({ proId }: { proId: string }) {
   const pro = getProfessional(proId)!;
@@ -31,16 +31,51 @@ export function BookingForm({ proId }: { proId: string }) {
   const [slot, setSlot] = useState(1);
   const [hours, setHours] = useState(2);
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
-  const [done, setDone] = useState<{ name: string } | null>(null);
+  const [done, setDone] = useState<{ name: string; id: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
   const q = quote(pro.hourlyRate, hours, pro.minimumBooking);
   const belowMinimum = pro.hourlyRate * hours < pro.minimumBooking;
 
-  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (sending) return;
     const data = new FormData(e.currentTarget);
-    setDone({ name: String(data.get('nombre') ?? '').split(' ')[0] });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const get = (k: string) => String(data.get(k) ?? '').trim();
+    setSending(true);
+    setError('');
+    try {
+      // Firebase se carga solo al confirmar, para que la página abra rápido.
+      const { saveBooking, dateInDays } = await import('@hulul/shared/firebase');
+      const id = await saveBooking({
+        source: 'web',
+        professionalId: pro.id,
+        professionalName: pro.name,
+        category: pro.category,
+        date: dateInDays(day),
+        slot: SLOTS[slot],
+        hours,
+        address: get('direccion'),
+        notes: get('descripcion'),
+        contactName: get('nombre'),
+        contactPhone: get('celular'),
+        contactEmail: get('correo'),
+        paymentMethod: payment,
+        subtotal: q.subtotal,
+        fee: q.fee,
+        iva: q.iva,
+        total: q.total,
+        consentMarketing: data.get('acepta_promociones') === 'on',
+        demo: DEMO_MODE,
+      });
+      setDone({ name: get('nombre').split(' ')[0], id });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {
+      setError('No pudimos registrar tu reserva. Revisa tu conexión e inténtalo de nuevo.');
+    } finally {
+      setSending(false);
+    }
   };
 
   if (done) {
@@ -54,8 +89,9 @@ export function BookingForm({ proId }: { proId: string }) {
           <p style={{ color: 'var(--text-2)' }}>
             {pro.name} llegará {days[day].long} a las {SLOTS[slot]}. {cat.name} · {hours} h · {formatUSD(q.total)}
           </p>
+          <p className="muted" style={{ fontSize: 13.5 }}>Código de reserva: {done.id.slice(0, 8).toUpperCase()}</p>
           {DEMO_MODE && (
-            <p className="pill pill-warm">Versión de prueba: no se hizo ningún cobro ni se avisó al profesional.</p>
+            <p className="pill pill-warm">Versión de prueba: la reserva quedó registrada, pero no se hizo ningún cobro.</p>
           )}
         </div>
         <div className="card stack gap-12">
@@ -109,11 +145,11 @@ export function BookingForm({ proId }: { proId: string }) {
         <legend className="fs-title">2. ¿Dónde y qué necesitas?</legend>
         <div className="field">
           <label htmlFor="direccion">Dirección del servicio</label>
-          <input id="direccion" name="direccion" required minLength={8} autoComplete="street-address" placeholder="Urbanización, manzana y villa" />
+          <input id="direccion" name="direccion" required minLength={8} maxLength={300} autoComplete="street-address" placeholder="Urbanización, manzana y villa" />
         </div>
         <div className="field">
           <label htmlFor="descripcion">Describe lo que necesitas</label>
-          <textarea id="descripcion" name="descripcion" rows={3} placeholder="Ej.: 2 splits de 12.000 BTU, uno gotea agua" />
+          <textarea id="descripcion" name="descripcion" rows={3} maxLength={1000} placeholder="Ej.: 2 splits de 12.000 BTU, uno gotea agua" />
         </div>
       </fieldset>
 
@@ -122,7 +158,7 @@ export function BookingForm({ proId }: { proId: string }) {
         <p className="muted" style={{ fontSize: 14 }}>No necesitas descargar la app. Te enviaremos la confirmación por WhatsApp y correo.</p>
         <div className="field">
           <label htmlFor="nombre">Nombre y apellido</label>
-          <input id="nombre" name="nombre" required autoComplete="name" />
+          <input id="nombre" name="nombre" required minLength={2} maxLength={120} autoComplete="name" />
         </div>
         <div className="form-2">
           <div className="field">
@@ -131,7 +167,7 @@ export function BookingForm({ proId }: { proId: string }) {
           </div>
           <div className="field">
             <label htmlFor="correo">Correo electrónico</label>
-            <input id="correo" name="correo" type="email" required autoComplete="email" />
+            <input id="correo" name="correo" type="email" required maxLength={160} autoComplete="email" />
           </div>
         </div>
       </fieldset>
@@ -174,8 +210,9 @@ export function BookingForm({ proId }: { proId: string }) {
         </label>
       </div>
 
-      <button type="submit" className="btn btn-primary" style={{ minHeight: 54, fontSize: 16 }}>
-        Confirmar y pagar {formatUSD(q.total)}
+      {error && <p role="alert" style={{ color: 'var(--primary)', fontWeight: 600 }}>{error}</p>}
+      <button type="submit" className="btn btn-primary" style={{ minHeight: 54, fontSize: 16 }} disabled={sending} aria-busy={sending}>
+        {sending ? 'Registrando tu reserva…' : `Confirmar y pagar ${formatUSD(q.total)}`}
       </button>
     </form>
   );

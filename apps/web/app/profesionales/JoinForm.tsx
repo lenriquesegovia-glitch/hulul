@@ -2,17 +2,17 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { categories, cities } from '@hulul/shared';
+import { categories, cities, type CategorySlug } from '@hulul/shared';
 
 /**
  * Formulario de registro de profesionales.
- * Pendiente: guardar la solicitud en Firestore (colección `applications`)
- * cuando se conecte Firebase. Por ahora solo confirma en pantalla.
- * Al guardarla, registrar también la aceptación como prueba del
- * consentimiento: fecha, PRIVACY_VERSION y si aceptó promociones.
+ * Guarda la solicitud en Firestore (`applications`) con la prueba del
+ * consentimiento, para revisarla desde la consola de Firebase.
  */
 export function JoinForm() {
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
   if (sent) {
     return (
@@ -26,14 +26,34 @@ export function JoinForm() {
   return (
     <form
       className="stack gap-16"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault();
-        setSent(true);
+        if (sending) return;
+        const data = new FormData(e.currentTarget);
+        const get = (k: string) => String(data.get(k) ?? '').trim();
+        setSending(true);
+        setError('');
+        try {
+          const { saveApplication } = await import('@hulul/shared/firebase');
+          await saveApplication({
+            name: get('nombre'),
+            phone: get('celular'),
+            category: get('servicio') as CategorySlug,
+            city: get('ciudad'),
+            experience: get('experiencia'),
+            consentMarketing: data.get('acepta_promociones') === 'on',
+          });
+          setSent(true);
+        } catch {
+          setError('No pudimos enviar tus datos. Revisa tu conexión e inténtalo de nuevo.');
+        } finally {
+          setSending(false);
+        }
       }}
     >
       <div className="field">
         <label htmlFor="nombre">Nombre completo o de tu empresa</label>
-        <input id="nombre" name="nombre" required autoComplete="name" />
+        <input id="nombre" name="nombre" required minLength={2} maxLength={120} autoComplete="name" />
       </div>
       <div className="field">
         <label htmlFor="celular">Celular (WhatsApp)</label>
@@ -55,7 +75,7 @@ export function JoinForm() {
       </div>
       <div className="field">
         <label htmlFor="experiencia">Cuéntanos tu experiencia</label>
-        <textarea id="experiencia" name="experiencia" rows={4} />
+        <textarea id="experiencia" name="experiencia" rows={4} maxLength={2000} />
       </div>
 
       <div className="stack gap-12" style={{ paddingTop: 4 }}>
@@ -72,7 +92,10 @@ export function JoinForm() {
         </label>
       </div>
 
-      <button type="submit" className="btn btn-primary">Quiero ser profesional HULUL</button>
+      {error && <p role="alert" style={{ color: 'var(--primary)', fontWeight: 600 }}>{error}</p>}
+      <button type="submit" className="btn btn-primary" disabled={sending} aria-busy={sending}>
+        {sending ? 'Enviando…' : 'Quiero ser profesional HULUL'}
+      </button>
     </form>
   );
 }

@@ -23,6 +23,11 @@ export default function BookingScreen() {
   const [error, setError] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [agreeError, setAgreeError] = useState(false);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [contactError, setContactError] = useState('');
+  const [sending, setSending] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   if (!pro) {
     return (
@@ -36,17 +41,52 @@ export default function BookingScreen() {
   const q = quote(pro.hourlyRate, hours, pro.minimumBooking);
   const belowMinimum = pro.hourlyRate * hours < pro.minimumBooking;
 
-  const onConfirm = () => {
+  const onConfirm = async () => {
+    if (sending) return;
     if (address.trim().length < 8) {
       setError('Escribe la dirección completa para que el profesional pueda llegar.');
+      return;
+    }
+    if (name.trim().length < 2 || !/^0?9\d{8}$/.test(phone.replace(/\s/g, ''))) {
+      setContactError('Escribe tu nombre y un celular válido (09XXXXXXXX).');
       return;
     }
     if (!agreed) {
       setAgreeError(true);
       return;
     }
-    confirm({ professionalId: pro.id, dayIndex: day, slotIndex: slot, hours, address, notes, payment, total: q.total });
-    router.replace('/confirmada');
+    setSending(true);
+    setSaveError('');
+    try {
+      const { saveBooking, dateInDays } = await import('@hulul/shared/firebase');
+      const bookingId = await saveBooking({
+        source: 'app',
+        professionalId: pro.id,
+        professionalName: pro.name,
+        category: pro.category,
+        date: dateInDays(day),
+        slot: SLOTS[slot],
+        hours,
+        address: address.trim(),
+        notes: notes.trim(),
+        contactName: name.trim(),
+        contactPhone: phone.replace(/\s/g, ''),
+        contactEmail: '',
+        paymentMethod: payment,
+        subtotal: q.subtotal,
+        fee: q.fee,
+        iva: q.iva,
+        total: q.total,
+        consentMarketing: false,
+        demo: true,
+      });
+      confirm({ professionalId: pro.id, dayIndex: day, slotIndex: slot, hours, address, notes, payment, total: q.total, bookingId });
+      router.replace('/confirmada');
+    } catch {
+      setSaveError('No pudimos registrar tu reserva. Revisa tu conexión e inténtalo de nuevo.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -112,6 +152,7 @@ export default function BookingScreen() {
               value={address}
               onChangeText={(t) => { setAddress(t); setError(''); }}
               placeholder="Urbanización, manzana y villa"
+              maxLength={300}
               placeholderTextColor={c.textMuted}
               accessibilityLabelledBy="dir-label"
               style={s.input}
@@ -128,8 +169,36 @@ export default function BookingScreen() {
               placeholderTextColor={c.textMuted}
               accessibilityLabelledBy="notes-label"
               multiline
+              maxLength={1000}
               style={[s.input, { minHeight: 88, textAlignVertical: 'top', paddingTop: 12 }]}
             />
+          </View>
+
+          <View style={{ gap: 8 }}>
+            <Text style={s.label} nativeID="name-label">Tu nombre</Text>
+            <TextInput
+              value={name}
+              onChangeText={(t) => { setName(t); setContactError(''); }}
+              placeholder="Nombre y apellido"
+              placeholderTextColor={c.textMuted}
+              accessibilityLabelledBy="name-label"
+              autoComplete="name"
+              maxLength={120}
+              style={s.input}
+            />
+            <Text style={s.label} nativeID="phone-label">Celular (WhatsApp)</Text>
+            <TextInput
+              value={phone}
+              onChangeText={(t) => { setPhone(t); setContactError(''); }}
+              placeholder="09XXXXXXXX"
+              placeholderTextColor={c.textMuted}
+              accessibilityLabelledBy="phone-label"
+              keyboardType="phone-pad"
+              autoComplete="tel"
+              maxLength={13}
+              style={s.input}
+            />
+            {contactError ? <Text style={s.error}>{contactError}</Text> : null}
           </View>
 
           <View style={{ gap: 10 }}>
@@ -167,7 +236,8 @@ export default function BookingScreen() {
         </ScrollView>
 
         <View style={s.footer}>
-          <PrimaryButton label={`Confirmar y pagar ${formatUSD(q.total)}`} onPress={onConfirm} />
+          {saveError ? <Text style={[s.error, { marginBottom: 8 }]}>{saveError}</Text> : null}
+          <PrimaryButton label={sending ? 'Registrando tu reserva…' : `Confirmar y pagar ${formatUSD(q.total)}`} onPress={onConfirm} />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -39,6 +39,8 @@ export default function ConfirmedScreen() {
           </View>
           <H1 style={{ fontSize: 24, textAlign: 'center' }}>Reserva confirmada</H1>
           <Body muted style={{ textAlign: 'center' }}>{when}</Body>
+          {last.bookingId ? <Body muted style={{ textAlign: 'center', fontSize: 13 }}>Código de reserva: {last.bookingId.slice(0, 8).toUpperCase()}</Body> : null}
+          <Body muted style={{ textAlign: 'center', fontSize: 12.5 }}>Versión de prueba: no se hizo ningún cobro.</Body>
         </View>
 
         <Card style={s.proRow}>

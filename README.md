@@ -53,6 +53,15 @@ npm run web          # abre http://localhost:3000
 - Reserva: día, hora, número de horas, dirección, forma de pago y total con IVA.
 - Confirmación con el seguimiento del servicio.
 
+## Firebase
+
+Proyecto: **hulul-59081** (cuenta personal, separado de ARCSEG).
+
+- La configuración pública está en `packages/shared/src/firebase.ts`.
+- Las reservas se guardan en la colección `bookings` y las solicitudes de profesionales en `applications`, con la prueba de aceptación de la política de privacidad (versión y fecha).
+- Las reglas de seguridad están en `firestore.rules`: hay que copiarlas en la consola de Firebase → Firestore → **Reglas** → **Publicar** cada vez que cambien.
+- La analítica (Google Analytics) solo se activa para quien acepta las cookies de analítica.
+
 ## Datos de demostración
 
 Los profesionales, reseñas y valoraciones de `packages/shared/src/demo-data.ts` son **ficticios**. Se reemplazan por los datos reales de Firebase.
@@ -70,7 +79,7 @@ En `apps/web/lib/site.ts`: enlaces de App Store y Google Play, y número de What
 
 ## Próximos pasos
 
-1. **Firebase**: inicio de sesión con celular, base de datos (Firestore) para profesionales, reservas y reseñas, notificaciones push. Los modelos ya están en `packages/shared/src/models.ts`.
+1. **Firebase**: ya se guardan reservas y solicitudes. Falta el inicio de sesión (celular y Google), profesionales y reseñas reales desde Firestore, y notificaciones push.
 2. **Pagos**: pasarela local (Payphone, Kushki o Datafast) con retención del pago hasta que el cliente apruebe.
 3. **App del profesional**: disponibilidad, aceptar o rechazar trabajos y ganancias.
 4. **Facturación electrónica SRI**.

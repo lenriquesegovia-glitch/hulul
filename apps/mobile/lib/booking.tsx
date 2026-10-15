@@ -6,8 +6,8 @@ export { nextDays, PAYMENT_OPTIONS, SLOTS } from '@hulul/shared';
 
 /**
  * Estado de la reserva en curso, compartido entre la pantalla de reserva y la
- * de confirmación. Cuando se conecte Firebase, `confirm` creará el documento
- * en la colección `bookings` y el pago se hará con la pasarela elegida.
+ * de confirmación. La reserva ya se guardó en Firestore antes de llamar a
+ * `confirm`; aquí solo se guarda para mostrar el resumen.
  */
 export interface DraftBooking {
   professionalId: string;
@@ -18,6 +18,8 @@ export interface DraftBooking {
   notes: string;
   payment: PaymentMethod;
   total: number;
+  /** Id del documento en Firestore. */
+  bookingId?: string;
 }
 
 interface Ctx {

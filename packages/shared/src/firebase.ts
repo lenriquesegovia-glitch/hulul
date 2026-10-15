@@ -1,0 +1,122 @@
+/**
+ * Conexión con Firebase, compartida por la web y la app.
+ *
+ * Estos valores son identificadores públicos del proyecto (van dentro de toda
+ * web o app que usa Firebase). La seguridad de los datos la dan las reglas de
+ * `firestore.rules`, no este archivo.
+ *
+ * Se importa por separado (`@hulul/shared/firebase`) para que las páginas que
+ * no guardan datos no carguen Firebase.
+ */
+import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
+import { addDoc, collection, getFirestore, serverTimestamp, type Firestore } from 'firebase/firestore';
+import { PRIVACY_VERSION } from './legal';
+import type { CategorySlug } from './categories';
+import type { PaymentMethod } from './models';
+
+export const firebaseConfig = {
+  apiKey: 'AIzaSyAR2w6K7JXPHyPvfLb3piv--48T3gvlL2o',
+  authDomain: 'hulul-59081.firebaseapp.com',
+  projectId: 'hulul-59081',
+  storageBucket: 'hulul-59081.firebasestorage.app',
+  messagingSenderId: '1070795690327',
+  appId: '1:1070795690327:web:7efec3345f19e7fc6d6e12',
+  measurementId: 'G-ET4BRZTT43',
+};
+
+export function firebaseApp(): FirebaseApp {
+  return getApps().length ? getApp() : initializeApp(firebaseConfig);
+}
+
+let db: Firestore | null = null;
+export function firestore(): Firestore {
+  if (!db) db = getFirestore(firebaseApp());
+  return db;
+}
+
+/** Tiempo máximo de espera para que el servidor confirme un guardado. */
+const SAVE_TIMEOUT_MS = 20_000;
+
+/**
+ * Firestore no falla sin conexión: deja el guardado en espera. Para no dejar
+ * al usuario esperando indefinidamente, se corta a los 20 segundos.
+ */
+function withTimeout<T>(p: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), SAVE_TIMEOUT_MS);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
+/** Datos de una reserva tal como la envía la web o la app. */
+export interface NewBooking {
+  source: 'web' | 'app';
+  professionalId: string;
+  professionalName: string;
+  category: CategorySlug;
+  /** Fecha del servicio, AAAA-MM-DD */
+  date: string;
+  /** Hora de llegada, HH:MM */
+  slot: string;
+  hours: number;
+  address: string;
+  notes: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
+  paymentMethod: PaymentMethod;
+  subtotal: number;
+  fee: number;
+  iva: number;
+  total: number;
+  consentMarketing: boolean;
+  /** true mientras los profesionales sean de ejemplo. */
+  demo: boolean;
+}
+
+/**
+ * Guarda una reserva en la colección `bookings`.
+ * Incluye la prueba del consentimiento (versión de la política y fecha del
+ * servidor), como exige la LOPDP.
+ */
+export async function saveBooking(b: NewBooking): Promise<string> {
+  const ref = await withTimeout(addDoc(collection(firestore(), 'bookings'), {
+    ...b,
+    status: 'pendiente',
+    consentPrivacy: true,
+    privacyVersion: PRIVACY_VERSION,
+    createdAt: serverTimestamp(),
+  }));
+  return ref.id;
+}
+
+/** Solicitud de un profesional que quiere trabajar con HULUL. */
+export interface NewApplication {
+  name: string;
+  phone: string;
+  category: CategorySlug;
+  city: string;
+  experience: string;
+  consentMarketing: boolean;
+}
+
+/** Guarda la solicitud en la colección `applications` para revisarla. */
+export async function saveApplication(a: NewApplication): Promise<string> {
+  const ref = await withTimeout(addDoc(collection(firestore(), 'applications'), {
+    ...a,
+    status: 'nueva',
+    consentPrivacy: true,
+    privacyVersion: PRIVACY_VERSION,
+    createdAt: serverTimestamp(),
+  }));
+  return ref.id;
+}
+
+/** Fecha AAAA-MM-DD de dentro de `offset` días, en la hora local del dispositivo. */
+export function dateInDays(offset: number, from: Date = new Date()): string {
+  const d = new Date(from);
+  d.setDate(from.getDate() + offset);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
