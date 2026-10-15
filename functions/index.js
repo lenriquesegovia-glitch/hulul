@@ -57,12 +57,12 @@ function transport() {
       host: 'smtp.resend.com',
       port: 465,
       secure: true,
-      auth: { user: 'resend', pass: MAIL_PASSWORD.value() },
+      auth: { user: 'resend', pass: MAIL_PASSWORD.value().trim() },
     });
   }
   return nodemailer.createTransport({
     service: 'gmail',
-    auth: { user: FROM_EMAIL.value(), pass: MAIL_PASSWORD.value() },
+    auth: { user: FROM_EMAIL.value(), pass: MAIL_PASSWORD.value().trim() },
   });
 }
 
