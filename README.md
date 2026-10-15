@@ -65,7 +65,7 @@ Proyecto: **hulul-59081** (cuenta personal, separado de ARCSEG).
 
 **Publicar en Firebase (Windows)**
 
-1. Una sola vez: `configurar-correo.bat` (inicia sesión y guarda la contraseña de aplicación de Gmail como secreto).
+1. Una sola vez: `configurar-correo.bat` (inicia sesión y guarda la clave de Resend como secreto). Requiere el dominio hululapp.com verificado en Resend.
 2. Cada vez que cambien las reglas o las funciones: `publicar-firebase.bat`.
 
 ## Datos de demostración
