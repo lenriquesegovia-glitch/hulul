@@ -4,8 +4,8 @@ cd /d "%~dp0"
 echo.
 echo  Publicando las reglas de seguridad y los avisos por correo en Firebase...
 echo  La primera vez te preguntara:
-echo    MAIL_PROVIDER = pulsa Enter (gmail)
-echo    FROM_EMAIL    = el Gmail de HULUL que envia los correos
+echo    MAIL_PROVIDER = resend
+echo    FROM_EMAIL    = reservas@hululec.com
 echo    NOTIFY_TO     = el correo donde quieres recibir los avisos
 echo.
 call npm.cmd install --prefix functions --no-audit --no-fund
