@@ -15,9 +15,11 @@ import {
   quote,
   SLOTS,
   slotAvailable,
+  type LatLng,
   type PaymentMethod,
 } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
+import { LocationPicker } from '@/components/LocationPicker';
 import { DEMO_MODE } from '@/lib/site';
 
 /**
@@ -50,6 +52,7 @@ export function BookingForm({ proId }: { proId: string }) {
     }
   };
   const [hours, setHours] = useState(2);
+  const [location, setLocation] = useState<LatLng | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
   const [done, setDone] = useState<{ name: string; id: string } | null>(null);
   const [sending, setSending] = useState(false);
@@ -81,6 +84,7 @@ export function BookingForm({ proId }: { proId: string }) {
         slot: SLOTS[slot],
         hours,
         address: get('direccion'),
+        location: location ?? undefined,
         notes: get('descripcion'),
         contactName: get('nombre'),
         contactPhone: get('celular'),
@@ -169,8 +173,9 @@ export function BookingForm({ proId }: { proId: string }) {
 
       <fieldset className="stack gap-16 fs">
         <legend className="fs-title">2. ¿Dónde y qué necesitas?</legend>
+        <LocationPicker value={location} onChange={setLocation} />
         <div className="field">
-          <label htmlFor="direccion">Dirección del servicio</label>
+          <label htmlFor="direccion">Dirección y referencia</label>
           <input id="direccion" name="direccion" required minLength={8} maxLength={300} autoComplete="street-address" placeholder="Urbanización, manzana y villa" />
         </div>
         <div className="field">
