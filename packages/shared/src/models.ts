@@ -36,6 +36,12 @@ export type BookingStatus =
   | 'cancelada'
   | 'en_disputa';
 
+/** Punto en el mapa (grados decimales, WGS 84). */
+export interface LatLng {
+  lat: number;
+  lng: number;
+}
+
 export type PaymentMethod = 'tarjeta' | 'transferencia' | 'deuna';
 
 /** Colección `bookings` */
@@ -48,6 +54,8 @@ export interface Booking {
   scheduledAt: string;
   hours: number;
   address: string;
+  /** Punto marcado en el mapa, si el cliente lo marcó. */
+  location?: LatLng;
   notes: string;
   paymentMethod: PaymentMethod;
   subtotal: number;

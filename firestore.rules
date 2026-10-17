@@ -23,6 +23,16 @@ service cloud.firestore {
       return v is number && v >= min && v <= max;
     }
 
+    // Punto en el mapa, opcional. Solo se acepta dentro de Ecuador
+    // (incluye Galápagos).
+    function location(d) {
+      return !('location' in d) || (
+        d.location is map
+        && d.location.keys().hasOnly(['lat', 'lng'])
+        && num(d.location.lat, -5.1, 1.7)
+        && num(d.location.lng, -92.1, -75.1));
+    }
+
     function consent(d) {
       return d.consentPrivacy == true
         && d.consentMarketing is bool
@@ -33,7 +43,7 @@ service cloud.firestore {
     match /bookings/{bookingId} {
       allow create: if request.resource.data.keys().hasOnly([
             'source', 'professionalId', 'professionalName', 'category',
-            'date', 'slot', 'hours', 'address', 'notes',
+            'date', 'slot', 'hours', 'address', 'location', 'notes',
             'contactName', 'contactPhone', 'contactEmail', 'paymentMethod',
             'subtotal', 'fee', 'iva', 'total', 'consentMarketing', 'demo',
             'status', 'consentPrivacy', 'privacyVersion', 'createdAt'])
@@ -45,6 +55,7 @@ service cloud.firestore {
         && request.resource.data.slot.matches('^[0-9]{2}:[0-9]{2}$')
         && num(request.resource.data.hours, 1, 8)
         && str(request.resource.data.address, 8, 300)
+        && location(request.resource.data)
         && str(request.resource.data.notes, 0, 1000)
         && str(request.resource.data.contactName, 2, 120)
         && str(request.resource.data.contactPhone, 7, 20)

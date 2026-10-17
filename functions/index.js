@@ -88,6 +88,21 @@ function rows(pairs) {
 const button = (href, label, bg = '#7A1E2C') =>
   `<a href="${esc(href)}" style="display:inline-block;background:${bg};color:#fff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:10px;margin:16px 8px 0 0">${esc(label)}</a>`;
 
+/** Enlace a Google Maps del punto marcado, o '' si no hay. */
+function mapsUrl(loc) {
+  const lat = Number(loc?.lat), lng = Number(loc?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+}
+
+/** Fila "Ubicación" con el enlace al mapa. */
+function mapRow(loc) {
+  const url = mapsUrl(loc);
+  return url
+    ? `<a href="${url}" style="color:#7A1E2C;font-weight:700">Ver en Google Maps</a>`
+    : '<span style="color:#6B6560">No marcó el mapa</span>';
+}
+
 /** Correos de una reserva nueva: aviso para ti y confirmación para el cliente. */
 export function bookingEmails(b, id, { from, notifyTo }) {
   const cat = CATEGORIES[b.category] ?? b.category;
@@ -101,6 +116,7 @@ export function bookingEmails(b, id, { from, notifyTo }) {
     ['Fecha', esc(when)],
     ['Horas', esc(b.hours)],
     ['Dirección', esc(b.address)],
+    ['Ubicación', mapRow(b.location)],
     ['Descripción', esc(b.notes)],
     ['Cliente', esc(b.contactName)],
     ['Celular', esc(b.contactPhone)],
@@ -129,6 +145,7 @@ export function bookingEmails(b, id, { from, notifyTo }) {
         ['Fecha', esc(when)],
         ['Horas', esc(b.hours)],
         ['Dirección', esc(b.address)],
+        ...(mapsUrl(b.location) ? [['Ubicación', mapRow(b.location)]] : []),
         ['Total', `<strong>${usd(b.total)}</strong>`],
       ]) +
       `<p style="font-size:14px;color:#3F3A37;margin-top:16px">Te escribiremos por WhatsApp para confirmar. El pago queda retenido por HULUL y se libera al profesional cuando apruebas el trabajo.</p>` +

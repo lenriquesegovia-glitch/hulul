@@ -12,7 +12,7 @@ import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { addDoc, collection, getFirestore, serverTimestamp, type Firestore } from 'firebase/firestore';
 import { PRIVACY_VERSION } from './legal';
 import type { CategorySlug } from './categories';
-import type { PaymentMethod } from './models';
+import type { LatLng, PaymentMethod } from './models';
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyAR2w6K7JXPHyPvfLb3piv--48T3gvlL2o',
@@ -60,6 +60,8 @@ export interface NewBooking {
   slot: string;
   hours: number;
   address: string;
+  /** Punto marcado en el mapa (opcional). */
+  location?: LatLng;
   notes: string;
   contactName: string;
   contactPhone: string;
@@ -79,9 +81,11 @@ export interface NewBooking {
  * Incluye la prueba del consentimiento (versión de la política y fecha del
  * servidor), como exige la LOPDP.
  */
-export async function saveBooking(b: NewBooking): Promise<string> {
+export async function saveBooking({ location, ...b }: NewBooking): Promise<string> {
   const ref = await withTimeout(addDoc(collection(firestore(), 'bookings'), {
     ...b,
+    // Firestore no acepta campos vacíos (undefined): solo se envía si existe.
+    ...(location ? { location: { lat: location.lat, lng: location.lng } } : {}),
     status: 'pendiente',
     consentPrivacy: true,
     privacyVersion: PRIVACY_VERSION,
