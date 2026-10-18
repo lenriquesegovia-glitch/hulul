@@ -10,7 +10,7 @@
  * cambiar MAIL_PROVIDER y FROM_EMAIL. La contraseña se guarda como secreto en
  * Google (MAIL_PASSWORD), nunca en el código.
  */
-import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import nodemailer from 'nodemailer';
@@ -198,5 +198,50 @@ export const avisoProfesional = onDocumentCreated(
     if (!a) return;
     await transport().sendMail(applicationEmail(a, senders()));
     logger.info('Aviso de profesional enviado', { id: event.params.id });
+  },
+);
+
+/** Correos cuando un profesional envía su registro a revisión. */
+export function providerEmails(p, uid, { from, notifyTo }) {
+  const name = p.kind === 'empresa' ? `${p.businessName} (${p.firstName} ${p.lastName})` : `${p.firstName} ${p.lastName}`;
+  const cats = (p.categories ?? []).map((c) => `${CATEGORIES[c] ?? c} · $${p.rates?.[c]}/h · mín. ${p.minHours?.[c]} h`).join('<br>');
+  const firstName = String(p.firstName ?? '').split(' ')[0];
+  const waText = `Hola ${firstName}, te escribimos de HULUL por tu registro como profesional.`;
+  const admin = rows([
+    ['Nombre', esc(name)],
+    ['Cédula', esc(p.cedula)],
+    ['RUC', esc(p.ruc)],
+    ['Celular', esc(p.phone)],
+    ['Correo', esc(p.email)],
+    ['Servicios', cats],
+    ['Ciudades', esc((p.cities ?? []).join(', '))],
+    ['Horario', esc(`${(p.days ?? []).length} días · ${p.from} a ${p.to}`)],
+    ['Efectivo', p.acceptsCash ? 'Acepta' : 'No'],
+    ['Documentos', esc(Object.keys(p.docs ?? {}).join(', '))],
+  ]) +
+    `<p style="font-size:13px;color:#6B6560;margin-top:12px">Para aprobar: en Firestore cambia <b>status</b> a <b>aprobado</b> (o <b>observado</b> si hay que corregir algo). Los documentos están en Storage, carpeta providers/${esc(uid)}.</p>` +
+    button(`https://console.firebase.google.com/project/${PROJECT}/firestore/databases/-default-/data/~2Fproviders~2F${uid}`, 'Revisar en Firebase') +
+    button(`https://console.firebase.google.com/project/${PROJECT}/storage/hulul-59081.firebasestorage.app/files/~2Fproviders~2F${uid}`, 'Ver documentos', '#9A5B34') +
+    button(`https://wa.me/${waNumber(p.phone)}?text=${encodeURIComponent(waText)}`, 'WhatsApp', '#1F7A4A');
+  const out = [{ from, to: notifyTo, replyTo: p.email || undefined, subject: `Registro de profesional por revisar: ${name}`, html: layout('Nuevo profesional por revisar', admin) }];
+  if (p.email) {
+    out.push({
+      from, to: p.email, replyTo: notifyTo,
+      subject: 'Recibimos tu registro en HULUL',
+      html: layout('Tu registro está en revisión', `<p style="font-size:15px">Hola ${esc(firstName)}, recibimos tus datos y documentos. Los revisamos en 1 a 3 días hábiles y te escribimos por WhatsApp y correo con el resultado.</p>`),
+    });
+  }
+  return out;
+}
+
+export const avisoRegistroProfesional = onDocumentUpdated(
+  { document: 'providers/{uid}', region: REGION, secrets: [MAIL_PASSWORD] },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after || after.status !== 'en_revision' || before?.status === 'en_revision') return;
+    const mail = transport();
+    for (const m of providerEmails(after, event.params.uid, senders())) await mail.sendMail(m);
+    logger.info('Aviso de registro de profesional enviado', { uid: event.params.uid });
   },
 );

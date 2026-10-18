@@ -85,6 +85,50 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    // Perfil del profesional: solo su dueño lo lee y lo escribe, y solo
+    // mientras está en borrador, observado o en revisión. Aprobar, rechazar o
+    // suspender lo hace HULUL desde la consola (las reglas no lo permiten aquí).
+    function providerFields(d) {
+      return d.keys().hasOnly([
+        'uid', 'status', 'step', 'kind', 'firstName', 'lastName', 'businessName', 'cedula', 'ruc',
+        'phone', 'email', 'categories', 'services', 'rates', 'minHours', 'years', 'bio',
+        'cities', 'days', 'from', 'to', 'acceptsCash', 'docs',
+        'consentPrivacy', 'privacyVersion', 'termsAccepted', 'submittedAt', 'createdAt', 'updatedAt']);
+    }
+
+    function providerOk(uid, d) {
+      return providerFields(d)
+        && d.uid == uid
+        && d.status in ['borrador', 'en_revision', 'observado']
+        && d.updatedAt == request.time
+        && (!('categories' in d) || (d.categories is list && d.categories.size() <= 3))
+        && (!('bio' in d) || str(d.bio, 0, 500))
+        && (!('cedula' in d) || str(d.cedula, 0, 10))
+        && (!('docs' in d) || d.docs is map);
+    }
+
+    match /providers/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && providerOk(uid, request.resource.data)
+        && request.resource.data.status == 'borrador'
+        && request.resource.data.createdAt == request.time;
+      allow update: if request.auth != null && request.auth.uid == uid
+        && resource.data.status in ['borrador', 'en_revision', 'observado']
+        && providerOk(uid, request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+
+      // Datos bancarios: aparte, solo para el dueño.
+      match /private/{docId} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if request.auth != null && request.auth.uid == uid && docId == 'banco'
+          && request.resource.data.keys().hasOnly(['bank', 'type', 'number', 'holder', 'holderId', 'updatedAt'])
+          && str(request.resource.data.number, 6, 20)
+          && request.resource.data.type in ['ahorros', 'corriente'];
+      }
+    }
+
     // Todo lo demás, cerrado.
     match /{document=**} {
       allow read, write: if false;

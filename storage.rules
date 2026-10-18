@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Archivos de HULUL en Firebase Storage.
+// Documentos de profesionales: solo el propio profesional los sube y los ve.
+// HULUL los revisa desde la consola de Firebase. Todo lo demás, cerrado.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /providers/{uid}/{file} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 10 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+      allow delete: if false;
+    }
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

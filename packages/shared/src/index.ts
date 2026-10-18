@@ -8,3 +8,4 @@ export * from './icons';
 export * from './legal';
 export * from './booking';
 export * from './search';
+export * from './provider';
