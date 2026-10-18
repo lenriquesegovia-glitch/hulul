@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import {
   dayAvailable,
@@ -10,6 +10,7 @@ import {
   getProfessional,
   MAX_HOURS,
   MIN_HOURS,
+  BOOKING_DAYS,
   nextDays,
   PAYMENT_OPTIONS,
   quote,
@@ -20,6 +21,7 @@ import {
 } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { LocationPicker } from '@/components/LocationPicker';
+import { Notice } from '@/components/Notice';
 import { DEMO_MODE } from '@/lib/site';
 
 /**
@@ -27,6 +29,20 @@ import { DEMO_MODE } from '@/lib/site';
  * Guarda la reserva en Firestore (`bookings`) con la prueba del consentimiento.
  * Pendiente: redirigir a la pasarela de pago antes de confirmar.
  */
+/** Fecha AAAA-MM-DD de dentro de `offset` días (hora local). */
+function isoDay(from: Date, offset: number): string {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Días entre hoy y una fecha AAAA-MM-DD. */
+function dayOffset(from: Date, iso: string): number {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return -1;
+  const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  return Math.round((new Date(y, m - 1, d).getTime() - today.getTime()) / 86_400_000);
+}
+
 /** Largo máximo de la descripción (el mismo límite que las reglas de Firestore). */
 const NOTES_MAX = 1000;
 
@@ -35,7 +51,7 @@ export function BookingForm({ proId }: { proId: string }) {
   const cat = getCategory(pro.category)!;
   // La hora real se toma en el navegador, no al publicar la página.
   const [now, setNow] = useState<Date | null>(null);
-  const days = useMemo(() => (now ? nextDays(7, now) : []), [now]);
+  const days = useMemo(() => (now ? nextDays(BOOKING_DAYS, now) : []), [now]);
 
   const [day, setDay] = useState(0);
   const [slot, setSlot] = useState(-1);
@@ -48,8 +64,11 @@ export function BookingForm({ proId }: { proId: string }) {
     setSlot(first.slot);
   }, []);
 
+  const dayRow = useRef<HTMLDivElement>(null);
   const pickDay = (i: number) => {
     setDay(i);
+    // Si se eligió en el calendario, lleva ese día a la vista.
+    (dayRow.current?.children[i] as HTMLElement | undefined)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
     if (now && (slot < 0 || !slotAvailable(i, slot, now))) {
       setSlot(SLOTS.findIndex((_, s) => slotAvailable(i, s, now)));
     }
@@ -142,14 +161,30 @@ export function BookingForm({ proId }: { proId: string }) {
 
   return (
     <form onSubmit={onSubmit} className="stack gap-32">
+      <Notice text={cat.aviso} />
       <fieldset className="stack gap-12 fs">
         <legend className="fs-title">1. ¿Cuándo?</legend>
-        <span className="muted" style={{ fontSize: 14, fontWeight: 700 }}>Día</span>
-        <div className="chip-row" role="radiogroup" aria-label="Día">
+        <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
+          <span className="muted" style={{ fontSize: 14, fontWeight: 700 }}>Día · desliza para ver más</span>
+          {now && (
+            <label className="date-pick">
+              <Icon name="calendar" size={18} color="var(--primary)" strokeWidth={2} />
+              Ver calendario
+              <input type="date" aria-label="Elegir fecha en el calendario"
+                min={isoDay(now, 0)} max={isoDay(now, BOOKING_DAYS - 1)} value={isoDay(now, day)}
+                onChange={(e) => {
+                  const off = dayOffset(now, e.target.value);
+                  if (off >= 0 && off < BOOKING_DAYS && dayAvailable(off, now)) pickDay(off);
+                }} />
+            </label>
+          )}
+        </div>
+        <div className="chip-row" role="radiogroup" aria-label="Día" ref={dayRow}>
           {days.map((d, i) => (
             <button key={i} type="button" role="radio" aria-checked={i === day} aria-label={d.long}
               disabled={!now || !dayAvailable(i, now)}
               className={`chip-day ${i === day ? 'on' : ''}`} onClick={() => pickDay(i)}>
+              <span className="chip-month">{d.month}</span>
               <span style={{ fontSize: 12, fontWeight: 700 }}>{d.top}</span>
               <span style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 700 }}>{d.num}</span>
             </button>

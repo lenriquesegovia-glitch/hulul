@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { Checkbox } from '@/components/Checkbox';
-import { dayAvailable, firstAvailable, formatUSD, getProfessional, quote, slotAvailable, type PaymentMethod } from '@hulul/shared';
+import { BOOKING_DAYS, dayAvailable, firstAvailable, formatUSD, getProfessional, quote, slotAvailable, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
@@ -14,7 +14,7 @@ export default function BookingScreen() {
   const { confirm } = useBooking();
 
   const now = useMemo(() => new Date(), []);
-  const days = useMemo(() => nextDays(7, now), [now]);
+  const days = useMemo(() => nextDays(BOOKING_DAYS, now), [now]);
   const first = useMemo(() => firstAvailable(now), [now]);
   const [day, setDay] = useState(first.day);
   const [slot, setSlot] = useState(first.slot);
@@ -114,13 +114,14 @@ export default function BookingScreen() {
           </View>
 
           <View style={{ gap: 10 }}>
-            <Text style={s.label}>Día</Text>
+            <Text style={s.label}>Día · desliza para ver más</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {days.map((d, i) => {
                 const on = i === day;
                 const off = !dayAvailable(i, now);
                 return (
                   <Pressable key={i} disabled={off} accessibilityRole="button" accessibilityState={{ selected: on, disabled: off }} accessibilityLabel={d.long} onPress={() => pickDay(i)} style={[s.day, on && s.on, off && s.off]}>
+                    <Text style={[s.dayMonth, on && s.onText]}>{d.month}</Text>
                     <Text style={[s.dayTop, on && s.onText]}>{d.top}</Text>
                     <Text style={[s.dayNum, on && s.onText]}>{d.num}</Text>
                   </Pressable>
@@ -271,13 +272,14 @@ const s = StyleSheet.create({
   content: { padding: 20, paddingBottom: 32, gap: 22 },
   title: { fontFamily: font.display, fontSize: 18, color: c.text },
   label: { fontFamily: font.bodyBold, fontSize: 14, color: c.textSecondary },
-  day: { minWidth: 58, height: 68, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  day: { minWidth: 58, height: 78, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  dayMonth: { fontFamily: font.bodyBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase', color: c.copper, minHeight: 12 },
   dayTop: { fontFamily: font.bodySemi, fontSize: 12, color: c.text },
   dayNum: { fontFamily: font.display, fontSize: 18, color: c.text },
   on: { backgroundColor: c.text, borderColor: c.text },
   onText: { color: c.onPrimary },
   slots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  slot: { width: '31%', flexGrow: 1, height: 46, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center' },
+  slot: { width: '23%', flexGrow: 1, height: 46, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center' },
   off: { opacity: 0.38 },
   slotText: { fontFamily: font.bodyBold, fontSize: 14, color: c.text },
   hoursBox: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },

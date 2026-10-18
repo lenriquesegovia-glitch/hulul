@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Notice } from '@/components/Notice';
 import { notFound } from 'next/navigation';
 import { categories, cities, getCategory, getCity, prosByCategory } from '@hulul/shared';
 import { ProCard } from '@/components/ProCard';
@@ -59,6 +60,7 @@ export default async function CategoryCityPage({ params }: { params: Promise<Par
           <p style={{ fontSize: 17, color: 'var(--text-2)', maxWidth: 700 }}>
             {cat.sub} en {city.zonas.slice(0, 4).join(', ')} y el resto de {city.name}. Reserva al instante, sin presupuestos, y paga solo cuando el trabajo esté bien hecho.
           </p>
+          <Notice text={cat.aviso} />
         </div>
       </section>
 

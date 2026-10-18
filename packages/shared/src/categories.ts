@@ -4,6 +4,10 @@ export type CategorySlug =
   | 'electricidad'
   | 'electrodomesticos'
   | 'limpieza'
+  | 'jardineria'
+  | 'piscinas'
+  | 'pintura'
+  | 'salud'
   | 'belleza'
   | 'mascotas'
   | 'clases';
@@ -14,6 +18,10 @@ export type IconName =
   | 'bolt'
   | 'washer'
   | 'sparkle'
+  | 'leaf'
+  | 'waves'
+  | 'roller'
+  | 'heart'
   | 'scissors'
   | 'paw'
   | 'book';
@@ -28,8 +36,10 @@ export interface Category {
   sub: string;
   icon: IconName;
   incluye: string[];
-  /** Servicios concretos que se buscan en Google dentro de la categoría. */
+  /** Servicios más pedidos dentro de la categoría (no es una lista cerrada). */
   servicios: string[];
+  /** Aviso importante que se muestra en la categoría y al reservar. */
+  aviso?: string;
 }
 
 export const categories: Category[] = [
@@ -84,6 +94,33 @@ export const categories: Category[] = [
     servicios: ['Limpieza por horas', 'Limpieza profunda', 'Limpieza post obra', 'Limpieza de oficinas'],
   },
   {
+    slug: 'jardineria',
+    name: 'Jardinería',
+    seoName: 'Jardineros a domicilio',
+    sub: 'Corte de césped, poda y mantenimiento de jardines',
+    icon: 'leaf',
+    incluye: ['Corte y bordeado de césped', 'Poda de plantas y arbustos', 'Retiro de los restos de la poda'],
+    servicios: ['Corte de césped', 'Poda de árboles y arbustos', 'Mantenimiento de jardines', 'Sistemas de riego'],
+  },
+  {
+    slug: 'piscinas',
+    name: 'Piscinas',
+    seoName: 'Mantenimiento de piscinas a domicilio',
+    sub: 'Limpieza, químicos, bombas y filtros',
+    icon: 'waves',
+    incluye: ['Aspirado, cepillado y limpieza de bordes', 'Medición y balance de cloro y pH', 'Revisión de bomba y filtro'],
+    servicios: ['Limpieza de piscina', 'Balance de químicos', 'Reparación de bombas y filtros', 'Mantenimiento mensual'],
+  },
+  {
+    slug: 'pintura',
+    name: 'Pintura',
+    seoName: 'Pintores a domicilio',
+    sub: 'Interiores, fachadas, empaste y acabados',
+    icon: 'roller',
+    incluye: ['Protección de pisos y muebles', 'Preparación y resane de paredes', 'Limpieza al terminar'],
+    servicios: ['Pintura de interiores', 'Pintura de fachadas', 'Empaste y resanes', 'Impermeabilización'],
+  },
+  {
     slug: 'belleza',
     name: 'Belleza',
     seoName: 'Belleza a domicilio',
@@ -109,6 +146,16 @@ export const categories: Category[] = [
     icon: 'book',
     incluye: ['Diagnóstico del nivel en la primera clase', 'Material de práctica', 'Reporte de avance'],
     servicios: ['Tareas dirigidas', 'Clases de inglés', 'Clases de matemáticas', 'Clases de música'],
+  },
+  {
+    slug: 'salud',
+    name: 'Salud',
+    seoName: 'Salud a domicilio: fisioterapia, enfermería y pediatría',
+    sub: 'Fisioterapia, enfermería, pediatría y cuidado de adultos mayores',
+    icon: 'heart',
+    incluye: ['Profesionales con título registrado en la SENESCYT', 'Atención en tu casa, con cita', 'Informe de la atención en la app'],
+    servicios: ['Fisioterapia', 'Enfermería a domicilio', 'Consulta pediátrica', 'Cuidado de adultos mayores', 'Curso de primeros auxilios', 'Toma de muestras'],
+    aviso: 'HULUL no atiende emergencias. Si alguien está en peligro, llama al 911.',
   },
 ];
 

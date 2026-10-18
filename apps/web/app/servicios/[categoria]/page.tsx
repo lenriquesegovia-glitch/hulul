@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Notice } from '@/components/Notice';
 import { notFound } from 'next/navigation';
 import { categories, cities, getCategory, prosByCategory } from '@hulul/shared';
 import { ProCard } from '@/components/ProCard';
@@ -41,6 +42,7 @@ export default async function CategoryPage({ params }: { params: Promise<Params>
             <h1 style={{ fontSize: 'clamp(28px, 4vw, 42px)' }}>{cat.seoName}</h1>
           </div>
           <p style={{ fontSize: 17, color: 'var(--text-2)', maxWidth: 680 }}>{cat.sub}. Elige tu ciudad para ver a los profesionales disponibles.</p>
+          <Notice text={cat.aviso} />
           <div className="link-cloud">
             {cities.map((c) => (
               <Link key={c.slug} href={`/servicios/${cat.slug}/${c.slug}`}>{c.name}</Link>
@@ -60,10 +62,13 @@ export default async function CategoryPage({ params }: { params: Promise<Params>
 
       <section className="section-sm">
         <div className="container stack gap-12">
-          <h2 style={{ fontSize: 22 }}>Servicios incluidos en {cat.name.toLowerCase()}</h2>
+          <h2 style={{ fontSize: 22 }}>Lo más solicitado en {cat.name.toLowerCase()}</h2>
           <div className="link-cloud">
             {cat.servicios.map((s) => <span key={s} className="pill pill-warm">{s}</span>)}
           </div>
+          <p className="muted" style={{ fontSize: 14.5 }}>
+            ¿Necesitas otro trabajo de {cat.name.toLowerCase()}? Descríbelo al reservar y el profesional lo revisa contigo.
+          </p>
         </div>
       </section>
 

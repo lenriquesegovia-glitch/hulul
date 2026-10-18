@@ -42,6 +42,11 @@ export default function CategoryScreen() {
         <View style={{ gap: 6 }}>
           <H1>{cat.name}</H1>
           <Body muted>{cat.sub}</Body>
+          {cat.aviso && (
+            <View style={s.notice} accessibilityRole="text">
+              <Body style={{ fontSize: 13.5 }}><Text style={{ fontWeight: '700' }}>Importante: </Text>{cat.aviso}</Body>
+            </View>
+          )}
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
@@ -103,4 +108,5 @@ const s = StyleSheet.create({
   proFoot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTopWidth: 1, borderTopColor: c.border },
   price: { fontFamily: font.display, fontSize: 16, color: c.text },
   perHour: { fontFamily: font.body, fontSize: 12, color: c.textMuted },
+  notice: { backgroundColor: c.copperSoft, borderLeftWidth: 4, borderLeftColor: c.primary, borderRadius: 10, padding: 12 },
 });

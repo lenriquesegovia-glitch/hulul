@@ -268,3 +268,15 @@ details p { margin-top: 10px; color: var(--text-2); }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .stepper:disabled { opacity: .4; cursor: default; }
+
+/* Aviso importante (p. ej., Salud no atiende emergencias) */
+.notice { background: var(--copper-soft); border-left: 4px solid var(--primary); border-radius: 10px; padding: 12px 14px; font-size: 14.5px; color: var(--text); max-width: 680px; }
+
+/* Días: mes abreviado al empezar el mes, y calendario */
+.chip-day { height: 80px; }
+.chip-month { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--copper); min-height: 13px; line-height: 13px; }
+.chip-day.on .chip-month { color: inherit; }
+.date-pick { position: relative; display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; color: var(--primary); }
+.date-pick input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; font-size: 16px; }
+.slot-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.chip-slot { font-size: 14.5px; }

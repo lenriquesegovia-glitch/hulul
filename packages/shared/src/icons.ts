@@ -44,6 +44,24 @@ export const icons: Record<UiIconName, IconShape[]> = {
     { kind: 'path', d: 'M3 5.5C5.5 4 9 4 12 6c3-2 6.5-2 9-.5V19c-2.5-1.5-6-1.5-9 .5-3-2-6.5-2-9-.5V5.5z' },
     { kind: 'path', d: 'M12 6v13.5' },
   ],
+  leaf: [
+    { kind: 'path', d: 'M5 19c0-8.5 6-14 15-14 0 9-6 14.5-14 14.5H5z' },
+    { kind: 'path', d: 'M5 19.5l8-8' },
+  ],
+  waves: [
+    { kind: 'path', d: 'M2 8c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0' },
+    { kind: 'path', d: 'M2 13c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0' },
+    { kind: 'path', d: 'M2 18c2.5-2 4.5-2 7 0s4.5 2 7 0 4.5-2 6 0' },
+  ],
+  roller: [
+    { kind: 'rect', x: 3, y: 3, width: 15, height: 6, rx: 1.5 },
+    { kind: 'path', d: 'M18 6h2.5v5H11v3' },
+    { kind: 'rect', x: 9.5, y: 14, width: 3, height: 7, rx: 1 },
+  ],
+  heart: [
+    { kind: 'path', d: 'M12 20s-8-4.8-8-10.5A4.5 4.5 0 0 1 12 6.8a4.5 4.5 0 0 1 8 2.7C20 15.2 12 20 12 20z' },
+    { kind: 'path', d: 'M7 12h3l1.5-2.5 2 4.5 1.5-2H17' },
+  ],
   pin: [
     { kind: 'path', d: 'M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z' },
     { kind: 'circle', cx: 12, cy: 9.5, r: 2.5 },

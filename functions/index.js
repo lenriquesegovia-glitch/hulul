@@ -27,7 +27,8 @@ const NOTIFY_TO = defineString('NOTIFY_TO', { description: 'Correo donde recibes
 const CATEGORIES = {
   climatizacion: 'Climatización', plomeria: 'Plomería', electricidad: 'Electricidad',
   electrodomesticos: 'Electrodomésticos', limpieza: 'Limpieza', belleza: 'Belleza',
-  mascotas: 'Mascotas', clases: 'Clases',
+  mascotas: 'Mascotas', clases: 'Clases', jardineria: 'Jardinería', piscinas: 'Piscinas',
+  pintura: 'Pintura', salud: 'Salud',
 };
 const PAYMENTS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', deuna: 'DeUna' };
 const DAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
