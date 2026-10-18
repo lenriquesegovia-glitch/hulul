@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { formatUSD, getCategory, getProfessional } from '@hulul/shared';
+import { formatUSD, getCategory } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { Avatar, Body, Card, H1, PrimaryButton } from '@/components/ui';
 import { nextDays, SLOTS, useBooking } from '@/lib/booking';
@@ -18,8 +18,8 @@ const timeline = [
 
 export default function ConfirmedScreen() {
   const { last } = useBooking();
-  const pro = last ? getProfessional(last.professionalId) : undefined;
-  const cat = pro ? getCategory(pro.category) : undefined;
+  const pro = last ? { name: last.professionalName, initials: last.professionalName.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() } : undefined;
+  const cat = last ? getCategory(last.category) : undefined;
 
   if (!last || !pro || !cat) {
     return (

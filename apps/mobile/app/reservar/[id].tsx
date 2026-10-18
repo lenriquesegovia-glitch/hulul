@@ -7,10 +7,12 @@ import { ClientGate } from '@/components/ClientGate';
 import { Icon } from '@/components/Icon';
 import { MapPicker } from '@/components/MapPicker';
 import type { ClientProfile } from '@hulul/shared/firebase';
-import { BOOKING_DAYS, categoryPricing, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, getProfessional, quote, slotAvailable, type PaymentMethod } from '@hulul/shared';
+import { BOOKING_DAYS, categoryPricing, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
+import { ActivityIndicator } from 'react-native';
+import { usePro } from '@/lib/pros';
 
 const OTHER = 'Otro trabajo';
 const NOTES_MAX = 940;
@@ -25,9 +27,27 @@ export default function BookingScreen() {
 }
 
 function BookingForm({ uid, profile }: { uid: string; profile: ClientProfile }) {
-  const { id, trabajo } = useLocalSearchParams<{ id: string; trabajo?: string }>();
-  const pro = getProfessional(id);
-  const cat = pro ? getCategory(pro.category) : undefined;
+  const { id, c: catParam } = useLocalSearchParams<{ id: string; c?: string }>();
+  const pro = usePro(id, catParam);
+  if (pro === undefined) return <SafeAreaView style={{ flex: 1, padding: 20 }}><BackButton /><ActivityIndicator color={c.primary} style={{ marginTop: 40 }} /></SafeAreaView>;
+  if (!pro) {
+    return (
+      <SafeAreaView style={{ flex: 1, padding: 20, gap: 16 }}>
+        <BackButton />
+        <Body>Este profesional no está disponible.</Body>
+      </SafeAreaView>
+    );
+  }
+  return <BookingFormInner pro={pro} uid={uid} profile={profile} />;
+}
+
+function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: string; profile: ClientProfile }) {
+  const { trabajo } = useLocalSearchParams<{ trabajo?: string }>();
+  const cat = getCategory(pro.category);
+  const jobs = useMemo(() => {
+    const own = pro.services ?? [];
+    return cat ? [...own, ...cat.servicios.filter((x) => !own.includes(x))] : own;
+  }, [pro.services, cat]);
   const { confirm } = useBooking();
 
   const now = useMemo(() => new Date(), []);
@@ -45,7 +65,7 @@ function BookingForm({ uid, profile }: { uid: string; profile: ClientProfile }) 
   const picked = useRef('');
   const [location, setLocation] = useState<LatLng | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
-  const [job, setJob] = useState(trabajo && cat && (cat.servicios.includes(trabajo) || trabajo === OTHER) ? trabajo : '');
+  const [job, setJob] = useState(trabajo && cat && (jobs.includes(trabajo) || trabajo === OTHER) ? trabajo : '');
   const [notes, setNotes] = useState('');
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
   const [error, setError] = useState('');
@@ -128,7 +148,7 @@ function BookingForm({ uid, profile }: { uid: string; profile: ClientProfile }) 
         consentMarketing: profile.consentMarketing,
         demo: true,
       });
-      confirm({ professionalId: pro.id, dayIndex: day, slotIndex: slot, hours, address, notes: job, payment, total: q.total, bookingId });
+      confirm({ professionalId: pro.id, professionalName: pro.name, category: pro.category, dayIndex: day, slotIndex: slot, hours, address, notes: job, payment, total: q.total, bookingId });
       router.replace('/confirmada');
     } catch {
       setSaveError('No pudimos registrar tu reserva. Revisa tu conexión e inténtalo de nuevo.');
@@ -200,7 +220,7 @@ function BookingForm({ uid, profile }: { uid: string; profile: ClientProfile }) 
           <View style={{ gap: 10 }}>
             <Text style={s.label}>¿Qué trabajo necesitas?</Text>
             <View style={s.tags}>
-              {[...cat.servicios, OTHER].map((t) => {
+              {[...jobs, OTHER].map((t) => {
                 const on = job === t;
                 return (
                   <Pressable key={t} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => { setJob(t); setError(''); }} style={[s.tag, on && s.tagOn]}>

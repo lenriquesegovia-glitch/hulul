@@ -23,6 +23,12 @@ export interface Professional {
   jobsDone: number;
   verified: boolean;
   availableToday: boolean;
+  /** Todas sus categorías (máx. 3). */
+  categories?: CategorySlug[];
+  /** Trabajos que marcó en esta categoría. */
+  services?: string[];
+  /** Horario, p. ej. "08:00 a 18:00". */
+  hours?: string;
 }
 
 export type BookingStatus =

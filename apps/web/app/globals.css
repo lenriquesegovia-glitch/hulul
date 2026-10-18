@@ -408,3 +408,4 @@ details p { margin-top: 10px; color: var(--text-2); }
   .role-card { flex-direction: row; align-items: center; }
   .role-card img { width: 96px; aspect-ratio: 1; flex-shrink: 0; }
 }
+.own-job { flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--text); background: var(--surface); border: 1px dashed var(--border); border-radius: 12px; padding: 10px 12px; min-height: 44px; }

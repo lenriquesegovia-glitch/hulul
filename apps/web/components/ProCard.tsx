@@ -1,13 +1,13 @@
 import Link from 'next/link';
-import { formatRating, minimumLabel, type Professional } from '@hulul/shared';
+import { minimumLabel, proHref, ratingLabel, type Professional } from '@hulul/shared';
 import { Icon } from './Icon';
 
 /** `job`: trabajo elegido en la categoría; se pasa a la reserva. */
 export function ProCard({ pro, job }: { pro: Professional; job?: string }) {
-  const bookHref = `/reservar/${pro.id}${job ? `?trabajo=${encodeURIComponent(job)}` : ''}`;
+  const bookHref = proHref('reservar', pro, job);
   return (
     <article className="card pro-card">
-      <Link href={`/profesional/${pro.id}`} className="stack gap-12" style={{ textDecoration: 'none', color: 'inherit' }}>
+      <Link href={proHref('profesional', pro)} className="stack gap-12" style={{ textDecoration: 'none', color: 'inherit' }}>
         <div className="row gap-12">
           <span className="avatar" style={{ width: 52, height: 52, fontSize: 17 }}>{pro.initials}</span>
           <div className="stack gap-4" style={{ minWidth: 0 }}>
@@ -16,7 +16,7 @@ export function ProCard({ pro, job }: { pro: Professional; job?: string }) {
               {pro.verified && <Icon name="shield" size={18} color="#9A5B34" label="Verificado" />}
             </strong>
             <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
-              ★ {formatRating(pro.rating)} ({pro.reviewCount}) · {pro.jobsDone} servicios
+              {ratingLabel(pro)}{pro.jobsDone > 0 ? ` · ${pro.jobsDone} servicios` : ` · ${pro.years} años de experiencia`}
             </span>
             <span className="muted" style={{ fontSize: 13.5 }}>{pro.zone}</span>
           </div>

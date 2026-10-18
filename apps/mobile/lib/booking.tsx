@@ -11,6 +11,8 @@ export { nextDays, PAYMENT_OPTIONS, SLOTS } from '@hulul/shared';
  */
 export interface DraftBooking {
   professionalId: string;
+  professionalName: string;
+  category: string;
   dayIndex: number;
   slotIndex: number;
   hours: number;

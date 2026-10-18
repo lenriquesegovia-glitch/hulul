@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Notice } from '@/components/Notice';
 import { notFound } from 'next/navigation';
-import { categories, categoryImage, cities, getCategory, prosByCategory } from '@hulul/shared';
+import { categories, categoryImage, cities, getCategory } from '@hulul/shared';
 import { ServicePicker } from '@/components/ServicePicker';
 import { DownloadBand } from '@/components/DownloadBand';
 import { Icon } from '@/components/Icon';
@@ -28,7 +28,6 @@ export default async function CategoryPage({ params }: { params: Promise<Params>
   const { categoria } = await params;
   const cat = getCategory(categoria);
   if (!cat) notFound();
-  const pros = prosByCategory(cat.slug);
 
   return (
     <>
@@ -55,7 +54,7 @@ export default async function CategoryPage({ params }: { params: Promise<Params>
 
       <section className="section-sm" style={{ paddingTop: 0 }}>
         <div className="container">
-          <ServicePicker cat={cat} pros={pros} />
+          <ServicePicker cat={cat} />
         </div>
       </section>
 

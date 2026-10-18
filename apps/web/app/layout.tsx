@@ -43,7 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {DEMO_MODE && (
           <div role="note" style={{ background: '#1C1A1A', color: '#FAF7F2', fontSize: 13.5, textAlign: 'center', padding: '8px 16px' }}>
-            Versión de prueba: los profesionales, precios y reseñas que ves son de ejemplo.
+            Versión de prueba: las reservas no generan ningún cobro.
           </div>
         )}
         <Header />

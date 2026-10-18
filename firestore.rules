@@ -157,6 +157,13 @@ service cloud.firestore {
       }
     }
 
+    // Directorio público: solo profesionales aprobados. Lo escribe la función
+    // directorioProfesionales; nadie lo cambia desde la web o la app.
+    match /pros/{uid} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Todo lo demás, cerrado.
     match /{document=**} {
       allow read, write: if false;

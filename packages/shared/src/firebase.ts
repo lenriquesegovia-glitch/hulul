@@ -12,7 +12,8 @@ import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { addDoc, collection, doc, getDoc, getDocs, getFirestore, query, serverTimestamp, setDoc, where, type Firestore } from 'firebase/firestore';
 import { PRIVACY_VERSION } from './legal';
 import type { CategorySlug } from './categories';
-import type { LatLng, PaymentMethod } from './models';
+import type { LatLng, PaymentMethod, Professional } from './models';
+import { sortPros, toProfessional, type PublicPro } from './demo-data';
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyAR2w6K7JXPHyPvfLb3piv--48T3gvlL2o',
@@ -192,4 +193,19 @@ export const TRACK_STEPS: { status: string; label: string }[] = [
 export function activeBooking(list: ClientBooking[]): ClientBooking | null {
   const live = list.filter((b) => !['completada', 'cancelada'].includes(b.status));
   return live.length ? [...live].sort((a, b) => (a.date + a.slot > b.date + b.slot ? 1 : -1))[0] : null;
+}
+
+/* ------------------------ Directorio de profesionales ------------------------ */
+
+/** Profesionales aprobados de una categoría (y ciudad, si se indica). */
+export async function listPros(category: CategorySlug, city?: string): Promise<Professional[]> {
+  const snap = await getDocs(query(collection(firestore(), 'pros'), where('categories', 'array-contains', category)));
+  const list = snap.docs.map((d) => toProfessional({ ...(d.data() as PublicPro), uid: d.id }, category));
+  return sortPros(city ? list.filter((p) => p.cities.includes(city)) : list);
+}
+
+/** Un profesional aprobado; `category` elige con qué tarifa se muestra. */
+export async function loadPro(id: string, category?: CategorySlug): Promise<Professional | null> {
+  const snap = await getDoc(doc(firestore(), 'pros', id));
+  return snap.exists() ? toProfessional({ ...(snap.data() as PublicPro), uid: snap.id }, category) : null;
 }

@@ -18,6 +18,12 @@ const PHOTOS: Record<CategorySlug, string> = {
   mascotas: 'photo-1537151608828-ea2b11777ee8',
   clases: 'photo-1583468982228-19f19164aee2',
   salud: 'photo-1649751361457-01d3a696c7e6',
+  cerrajeria: 'photo-1756341782434-3020b9d17372',
+  carpinteria: 'photo-1769353086138-19ee65291a04',
+  albanileria: 'photo-1701850009190-2859ba2aeea6',
+  fumigacion: 'photo-1747659629851-a92bd71149f6',
+  mudanzas: 'photo-1714647211902-bb711d643a17',
+  tecnologia: 'photo-1550041473-d296a3a8a18a',
 };
 
 /** URL de la foto de una categoría, recortada al ancho pedido. */

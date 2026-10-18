@@ -62,6 +62,31 @@ export const icons: Record<UiIconName, IconShape[]> = {
     { kind: 'path', d: 'M12 20s-8-4.8-8-10.5A4.5 4.5 0 0 1 12 6.8a4.5 4.5 0 0 1 8 2.7C20 15.2 12 20 12 20z' },
     { kind: 'path', d: 'M7 12h3l1.5-2.5 2 4.5 1.5-2H17' },
   ],
+  key: [
+    { kind: 'circle', cx: 8, cy: 15, r: 4.5 },
+    { kind: 'path', d: 'M11.2 11.8L20 3M16.5 6.5l2.5 2.5M14 9l2 2' },
+  ],
+  saw: [
+    { kind: 'path', d: 'M3 17l11-11 4 4-11 11H3v-4z' },
+    { kind: 'path', d: 'M14 6l2-2 4 4-2 2M6 14l1.5 1.5M8.5 11.5L10 13M11 9l1.5 1.5' },
+  ],
+  brick: [
+    { kind: 'rect', x: 3, y: 5, width: 18, height: 14, rx: 1.5 },
+    { kind: 'path', d: 'M3 9.7h18M3 14.3h18M9 5v4.7M15 5v4.7M6 9.7v4.6M12 9.7v4.6M18 9.7v4.6M9 14.3V19M15 14.3V19' },
+  ],
+  bug: [
+    { kind: 'path', d: 'M12 7.5a4 4 0 0 1 4 4V15a4 4 0 0 1-8 0v-3.5a4 4 0 0 1 4-4z' },
+    { kind: 'path', d: 'M9.5 5.5L11 7.5M14.5 5.5L13 7.5M8 12H4.5M8 16l-3 2M16 12h3.5M16 16l3 2M8.5 9.5L5.5 8M15.5 9.5l3-1.5M12 11v7' },
+  ],
+  truck: [
+    { kind: 'path', d: 'M2 6h11v10H2zM13 9h4.5l3.5 3.5V16h-8z' },
+    { kind: 'circle', cx: 6.5, cy: 17.5, r: 1.8 },
+    { kind: 'circle', cx: 17, cy: 17.5, r: 1.8 },
+  ],
+  monitor: [
+    { kind: 'rect', x: 3, y: 4, width: 18, height: 12, rx: 1.5 },
+    { kind: 'path', d: 'M9 20h6M12 16v4' },
+  ],
   pin: [
     { kind: 'path', d: 'M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z' },
     { kind: 'circle', cx: 12, cy: 9.5, r: 2.5 },

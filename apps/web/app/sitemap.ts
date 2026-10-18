@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { categories, cities, demoProfessionals } from '@hulul/shared';
+import { categories, cities } from '@hulul/shared';
 import { SITE_URL } from '@/lib/site';
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -17,6 +17,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
         priority: city.activa ? 0.9 : 0.5,
       })),
     ),
-    ...demoProfessionals.map((p) => ({ url: url(`/profesional/${p.id}`), lastModified: now, changeFrequency: 'weekly' as const, priority: 0.5 })),
   ];
 }

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'expo-router';
+import { usePros } from '@/lib/pros';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { categoryImage, categoryPricing, formatPrice, formatRating, getCategory, minimumLabel, prosByCategory } from '@hulul/shared';
+import { categoryImage, categoryPricing, formatPrice, getCategory, minimumLabel, ratingLabel } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { Avatar, BackButton, Body, Card, H1, Pill } from '@/components/ui';
 import { c, font, radius } from '@/theme';
@@ -23,12 +25,15 @@ export default function CategoryScreen() {
   // Trabajo elegido en "¿Qué necesitas?": viaja al perfil y a la reserva.
   const [job, setJob] = useState(trabajo && cat?.servicios.includes(trabajo) ? trabajo : '');
 
+  const { pros: all } = usePros(cat?.slug);
   const pros = useMemo(() => {
-    const list = cat ? prosByCategory(cat.slug) : [];
-    if (sort === 'today') return list.filter((p) => p.availableToday);
-    if (sort === 'price') return [...list].sort((a, b) => a.hourlyRate - b.hourlyRate);
-    return [...list].sort((a, b) => b.rating - a.rating);
-  }, [cat, sort]);
+    let list = all ?? [];
+    if (sort === 'today') list = list.filter((p) => p.availableToday);
+    else if (sort === 'price') list = [...list].sort((a, b) => a.hourlyRate - b.hourlyRate);
+    // Si eligió un trabajo, primero quienes lo marcaron.
+    if (job && job !== OTHER) list = [...list].sort((a, b) => Number((b.services ?? []).includes(job)) - Number((a.services ?? []).includes(job)));
+    return list;
+  }, [all, sort, job]);
 
   if (!cat) {
     return (
@@ -95,10 +100,17 @@ export default function CategoryScreen() {
           })}
         </ScrollView>
 
-        <Body muted style={{ fontSize: 13 }}>{pros.length} profesionales disponibles</Body>
+        {all === null ? <Body muted style={{ fontSize: 13 }}>Buscando profesionales…</Body>
+          : all.length === 0 ? (
+            <Card style={{ gap: 10 }}>
+              <Text style={s.proName}>Estamos sumando profesionales de {cat.name.toLowerCase()}</Text>
+              <Body muted style={{ fontSize: 13.5 }}>Todos los profesionales de HULUL son personas reales, verificadas una por una. Muy pronto habrá quien te atienda aquí.</Body>
+              <Link href="/profesionales" style={{ fontFamily: font.bodyBold, fontSize: 14, color: c.primary }}>¿Trabajas en {cat.name.toLowerCase()}? Regístrate</Link>
+            </Card>
+          ) : <Body muted style={{ fontSize: 13 }}>{pros.length} {pros.length === 1 ? 'profesional' : 'profesionales'}</Body>}
 
         {pros.map((p) => (
-          <Pressable key={p.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/profesional/[id]', params: { id: p.id, trabajo: job || undefined } })}>
+          <Pressable key={p.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/profesional/[id]', params: { id: p.id, c: cat.slug, trabajo: job || undefined } })}>
             {({ pressed }) => (
               <Card style={[{ gap: 12 }, pressed && { borderColor: c.copper }]}>
                 <View style={s.proHead}>
@@ -108,7 +120,7 @@ export default function CategoryScreen() {
                       <Text style={s.proName}>{p.name}</Text>
                       {p.verified && <Icon name="shield" size={16} color={c.copper} />}
                     </View>
-                    <Body style={{ fontSize: 13 }}>★ {formatRating(p.rating)} ({p.reviewCount}) · {p.jobsDone} servicios</Body>
+                    <Body style={{ fontSize: 13 }}>{ratingLabel(p)}{p.jobsDone > 0 ? ` · ${p.jobsDone} servicios` : ` · ${p.years} años exp.`}</Body>
                     <Body muted style={{ fontSize: 12.5 }}>{p.zone}</Body>
                   </View>
                 </View>

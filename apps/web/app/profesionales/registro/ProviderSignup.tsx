@@ -18,6 +18,7 @@ import {
   subservicesOf,
   validCedula,
   validRuc,
+  TRADE_NAME,
   WEEKDAY_NAMES,
   type CategorySlug,
   type ProviderDocSpec,
@@ -45,7 +46,7 @@ interface Draft {
   email: string;
   categories: CategorySlug[];
   services: Partial<Record<CategorySlug, string[]>>;
-  rates: Partial<Record<CategorySlug, number>>;
+  rates: Partial<Record<CategorySlug, number | undefined>>;
   minHours: Partial<Record<CategorySlug, number>>;
   years: number;
   bio: string;
@@ -140,6 +141,8 @@ function Wizard({ user }: { user: User }) {
   }, [user]);
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
+  // El mensaje de error se borra apenas el profesional corrige algo.
+  useEffect(() => { setError(''); }, [d, bank]);
 
   /** Guarda el borrador (y el banco, si corresponde). */
   const save = async (extra: Record<string, unknown> = {}, nextStep = step) => {
@@ -382,15 +385,23 @@ function StepServices({ d, setD }: { d: Draft; setD: (fn: (x: Draft) => Draft) =
             <strong style={{ fontSize: 17 }}>{cat.name}</strong>
             <span className="muted" style={{ fontSize: 13.5 }}>Marca lo que haces:</span>
             <div className="tag-row">
-              {subservicesOf(c).map((s) => {
+              {[...subservicesOf(c), ...(d.services[c] ?? []).filter((x) => !subservicesOf(c).includes(x))].map((s) => {
                 const on = (d.services[c] ?? []).includes(s);
                 return <button key={s} type="button" aria-pressed={on} className={`tag ${on ? 'on' : ''}`} onClick={() => toggleSvc(c, s)}>{on && '✓ '}{s}</button>;
               })}
             </div>
+            <AddOwnJob onAdd={(job) => setD((x) => {
+              const cur = x.services[c] ?? [];
+              return cur.includes(job) ? x : { ...x, services: { ...x.services, [c]: [...cur, job] } };
+            })} />
             <div className="form-2">
               <Field id={`r-${c}`} label="Tu tarifa por hora (USD)" hint={`Mínimo $${f.rate}`}>
-                <input id={`r-${c}`} type="number" inputMode="decimal" min={f.rate} max={200} step={0.5} value={d.rates[c] ?? ''}
-                  onChange={(e) => setD((x) => ({ ...x, rates: { ...x.rates, [c]: Number(e.target.value) } }))} />
+                <input id={`r-${c}`} type="text" inputMode="numeric" maxLength={3} value={d.rates[c] ? String(d.rates[c]) : ''}
+                  placeholder={String(f.rate)}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g, '').replace(/^0+/, '');
+                    setD((x) => ({ ...x, rates: { ...x.rates, [c]: v ? Number(v) : undefined } }));
+                  }} />
               </Field>
             </div>
             <p className="muted" style={{ fontSize: 13 }}>
@@ -405,8 +416,17 @@ function StepServices({ d, setD }: { d: Draft; setD: (fn: (x: Draft) => Draft) =
 
       <div className="form-2">
         <Field id="yrs" label="Años de experiencia">
-          <input id="yrs" type="number" inputMode="numeric" min={0} max={60} value={d.years || ''} onChange={(e) => setD((x) => ({ ...x, years: Number(e.target.value) }))} />
+          <input id="yrs" type="text" inputMode="numeric" maxLength={2} value={d.years ? String(d.years) : ''}
+            onChange={(e) => { const v = e.target.value.replace(/\D/g, '').replace(/^0+/, ''); setD((x) => ({ ...x, years: v ? Number(v) : 0 })); }} />
         </Field>
+      </div>
+      <div className="stack gap-8">
+        <span className="field-label">¿No sabes qué escribir? Elige una plantilla y edítala:</span>
+        <div className="tag-row">
+          {bioTemplates(d).map((t) => (
+            <button key={t.label} type="button" className="tag" onClick={() => setD((x) => ({ ...x, bio: t.text.slice(0, 500) }))}>{t.label}</button>
+          ))}
+        </div>
       </div>
       <Field id="bio" label="Preséntate a los clientes" hint={`${d.bio.length}/500`}>
         <textarea id="bio" rows={4} maxLength={500} value={d.bio} placeholder="Ej.: Técnico en refrigeración con 10 años de experiencia. Trabajo con equipos inverter y llevo mis herramientas."
@@ -580,7 +600,7 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
 function StatusCard({ status, name, user, onEdit }: { status: ProviderStatus; name: string; user: User; onEdit?: () => void }) {
   const info: Record<string, { t: string; d: string; ok?: boolean }> = {
     en_revision: { t: `¡Listo${name ? `, ${name}` : ''}! Tu registro está en revisión`, d: 'Revisamos tus datos y documentos en 1 a 3 días hábiles. Te escribiremos por WhatsApp y correo con el resultado.', ok: true },
-    aprobado: { t: '¡Tu cuenta está aprobada!', d: 'Descarga la app de HULUL e inicia sesión con esta misma cuenta para activar tu disponibilidad y recibir trabajos.', ok: true },
+    aprobado: { t: '¡Ya estás en HULUL!', d: 'Tu perfil está publicado y los clientes pueden reservarte. Te llega un correo por cada reserva nueva.', ok: true },
     rechazado: { t: 'No pudimos aprobar tu registro', d: 'Te escribimos por correo con el motivo. Si crees que es un error, contáctanos.' },
     suspendido: { t: 'Tu cuenta está suspendida', d: 'Te escribimos por correo con el motivo y los pasos para reactivarla.' },
   };
@@ -591,6 +611,7 @@ function StatusCard({ status, name, user, onEdit }: { status: ProviderStatus; na
         {s.ok && <span className="avatar" style={{ width: 64, height: 64, background: 'var(--success-soft)' }}><Icon name="check" size={32} color="var(--success)" strokeWidth={2.4} /></span>}
         <h2 style={{ fontSize: 24 }}>{s.t}</h2>
         <p style={{ color: 'var(--text-2)' }}>{s.d}</p>
+        {status === 'aprobado' && <Link href={`/profesional/${user.uid}`} className="btn btn-primary">Ver mi perfil público</Link>}
       </div>
       <div className="row gap-12" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <span className="muted" style={{ fontSize: 13.5 }}>Cuenta: {user.email ?? user.phoneNumber}</span>
@@ -604,6 +625,47 @@ function StatusCard({ status, name, user, onEdit }: { status: ProviderStatus; na
 }
 
 /* ---------------------------- Piezas ---------------------------- */
+
+/** Agregar un trabajo que no está en la lista. */
+function AddOwnJob({ onAdd }: { onAdd: (job: string) => void }) {
+  const [v, setV] = useState('');
+  const add = () => {
+    const job = v.trim().replace(/\s+/g, ' ');
+    if (job.length < 3) return;
+    onAdd(job.charAt(0).toUpperCase() + job.slice(1, 60));
+    setV('');
+  };
+  return (
+    <div className="row gap-8">
+      <input className="own-job" value={v} maxLength={60} placeholder="¿Haces otro trabajo? Escríbelo"
+        onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+      <button type="button" className="btn btn-ghost" style={{ minHeight: 44, padding: '0 14px' }} onClick={add}>Agregar</button>
+    </div>
+  );
+}
+
+/** Plantillas editables para "Preséntate a los clientes", con los datos que ya llenó. */
+function bioTemplates(d: Draft): { label: string; text: string }[] {
+  const cats = d.categories;
+  const oficio = cats.length ? TRADE_NAME[cats[0]] : 'profesional';
+  const areas = cats.map((c) => getCategory(c)?.name.toLowerCase()).filter(Boolean).join(', ') || 'servicios del hogar';
+  const jobs = cats.flatMap((c) => d.services[c] ?? []).slice(0, 3).map((j) => j.toLowerCase());
+  const jobsText = jobs.length ? jobs.join(', ') : areas;
+  const years = d.years ? `${d.years} años` : 'varios años';
+  const name = d.kind === 'empresa' ? d.businessName || 'nuestra empresa' : d.firstName || '';
+  const cityText = d.cities.length ? d.cities.map((x) => cities.find((y) => y.slug === x)?.name).join(', ') : 'Guayaquil, Samborondón y Daule';
+  if (d.kind === 'empresa') {
+    return [
+      { label: 'Empresa con experiencia', text: `Somos ${name}, un equipo dedicado a ${areas} con ${years} de experiencia. Hacemos ${jobsText}. Trabajamos con personal propio, herramientas profesionales y garantía en cada trabajo.` },
+      { label: 'Rápidos y garantizados', text: `En ${name} atendemos ${areas} en ${cityText}. Llegamos a la hora acordada, explicamos el trabajo antes de empezar y dejamos todo limpio. ${years} resolviendo ${jobsText}.` },
+    ];
+  }
+  return [
+    { label: 'Con experiencia', text: `Soy ${name}, ${oficio} con ${years} de experiencia. Me especializo en ${jobsText}. Llevo mis propias herramientas, soy puntual y dejo el área limpia. Mi trabajo tiene garantía.` },
+    { label: 'Cercano y confiable', text: `Hola, soy ${name}. Me dedico a ${areas} hace ${years}. Te explico qué voy a hacer y cuánto toma antes de empezar, y no cobro nada fuera de lo acordado en HULUL. Atiendo en ${cityText}.` },
+    { label: 'Corto y directo', text: `${oficio.charAt(0).toUpperCase() + oficio.slice(1)} con ${years} de experiencia: ${jobsText}. Puntual, ordenado y con garantía.` },
+  ];
+}
 
 function Progress({ step, onPick }: { step: number; onPick: (i: number) => void }) {
   return (

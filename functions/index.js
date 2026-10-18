@@ -10,7 +10,9 @@
  * cambiar MAIL_PROVIDER y FROM_EMAIL. La contraseña se guarda como secreto en
  * Google (MAIL_PASSWORD), nunca en el código.
  */
-import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { initializeApp } from 'firebase-admin/app';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import nodemailer from 'nodemailer';
@@ -18,6 +20,9 @@ import nodemailer from 'nodemailer';
 /** Debe coincidir con la ubicación de la base de datos Firestore. */
 const REGION = 'southamerica-east1';
 const PROJECT = 'hulul-59081';
+
+initializeApp();
+const db = () => getFirestore();
 
 const MAIL_PASSWORD = defineSecret('MAIL_PASSWORD');
 const MAIL_PROVIDER = defineString('MAIL_PROVIDER', { default: 'gmail', description: 'gmail o resend' });
@@ -28,7 +33,8 @@ const CATEGORIES = {
   climatizacion: 'Climatización', plomeria: 'Plomería', electricidad: 'Electricidad',
   electrodomesticos: 'Electrodomésticos', limpieza: 'Limpieza', belleza: 'Belleza',
   mascotas: 'Mascotas', clases: 'Clases', jardineria: 'Jardinería', piscinas: 'Piscinas',
-  pintura: 'Pintura', salud: 'Salud',
+  pintura: 'Pintura', salud: 'Salud', cerrajeria: 'Cerrajería', carpinteria: 'Carpintería',
+  albanileria: 'Albañilería', fumigacion: 'Fumigación', mudanzas: 'Mudanzas', tecnologia: 'Tecnología',
 };
 const PAYMENTS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', deuna: 'DeUna' };
 const DAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -187,6 +193,14 @@ export const avisoReserva = onDocumentCreated(
     if (!b) return;
     const mail = transport();
     for (const m of bookingEmails(b, event.params.id, senders())) await mail.sendMail(m);
+    // Aviso al profesional real (si es uno registrado y aprobado).
+    try {
+      const pro = await db().doc(`providers/${b.professionalId}`).get();
+      const p = pro.exists ? pro.data() : null;
+      if (p?.email && p.status === 'aprobado') await mail.sendMail(proBookingEmail(b, event.params.id, p, senders()));
+    } catch (e) {
+      logger.warn('No se pudo avisar al profesional', { id: event.params.id, e: String(e) });
+    }
     logger.info('Avisos de reserva enviados', { id: event.params.id });
   },
 );
@@ -243,5 +257,74 @@ export const avisoRegistroProfesional = onDocumentUpdated(
     const mail = transport();
     for (const m of providerEmails(after, event.params.uid, senders())) await mail.sendMail(m);
     logger.info('Aviso de registro de profesional enviado', { uid: event.params.uid });
+  },
+);
+
+/** Correo al profesional: tiene una reserva nueva. */
+export function proBookingEmail(b, id, p, { from, notifyTo }) {
+  const cat = CATEGORIES[b.category] ?? b.category;
+  const when = `${longDate(b.date)} a las ${b.slot}`;
+  const firstName = String(b.contactName ?? '').split(' ')[0];
+  const body = `<p style="font-size:15px;margin:0 0 12px">Hola ${esc(p.firstName)}, tienes una reserva nueva en HULUL.</p>` +
+    rows([
+      ['Código', `<strong>${code(id)}</strong>${b.demo ? ' <span style="color:#9A5B34">(prueba)</span>' : ''}`],
+      ['Servicio', esc(cat)],
+      ['Fecha', esc(when)],
+      ['Horas', esc(b.hours)],
+      ['Cliente', esc(firstName)],
+      ['Dirección', esc(b.address)],
+      ['Ubicación', mapRow(b.location)],
+      ['Trabajo', esc(b.notes)],
+      ['Pago', esc(PAYMENTS[b.paymentMethod] ?? b.paymentMethod)],
+      ['Te queda', `<strong>${usd((b.subtotal ?? 0) * 0.85)}</strong> aprox. (menos la comisión)`],
+    ]) +
+    `<p style="font-size:14px;color:#3F3A37;margin-top:16px">Responde este correo o escríbenos por WhatsApp para confirmar que vas. Pronto podrás aceptar desde la app de profesionales.</p>`;
+  return { from, to: p.email, replyTo: notifyTo, subject: `Reserva nueva ${code(id)} · ${cat} · ${when}`, html: layout('Tienes una reserva', body) };
+}
+
+/** Datos públicos de un profesional aprobado (nada de cédula, RUC, contacto ni banco). */
+export function publicPro(p, uid) {
+  const name = p.kind === 'empresa' ? String(p.businessName ?? '').trim() : `${String(p.firstName ?? '').trim()} ${String(p.lastName ?? '').trim()}`.trim();
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  return {
+    uid, name, initials, isCompany: p.kind === 'empresa',
+    categories: p.categories ?? [], services: p.services ?? {}, rates: p.rates ?? {},
+    cities: p.cities ?? [], years: Number(p.years ?? 0), bio: String(p.bio ?? ''),
+    days: p.days ?? [], from: p.from ?? '', to: p.to ?? '', acceptsCash: !!p.acceptsCash,
+  };
+}
+
+/**
+ * Al aprobar a un profesional (status "aprobado" en la consola), aparece en
+ * HULUL; si se lo suspende, rechaza u observa, desaparece. Su calificación se
+ * conserva.
+ */
+export const directorioProfesionales = onDocumentWritten(
+  { document: 'providers/{uid}', region: REGION, secrets: [MAIL_PASSWORD] },
+  async (event) => {
+    const uid = event.params.uid;
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    const ref = db().doc(`pros/${uid}`);
+    if (!after || after.status !== 'aprobado') {
+      if (before?.status === 'aprobado') { await ref.delete(); logger.info('Profesional retirado del directorio', { uid }); }
+      return;
+    }
+    const cur = await ref.get();
+    await ref.set({
+      ...publicPro(after, uid),
+      ...(cur.exists ? {} : { rating: 0, reviewCount: 0, jobsDone: 0, approvedAt: FieldValue.serverTimestamp() }),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    logger.info('Profesional publicado en el directorio', { uid });
+    if (before?.status !== 'aprobado' && after.email) {
+      const { from, notifyTo } = senders();
+      await transport().sendMail({
+        from, to: after.email, replyTo: notifyTo,
+        subject: '¡Ya estás en HULUL!',
+        html: layout('Tu perfil fue aprobado', `<p style="font-size:15px">Hola ${esc(after.firstName)}, revisamos tus datos y documentos. Tu perfil ya aparece en HULUL y los clientes pueden reservarte. Te llegará un correo por cada reserva.</p>` +
+          button(`https://hululec.com/profesional/${uid}`, 'Ver mi perfil')),
+      });
+    }
   },
 );

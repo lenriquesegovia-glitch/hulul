@@ -1,27 +1,30 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { categoryPricing, demoReviews, formatPrice, formatRating, getCategory, getProfessional, minimumLabel } from '@hulul/shared';
+import { ActivityIndicator } from 'react-native';
+import { categoryPricing, formatPrice, formatRating, getCategory, minimumLabel } from '@hulul/shared';
+import { usePro } from '@/lib/pros';
 import { Icon } from '@/components/Icon';
 import { Avatar, BackButton, Body, Card, H1, H2, PrimaryButton } from '@/components/ui';
 import { c, font } from '@/theme';
 
 export default function ProfessionalScreen() {
-  const { id, trabajo } = useLocalSearchParams<{ id: string; trabajo?: string }>();
-  const pro = getProfessional(id);
+  const { id, c: catParam, trabajo } = useLocalSearchParams<{ id: string; c?: string; trabajo?: string }>();
+  const pro = usePro(id, catParam);
   const cat = pro ? getCategory(pro.category) : undefined;
 
+  if (pro === undefined) return <SafeAreaView style={{ flex: 1, padding: 20 }}><BackButton /><ActivityIndicator color={c.primary} style={{ marginTop: 40 }} /></SafeAreaView>;
   if (!pro || !cat) {
     return (
       <SafeAreaView style={{ flex: 1, padding: 20, gap: 16 }}>
         <BackButton />
-        <Body>No encontramos este profesional.</Body>
+        <Body>Este profesional no está disponible. Puede que aún esté en revisión.</Body>
       </SafeAreaView>
     );
   }
 
   const stats = [
-    { v: `★ ${formatRating(pro.rating)}`, l: `${pro.reviewCount} reseñas` },
+    pro.reviewCount > 0 ? { v: `★ ${formatRating(pro.rating)}`, l: `${pro.reviewCount} reseñas` } : { v: 'Nuevo', l: 'en HULUL' },
     { v: String(pro.jobsDone), l: 'servicios' },
     { v: String(pro.years), l: 'años exp.' },
   ];
@@ -56,7 +59,7 @@ export default function ProfessionalScreen() {
         <View style={{ gap: 8 }}>
           <H2>Trabajos que realiza</H2>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {cat.servicios.map((sv) => (
+            {(pro.services?.length ? pro.services : cat.servicios).map((sv) => (
               <View key={sv} style={s.chip}><Text style={s.chipText}>{sv}</Text></View>
             ))}
           </View>
@@ -82,15 +85,7 @@ export default function ProfessionalScreen() {
 
         <View style={{ gap: 10 }}>
           <H2>Reseñas</H2>
-          {demoReviews.map((r) => (
-            <Card key={r.clientName} style={{ gap: 6 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={s.reviewName}>{r.clientName} · {r.zone}</Text>
-                <Body>{'★'.repeat(r.rating)}</Body>
-              </View>
-              <Body style={{ fontSize: 13.5 }}>{r.text}</Body>
-            </Card>
-          ))}
+          <Body muted>{pro.reviewCount > 0 ? 'Las reseñas se muestran pronto.' : `${pro.name.split(' ')[0]} es nuevo en HULUL. Las reseñas aparecen aquí después de cada servicio.`}</Body>
         </View>
       </ScrollView>
 
@@ -99,7 +94,7 @@ export default function ProfessionalScreen() {
           <Text style={s.price}>${pro.hourlyRate}<Text style={s.perHour}> /hora</Text></Text>
           <Body muted style={{ fontSize: 12.5 }}>{minimumLabel(pro)}</Body>
         </View>
-        <PrimaryButton label="Reservar ahora" onPress={() => router.push({ pathname: '/reservar/[id]', params: { id: pro.id, trabajo: trabajo || undefined } })} />
+        <PrimaryButton label="Reservar ahora" onPress={() => router.push({ pathname: '/reservar/[id]', params: { id: pro.id, c: pro.category, trabajo: trabajo || undefined } })} />
       </View>
     </SafeAreaView>
   );

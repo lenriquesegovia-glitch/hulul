@@ -38,6 +38,22 @@ export const CATEGORY_FLOORS: Record<CategorySlug, { rate: number; hours: number
   mascotas: { rate: 8, hours: 1, visit: 5 },
   clases: { rate: 10, hours: 1, visit: 0 },
   salud: { rate: 15, hours: 1, visit: 10 },
+  cerrajeria: { rate: 12, hours: 1, visit: 10 },
+  carpinteria: { rate: 12, hours: 2, visit: 10 },
+  albanileria: { rate: 10, hours: 4, visit: 10 },
+  fumigacion: { rate: 20, hours: 1, visit: 10 },
+  mudanzas: { rate: 15, hours: 2, visit: 0 },
+  tecnologia: { rate: 15, hours: 1, visit: 10 },
+};
+
+/** Cómo se llama a quien hace cada oficio (para las plantillas de presentación). */
+export const TRADE_NAME: Record<CategorySlug, string> = {
+  climatizacion: 'técnico de aire acondicionado', plomeria: 'plomero', electricidad: 'electricista',
+  electrodomesticos: 'técnico de electrodomésticos', limpieza: 'profesional de limpieza', jardineria: 'jardinero',
+  piscinas: 'técnico de piscinas', pintura: 'pintor', belleza: 'profesional de belleza', mascotas: 'cuidador de mascotas',
+  clases: 'profesor particular', salud: 'profesional de la salud', cerrajeria: 'cerrajero', carpinteria: 'carpintero',
+  albanileria: 'maestro albañil', fumigacion: 'técnico en control de plagas', mudanzas: 'transportista de mudanzas',
+  tecnologia: 'técnico en tecnología',
 };
 
 /** Máximo de categorías por profesional. */

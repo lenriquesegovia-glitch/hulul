@@ -7,7 +7,9 @@ import {
   firstAvailable,
   formatUSD,
   getCategory,
-  getProfessional,
+  minimumLabel,
+  proHref,
+  type Professional,
   MAX_HOURS,
   MIN_HOURS,
   BOOKING_DAYS,
@@ -26,6 +28,7 @@ import { ClientGate, type ClientProfile } from '@/components/ClientGate';
 import { LocationPicker } from '@/components/LocationPicker';
 import { Notice } from '@/components/Notice';
 import { DEMO_MODE } from '@/lib/site';
+import { usePro } from '@/lib/pros';
 
 /**
  * Reserva desde la web, el mismo flujo que la app.
@@ -70,15 +73,47 @@ const NOTES_MAX = 1000;
 
 /** Para reservar hay que tener cuenta de cliente (como Uber). */
 export function BookingForm({ proId }: { proId: string }) {
+  const pro = usePro(proId);
+  if (pro === undefined) return <p className="muted">Cargando…</p>;
+  if (!pro) {
+    return (
+      <div className="card stack gap-12">
+        <h1 style={{ fontSize: 24 }}>Este profesional no está disponible</h1>
+        <p className="muted">Puede que aún esté en revisión o que ya no atienda por HULUL.</p>
+        <Link href="/" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>Ver servicios</Link>
+      </div>
+    );
+  }
+  const cat = getCategory(pro.category)!;
+  return (
+    <>
+      <nav className="breadcrumbs" aria-label="Migas de pan">
+        <Link href="/">Inicio</Link><span>/</span>
+        <Link href={`/servicios/${cat.slug}`}>{cat.name}</Link><span>/</span>
+        <Link href={proHref('profesional', pro)}>{pro.name}</Link><span>/</span>
+        <span>Reservar</span>
+      </nav>
+      <div className="row gap-16">
+        <span className="avatar" style={{ width: 56, height: 56, fontSize: 19 }}>{pro.initials}</span>
+        <div className="stack gap-4">
+          <h1 style={{ fontSize: 'clamp(24px, 3.5vw, 32px)' }}>Reservar a {pro.name}</h1>
+          <p className="muted">{cat.name} · ${pro.hourlyRate}/hora · {minimumLabel(pro)}</p>
+        </div>
+      </div>
+      <BookingGate pro={pro} />
+    </>
+  );
+}
+
+function BookingGate({ pro }: { pro: Professional }) {
   return (
     <ClientGate title="Crea tu cuenta para reservar" lead="Con Google, Outlook, Facebook, tu correo o tu celular. Así sigues tu servicio, recibes la confirmación y tienes la garantía de HULUL.">
-      {({ user, profile }) => <BookingFormInner proId={proId} uid={user.uid} profile={profile} />}
+      {({ user, profile }) => <BookingFormInner pro={pro} uid={user.uid} profile={profile} />}
     </ClientGate>
   );
 }
 
-function BookingFormInner({ proId, uid, profile }: { proId: string; uid: string; profile: ClientProfile }) {
-  const pro = getProfessional(proId)!;
+function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: string; profile: ClientProfile }) {
   const cat = getCategory(pro.category)!;
   // La hora real se toma en el navegador, no al publicar la página.
   const [now, setNow] = useState<Date | null>(null);
@@ -109,11 +144,16 @@ function BookingFormInner({ proId, uid, profile }: { proId: string; uid: string;
   const minH = Math.max(MIN_HOURS, price.hours);
   const [hours, setHours] = useState(minH);
   const [service, setService] = useState('');
+  // Primero los trabajos que este profesional marcó; luego el resto de la categoría.
+  const jobs = useMemo(() => {
+    const own = pro.services ?? [];
+    return [...own, ...cat.servicios.filter((x) => !own.includes(x))];
+  }, [pro.services, cat.servicios]);
   // Si viene elegido desde la categoría (?trabajo=…), queda marcado.
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('trabajo');
-    if (t && (cat.servicios.includes(t) || t === OTHER)) setService(t);
-  }, [cat.servicios]);
+    if (t && (jobs.includes(t) || t === OTHER)) setService(t);
+  }, [jobs]);
   const [location, setLocation] = useState<LatLng | null>(null);
   const [notesLen, setNotesLen] = useState(0);
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
@@ -270,7 +310,7 @@ function BookingFormInner({ proId, uid, profile }: { proId: string; uid: string;
         <div className="field" id="trabajo">
           <span className="field-label">¿Qué trabajo necesitas?</span>
           <div className="tag-row" role="radiogroup" aria-label="Trabajo">
-            {[...cat.servicios, OTHER].map((s) => (
+            {[...jobs, OTHER].map((s) => (
               <button key={s} type="button" role="radio" aria-checked={service === s} className={`tag ${service === s ? 'on' : ''}`} onClick={() => setService(s)}>
                 {service === s && '✓ '}{s}
               </button>

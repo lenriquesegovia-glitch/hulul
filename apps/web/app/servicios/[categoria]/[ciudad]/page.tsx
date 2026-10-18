@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Notice } from '@/components/Notice';
 import { notFound } from 'next/navigation';
-import { categories, cities, getCategory, getCity, prosByCategory } from '@hulul/shared';
+import { categories, cities, getCategory, getCity } from '@hulul/shared';
 import { ServicePicker } from '@/components/ServicePicker';
 import { DownloadBand } from '@/components/DownloadBand';
 import { Faq } from '@/components/Faq';
@@ -31,7 +31,6 @@ export default async function CategoryCityPage({ params }: { params: Promise<Par
   const cat = getCategory(categoria);
   const city = getCity(ciudad);
   if (!cat || !city) notFound();
-  const pros = city.activa ? prosByCategory(cat.slug, city.slug) : [];
   const otherCities = cities.filter((c) => c.slug !== city.slug);
   const otherCats = categories.filter((c) => c.slug !== cat.slug);
 
@@ -66,8 +65,8 @@ export default async function CategoryCityPage({ params }: { params: Promise<Par
 
       <section className="section-sm">
         <div className="container stack gap-24">
-          {city.activa && pros.length > 0 ? (
-            <ServicePicker cat={cat} pros={pros} />
+          {city.activa ? (
+            <ServicePicker cat={cat} city={city.slug} cityName={city.name} />
           ) : (
             <div className="card stack gap-12">
               <h2 style={{ fontSize: 22 }}>
