@@ -12,3 +12,4 @@ export * from './provider';
 export * from './policy';
 export * from './terms';
 export * from './images';
+export * from './places';

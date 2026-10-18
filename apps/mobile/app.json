@@ -9,12 +9,24 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.hulul.app"
+      "bundleIdentifier": "com.hulul.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "HULUL usa tu ubicación para marcar dónde es el servicio y que el profesional llegue directo."
+      }
     },
     "android": {
       "package": "com.hulul.app"
     },
-    "plugins": ["expo-router", "expo-font"],
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "HULUL usa tu ubicación para marcar dónde es el servicio y que el profesional llegue directo."
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     }

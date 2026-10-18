@@ -9,7 +9,7 @@
  * no guardan datos no carguen Firebase.
  */
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
-import { addDoc, collection, getFirestore, serverTimestamp, type Firestore } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, getFirestore, query, serverTimestamp, setDoc, where, type Firestore } from 'firebase/firestore';
 import { PRIVACY_VERSION } from './legal';
 import type { CategorySlug } from './categories';
 import type { LatLng, PaymentMethod } from './models';
@@ -126,3 +126,55 @@ export function dateInDays(offset: number, from: Date = new Date()): string {
   const day = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${m}-${day}`;
 }
+
+/* ------------------------------------------------------------------ */
+/* Cuentas de cliente (web y app)                                       */
+/* ------------------------------------------------------------------ */
+
+/** Perfil del cliente en `clients/{uid}`. */
+export interface ClientProfile {
+  name: string;
+  phone: string;
+  email: string;
+  consentMarketing: boolean;
+}
+
+export async function loadClientProfile(uid: string): Promise<ClientProfile | null> {
+  const snap = await getDoc(doc(firestore(), 'clients', uid));
+  return snap.exists() ? (snap.data() as ClientProfile) : null;
+}
+
+/** Crea el perfil (la primera vez). Guarda la prueba del consentimiento. */
+export async function createClientProfile(uid: string, p: ClientProfile): Promise<void> {
+  await withTimeout(setDoc(doc(firestore(), 'clients', uid), {
+    ...p,
+    uid,
+    consentPrivacy: true,
+    privacyVersion: PRIVACY_VERSION,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }));
+}
+
+export interface ClientBooking {
+  id: string;
+  category: CategorySlug;
+  professionalName: string;
+  date: string;
+  slot: string;
+  total: number;
+  status: string;
+  notes?: string;
+}
+
+/** Reservas del cliente, de la más próxima a la más antigua. */
+export async function clientBookings(uid: string): Promise<ClientBooking[]> {
+  const snap = await getDocs(query(collection(firestore(), 'bookings'), where('clientId', '==', uid)));
+  const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ClientBooking, 'id'>) }));
+  return list.sort((a, b) => (a.date + a.slot < b.date + b.slot ? 1 : -1));
+}
+
+export const BOOKING_STATUS_LABEL: Record<string, string> = {
+  pendiente: 'Por confirmar', confirmada: 'Confirmada', en_camino: 'En camino', en_curso: 'En curso',
+  por_aprobar: 'Por aprobar', completada: 'Completada', cancelada: 'Cancelada', en_disputa: 'En revisión',
+};

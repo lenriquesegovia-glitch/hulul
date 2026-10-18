@@ -1,16 +1,33 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { Checkbox } from '@/components/Checkbox';
-import { BOOKING_DAYS, categoryPricing, dayAvailable, firstAvailable, formatUSD, getProfessional, quote, slotAvailable, type PaymentMethod } from '@hulul/shared';
+import { ClientGate } from '@/components/ClientGate';
+import { Icon } from '@/components/Icon';
+import { MapPicker } from '@/components/MapPicker';
+import type { ClientProfile } from '@hulul/shared/firebase';
+import { BOOKING_DAYS, categoryPricing, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, getProfessional, quote, slotAvailable, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
 
+const OTHER = 'Otro trabajo';
+const NOTES_MAX = 940;
+
+/** Para reservar hay que tener cuenta (como Uber). */
 export default function BookingScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  return (
+    <ClientGate screen title="Crea tu cuenta para reservar" lead="Así sigues tu servicio, recibes la confirmación y tienes la garantía de HULUL.">
+      {({ user, profile }) => <BookingForm uid={user.uid} profile={profile} />}
+    </ClientGate>
+  );
+}
+
+function BookingForm({ uid, profile }: { uid: string; profile: ClientProfile }) {
+  const { id, trabajo } = useLocalSearchParams<{ id: string; trabajo?: string }>();
   const pro = getProfessional(id);
+  const cat = pro ? getCategory(pro.category) : undefined;
   const { confirm } = useBooking();
 
   const now = useMemo(() => new Date(), []);
@@ -24,18 +41,29 @@ export default function BookingScreen() {
   const minH = Math.max(1, price.hours);
   const [hours, setHours] = useState(minH);
   const [address, setAddress] = useState('');
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const picked = useRef('');
+  const [location, setLocation] = useState<LatLng | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [job, setJob] = useState(trabajo && cat && (cat.servicios.includes(trabajo) || trabajo === OTHER) ? trabajo : '');
   const [notes, setNotes] = useState('');
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
   const [error, setError] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [agreeError, setAgreeError] = useState(false);
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [contactError, setContactError] = useState('');
   const [sending, setSending] = useState(false);
   const [saveError, setSaveError] = useState('');
 
-  if (!pro) {
+  // Sugerencias de dirección mientras se escribe.
+  useEffect(() => {
+    const t = address.trim();
+    if (t.length < 3 || t === picked.current) { setSuggestions([]); return; }
+    const ctrl = new AbortController();
+    const tm = setTimeout(() => searchPlaces(t, ctrl.signal).then(setSuggestions).catch(() => {}), 350);
+    return () => { clearTimeout(tm); ctrl.abort(); };
+  }, [address]);
+
+  if (!pro || !cat) {
     return (
       <SafeAreaView style={{ flex: 1, padding: 20, gap: 16 }}>
         <BackButton />
@@ -57,12 +85,16 @@ export default function BookingScreen() {
       setError('Esa hora ya no está disponible. Elige otra hora de llegada.');
       return;
     }
-    if (address.trim().length < 8) {
-      setError('Escribe la dirección completa para que el profesional pueda llegar.');
+    if (!job) {
+      setError('Elige qué trabajo necesitas (o "Otro trabajo").');
       return;
     }
-    if (name.trim().length < 2 || !/^0?9\d{8}$/.test(phone.replace(/\s/g, ''))) {
-      setContactError('Escribe tu nombre y un celular válido (09XXXXXXXX).');
+    if (job === OTHER && notes.trim().length < 10) {
+      setError('Describe el trabajo que necesitas (al menos 10 caracteres).');
+      return;
+    }
+    if (address.trim().length < 8) {
+      setError('Escribe la dirección completa para que el profesional pueda llegar.');
       return;
     }
     if (!agreed) {
@@ -75,6 +107,7 @@ export default function BookingScreen() {
       const { saveBooking, dateInDays } = await import('@hulul/shared/firebase');
       const bookingId = await saveBooking({
         source: 'app',
+        clientId: uid,
         professionalId: pro.id,
         professionalName: pro.name,
         category: pro.category,
@@ -82,19 +115,20 @@ export default function BookingScreen() {
         slot: SLOTS[slot],
         hours,
         address: address.trim(),
-        notes: notes.trim(),
-        contactName: name.trim(),
-        contactPhone: phone.replace(/\s/g, ''),
-        contactEmail: '',
+        location: location ?? undefined,
+        notes: [job === OTHER ? '' : job, notes.trim()].filter(Boolean).join('. ').slice(0, 1000),
+        contactName: profile.name,
+        contactPhone: profile.phone,
+        contactEmail: profile.email,
         paymentMethod: payment,
         subtotal: q.subtotal,
         fee: q.fee,
         iva: q.iva,
         total: q.total,
-        consentMarketing: false,
+        consentMarketing: profile.consentMarketing,
         demo: true,
       });
-      confirm({ professionalId: pro.id, dayIndex: day, slotIndex: slot, hours, address, notes, payment, total: q.total, bookingId });
+      confirm({ professionalId: pro.id, dayIndex: day, slotIndex: slot, hours, address, notes: job, payment, total: q.total, bookingId });
       router.replace('/confirmada');
     } catch {
       setSaveError('No pudimos registrar tu reserva. Revisa tu conexión e inténtalo de nuevo.');
@@ -163,59 +197,83 @@ export default function BookingScreen() {
             </View>
           </View>
 
+          <View style={{ gap: 10 }}>
+            <Text style={s.label}>¿Qué trabajo necesitas?</Text>
+            <View style={s.tags}>
+              {[...cat.servicios, OTHER].map((t) => {
+                const on = job === t;
+                return (
+                  <Pressable key={t} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => { setJob(t); setError(''); }} style={[s.tag, on && s.tagOn]}>
+                    <Text style={[s.tagText, on && { color: c.success }]}>{on ? '✓ ' : ''}{t}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
           <View style={{ gap: 8 }}>
-            <Text style={s.label} nativeID="dir-label">Dirección</Text>
+            <Text style={s.label} nativeID="dir-label">Dirección y referencia</Text>
             <TextInput
               value={address}
               onChangeText={(t) => { setAddress(t); setError(''); }}
-              placeholder="Urbanización, manzana y villa"
+              placeholder="Escribe tu urbanización o calle"
               maxLength={300}
               placeholderTextColor={c.textMuted}
               accessibilityLabelledBy="dir-label"
               style={s.input}
             />
-            {error ? <Text style={s.error}>{error}</Text> : null}
+            {suggestions.length > 0 && (
+              <View style={s.suggest}>
+                {suggestions.map((p) => (
+                  <Pressable key={p.label + p.detail} accessibilityRole="button" style={s.suggestRow} onPress={() => {
+                    const text = [p.label, p.detail.split(',')[0]].filter(Boolean).join(', ');
+                    picked.current = text + ', ';
+                    setAddress(text + ', ');
+                    setLocation(p.p);
+                    setSuggestions([]);
+                  }}>
+                    <Icon name="pin" size={16} color={c.copper} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.suggestTitle}>{p.label}</Text>
+                      {p.detail ? <Body muted style={{ fontSize: 12.5 }}>{p.detail}</Body> : null}
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            <Body muted style={{ fontSize: 12.5 }}>Elige tu urbanización o calle y completa con manzana y villa.</Body>
+            <Pressable accessibilityRole="button" onPress={() => setMapOpen(true)} style={[s.mapBtn, location && s.mapBtnOn]}>
+              <Icon name="pin" size={20} color={location ? c.success : c.primary} strokeWidth={2.2} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.mapTitle}>{location ? 'Ubicación marcada' : 'Marcar en el mapa'}</Text>
+                <Body muted style={{ fontSize: 12.5 }}>{location ? 'Toca para revisar el punto exacto' : 'Así el profesional llega directo, sin perderse'}</Body>
+              </View>
+              <Icon name="chevronRight" size={18} color={c.textMuted} />
+            </Pressable>
           </View>
 
           <View style={{ gap: 8 }}>
-            <Text style={s.label} nativeID="notes-label">Describe lo que necesitas</Text>
+            <Text style={s.label} nativeID="notes-label">{job === OTHER ? 'Describe el trabajo' : 'Detalles (opcional)'}</Text>
             <TextInput
               value={notes}
               onChangeText={setNotes}
-              placeholder="Ej.: 2 splits de 12.000 BTU, uno gotea agua"
+              placeholder={job === OTHER ? 'Cuéntanos qué necesitas' : 'Ej.: 2 splits de 12.000 BTU, uno gotea agua'}
               placeholderTextColor={c.textMuted}
               accessibilityLabelledBy="notes-label"
               multiline
-              maxLength={1000}
+              maxLength={NOTES_MAX}
               style={[s.input, { minHeight: 88, textAlignVertical: 'top', paddingTop: 12 }]}
             />
+            <Body muted style={{ fontSize: 12.5, textAlign: 'right', color: notes.length >= NOTES_MAX ? c.primary : c.textMuted }}>{notes.length}/{NOTES_MAX}</Body>
+            {error ? <Text style={s.error}>{error}</Text> : null}
           </View>
 
-          <View style={{ gap: 8 }}>
-            <Text style={s.label} nativeID="name-label">Tu nombre</Text>
-            <TextInput
-              value={name}
-              onChangeText={(t) => { setName(t); setContactError(''); }}
-              placeholder="Nombre y apellido"
-              placeholderTextColor={c.textMuted}
-              accessibilityLabelledBy="name-label"
-              autoComplete="name"
-              maxLength={120}
-              style={s.input}
-            />
-            <Text style={s.label} nativeID="phone-label">Celular (WhatsApp)</Text>
-            <TextInput
-              value={phone}
-              onChangeText={(t) => { setPhone(t); setContactError(''); }}
-              placeholder="09XXXXXXXX"
-              placeholderTextColor={c.textMuted}
-              accessibilityLabelledBy="phone-label"
-              keyboardType="phone-pad"
-              autoComplete="tel"
-              maxLength={13}
-              style={s.input}
-            />
-            {contactError ? <Text style={s.error}>{contactError}</Text> : null}
+          <View style={s.contact}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.mapTitle}>{profile.name}</Text>
+              <Body muted style={{ fontSize: 12.5 }}>{profile.phone} · {profile.email}</Body>
+            </View>
+            <Pressable accessibilityRole="button" onPress={() => router.push('/cuenta')}><Text style={s.link}>Mi cuenta</Text></Pressable>
           </View>
 
           <View style={{ gap: 10 }}>
@@ -231,6 +289,8 @@ export default function BookingScreen() {
             })}
           </View>
 
+          <MapPicker visible={mapOpen} initial={location} onClose={() => setMapOpen(false)} onConfirm={(p) => { setLocation(p); setMapOpen(false); }} />
+
           <View style={s.summary}>
             {q.visit > 0 && <Row label="Visita técnica (traslado y diagnóstico)" value={formatUSD(q.visit)} />}
             <Row label={`${hours} h × $${pro.hourlyRate}`} value={formatUSD(q.labor)} />
@@ -240,6 +300,8 @@ export default function BookingScreen() {
               <Text style={s.totalText}>Total</Text>
               <Text style={s.totalText}>{formatUSD(q.total)}</Text>
             </View>
+            <Body muted style={{ fontSize: 12.5 }}>Materiales y repuestos aparte: el profesional te los cotiza en la app. Todo trabajo extra se agrega en la app para que tenga garantía.</Body>
+            <Body style={{ fontSize: 12.5, color: c.copper }}>Versión de prueba: no se pide la tarjeta ni se cobra nada.</Body>
           </View>
 
           <View style={{ gap: 6 }}>
@@ -255,7 +317,7 @@ export default function BookingScreen() {
 
         <View style={s.footer}>
           {saveError ? <Text style={[s.error, { marginBottom: 8 }]}>{saveError}</Text> : null}
-          <PrimaryButton label={sending ? 'Registrando tu reserva…' : `Confirmar y pagar ${formatUSD(q.total)}`} onPress={onConfirm} />
+          <PrimaryButton label={sending ? 'Registrando tu reserva…' : `Confirmar reserva de prueba · ${formatUSD(q.total)}`} onPress={onConfirm} />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -300,5 +362,16 @@ const s = StyleSheet.create({
   summary: { gap: 8, padding: 16, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 10, borderTopWidth: 1, borderTopColor: c.border },
   totalText: { fontFamily: font.bodyBold, fontSize: 16, color: c.text },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tag: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
+  tagOn: { backgroundColor: c.successSoft, borderColor: c.success },
+  tagText: { fontFamily: font.bodySemi, fontSize: 13.5, color: c.text },
+  suggest: { borderWidth: 1, borderColor: c.border, borderRadius: radius.md, backgroundColor: c.surface, padding: 4 },
+  suggestRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10 },
+  suggestTitle: { fontFamily: font.bodyBold, fontSize: 14, color: c.text },
+  mapBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: radius.md, borderWidth: 1.5, borderStyle: 'dashed', borderColor: c.border, backgroundColor: c.surface },
+  mapBtnOn: { borderStyle: 'solid', borderColor: c.success },
+  mapTitle: { fontFamily: font.bodyBold, fontSize: 14.5, color: c.text },
+  contact: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   footer: { paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.background },
 });

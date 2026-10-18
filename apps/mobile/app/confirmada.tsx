@@ -8,10 +8,12 @@ import { nextDays, SLOTS, useBooking } from '@/lib/booking';
 import { c, font } from '@/theme';
 
 const timeline = [
-  { t: 'Reserva confirmada', d: 'Pago retenido por HULUL', done: true },
-  { t: 'Profesional en camino', d: 'Verás su ubicación en vivo', done: false },
-  { t: 'Servicio en curso', d: 'Código de inicio de 4 dígitos', done: false },
-  { t: 'Apruebas y calificas', d: 'Recién ahí se libera el pago', done: false },
+  { t: 'Reserva recibida', d: 'Te avisamos cada paso', done: true },
+  { t: 'Profesional confirmado', d: 'Acepta tu reserva', done: false },
+  { t: 'En camino', d: 'Verás en el mapa por dónde viene y cuánto falta', done: false },
+  { t: 'Llegó', d: 'Le das tu código de 4 dígitos para empezar', done: false },
+  { t: 'Trabajo en curso', d: 'El tiempo se cuenta en la app', done: false },
+  { t: 'Terminado', d: 'Apruebas y calificas; recién ahí se libera el pago', done: false },
 ];
 
 export default function ConfirmedScreen() {
@@ -37,7 +39,7 @@ export default function ConfirmedScreen() {
           <View style={s.checkCircle}>
             <Icon name="check" size={36} color={c.success} strokeWidth={2.4} />
           </View>
-          <H1 style={{ fontSize: 24, textAlign: 'center' }}>Reserva confirmada</H1>
+          <H1 style={{ fontSize: 24, textAlign: 'center' }}>Reserva recibida</H1>
           <Body muted style={{ textAlign: 'center' }}>{when}</Body>
           {last.bookingId ? <Body muted style={{ textAlign: 'center', fontSize: 13 }}>Código de reserva: {last.bookingId.slice(0, 8).toUpperCase()}</Body> : null}
           <Body muted style={{ textAlign: 'center', fontSize: 12.5 }}>Versión de prueba: no se hizo ningún cobro.</Body>
@@ -47,7 +49,7 @@ export default function ConfirmedScreen() {
           <Avatar initials={pro.initials} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={s.proName}>{pro.name}</Text>
-            <Body muted style={{ fontSize: 13 }}>{cat.name} · {last.hours} h · {formatUSD(last.total)}</Body>
+            <Body muted style={{ fontSize: 13 }}>{last.notes ? `${last.notes} · ` : ''}{cat.name} · {last.hours} h · {formatUSD(last.total)}</Body>
           </View>
         </Card>
 
@@ -66,7 +68,7 @@ export default function ConfirmedScreen() {
           ))}
         </Card>
 
-        <PrimaryButton label="Volver al inicio" onPress={() => router.replace('/')} />
+        <PrimaryButton label="Ver mis reservas" onPress={() => router.replace('/cuenta')} />
       </ScrollView>
     </SafeAreaView>
   );

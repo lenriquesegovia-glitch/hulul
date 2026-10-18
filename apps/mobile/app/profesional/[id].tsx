@@ -1,13 +1,13 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { demoReviews, formatRating, getCategory, getProfessional, minimumLabel } from '@hulul/shared';
+import { categoryPricing, demoReviews, formatPrice, formatRating, getCategory, getProfessional, minimumLabel } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { Avatar, BackButton, Body, Card, H1, H2, PrimaryButton } from '@/components/ui';
 import { c, font } from '@/theme';
 
 export default function ProfessionalScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, trabajo } = useLocalSearchParams<{ id: string; trabajo?: string }>();
   const pro = getProfessional(id);
   const cat = pro ? getCategory(pro.category) : undefined;
 
@@ -53,6 +53,23 @@ export default function ProfessionalScreen() {
           <Body>{pro.bio}</Body>
         </View>
 
+        <View style={{ gap: 8 }}>
+          <H2>Trabajos que realiza</H2>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {cat.servicios.map((sv) => (
+              <View key={sv} style={s.chip}><Text style={s.chipText}>{sv}</Text></View>
+            ))}
+          </View>
+          <Body muted style={{ fontSize: 13 }}>¿Otro trabajo de {cat.name.toLowerCase()}? Elige &quot;Otro trabajo&quot; al reservar.</Body>
+        </View>
+
+        <View style={{ gap: 6 }}>
+          <H2>Cómo se cobra</H2>
+          {categoryPricing(cat.slug).visit > 0 && <Body>• Visita técnica: {formatPrice(categoryPricing(cat.slug).visit)}, igual con cualquier profesional de {cat.name.toLowerCase()} (traslado y diagnóstico).</Body>}
+          <Body>• Mano de obra: ${pro.hourlyRate} por hora, mínimo {categoryPricing(cat.slug).hours} h.</Body>
+          <Body>• Materiales y repuestos: aparte, te los cotiza en la app.</Body>
+        </View>
+
         <View style={{ gap: 10 }}>
           <H2>Siempre incluido</H2>
           {cat.incluye.map((i) => (
@@ -82,7 +99,7 @@ export default function ProfessionalScreen() {
           <Text style={s.price}>${pro.hourlyRate}<Text style={s.perHour}> /hora</Text></Text>
           <Body muted style={{ fontSize: 12.5 }}>{minimumLabel(pro)}</Body>
         </View>
-        <PrimaryButton label="Reservar ahora" onPress={() => router.push(`/reservar/${pro.id}`)} />
+        <PrimaryButton label="Reservar ahora" onPress={() => router.push({ pathname: '/reservar/[id]', params: { id: pro.id, trabajo: trabajo || undefined } })} />
       </View>
     </SafeAreaView>
   );
@@ -94,6 +111,8 @@ const s = StyleSheet.create({
   stats: { flexDirection: 'row', gap: 10 },
   stat: { flex: 1, alignItems: 'center', padding: 12 },
   statValue: { fontFamily: font.display, fontSize: 18, color: c.text },
+  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: c.copperSoft },
+  chipText: { fontFamily: font.bodyBold, fontSize: 13, color: c.copper },
   reviewName: { fontFamily: font.bodyBold, fontSize: 13, color: c.text },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.background },
   price: { fontFamily: font.display, fontSize: 20, color: c.text },
