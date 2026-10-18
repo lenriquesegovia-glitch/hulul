@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { categories, cities } from '@hulul/shared';
-import { CategoryGrid } from '@/components/CategoryGrid';
+import { PhotoGrid } from '@/components/PhotoGrid';
 import { DownloadBand } from '@/components/DownloadBand';
 import { Faq } from '@/components/Faq';
 import { Icon } from '@/components/Icon';
@@ -43,7 +43,7 @@ export default function HomePage() {
       <section id="servicios" className="section-sm">
         <div className="container stack gap-24">
           <h2 style={{ fontSize: 30 }}>Servicios a domicilio</h2>
-          <CategoryGrid />
+          <PhotoGrid />
         </div>
       </section>
 

@@ -2,7 +2,9 @@ import Link from 'next/link';
 import { formatRating, minimumLabel, type Professional } from '@hulul/shared';
 import { Icon } from './Icon';
 
-export function ProCard({ pro }: { pro: Professional }) {
+/** `job`: trabajo elegido en la categoría; se pasa a la reserva. */
+export function ProCard({ pro, job }: { pro: Professional; job?: string }) {
+  const bookHref = `/reservar/${pro.id}${job ? `?trabajo=${encodeURIComponent(job)}` : ''}`;
   return (
     <article className="card pro-card">
       <Link href={`/profesional/${pro.id}`} className="stack gap-12" style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -27,7 +29,7 @@ export function ProCard({ pro }: { pro: Professional }) {
           <span className="price">${pro.hourlyRate}<span className="muted" style={{ fontSize: 13, fontFamily: 'var(--font-body)' }}>/hora</span></span>
           <span className="muted" style={{ fontSize: 13 }}>{minimumLabel(pro)}</span>
         </div>
-        <Link href={`/reservar/${pro.id}`} className="btn btn-primary" aria-label={`Reservar a ${pro.name}`}>Reservar</Link>
+        <Link href={bookHref} className="btn btn-primary" aria-label={`Reservar a ${pro.name}`}>Reservar</Link>
       </div>
     </article>
   );

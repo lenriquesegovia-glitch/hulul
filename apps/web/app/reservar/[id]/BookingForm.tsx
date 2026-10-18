@@ -22,6 +22,7 @@ import {
 } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { AddressInput } from '@/components/AddressInput';
+import { ClientGate, type ClientProfile } from '@/components/ClientGate';
 import { LocationPicker } from '@/components/LocationPicker';
 import { Notice } from '@/components/Notice';
 import { DEMO_MODE } from '@/lib/site';
@@ -67,7 +68,16 @@ function dayOffset(from: Date, iso: string): number {
 /** Largo máximo de la descripción (el mismo límite que las reglas de Firestore). */
 const NOTES_MAX = 1000;
 
+/** Para reservar hay que tener cuenta de cliente (como Uber). */
 export function BookingForm({ proId }: { proId: string }) {
+  return (
+    <ClientGate title="Crea tu cuenta para reservar" lead="Con Google, Outlook, Facebook, tu correo o tu celular. Así sigues tu servicio, recibes la confirmación y tienes la garantía de HULUL.">
+      {({ user, profile }) => <BookingFormInner proId={proId} uid={user.uid} profile={profile} />}
+    </ClientGate>
+  );
+}
+
+function BookingFormInner({ proId, uid, profile }: { proId: string; uid: string; profile: ClientProfile }) {
   const pro = getProfessional(proId)!;
   const cat = getCategory(pro.category)!;
   // La hora real se toma en el navegador, no al publicar la página.
@@ -99,6 +109,11 @@ export function BookingForm({ proId }: { proId: string }) {
   const minH = Math.max(MIN_HOURS, price.hours);
   const [hours, setHours] = useState(minH);
   const [service, setService] = useState('');
+  // Si viene elegido desde la categoría (?trabajo=…), queda marcado.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('trabajo');
+    if (t && (cat.servicios.includes(t) || t === OTHER)) setService(t);
+  }, [cat.servicios]);
   const [location, setLocation] = useState<LatLng | null>(null);
   const [notesLen, setNotesLen] = useState(0);
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
@@ -143,18 +158,19 @@ export function BookingForm({ proId }: { proId: string }) {
         location: location ?? undefined,
         // El trabajo elegido va delante de la descripción: "Mantenimiento de split. 2 equipos…"
         notes: [service === OTHER ? '' : service, get('descripcion')].filter(Boolean).join('. ').slice(0, NOTES_MAX),
-        contactName: get('nombre'),
-        contactPhone: get('celular'),
-        contactEmail: get('correo'),
+        clientId: uid,
+        contactName: profile.name,
+        contactPhone: profile.phone,
+        contactEmail: profile.email,
         paymentMethod: payment,
         subtotal: q.subtotal,
         fee: q.fee,
         iva: q.iva,
         total: q.total,
-        consentMarketing: data.get('acepta_promociones') === 'on',
+        consentMarketing: profile.consentMarketing,
         demo: DEMO_MODE,
       });
-      setDone({ name: get('nombre').split(' ')[0], id });
+      setDone({ name: profile.name.split(' ')[0], id });
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch {
       setError('No pudimos registrar tu reserva. Revisa tu conexión e inténtalo de nuevo.');
@@ -276,22 +292,14 @@ export function BookingForm({ proId }: { proId: string }) {
         </div>
       </fieldset>
 
-      <fieldset className="stack gap-16 fs">
+      <fieldset className="stack gap-12 fs">
         <legend className="fs-title">3. Tus datos</legend>
-        <p className="muted" style={{ fontSize: 14 }}>No necesitas descargar la app. Usaremos estos datos para confirmar tu reserva.</p>
-        <div className="field">
-          <label htmlFor="nombre">Nombre y apellido</label>
-          <input id="nombre" name="nombre" required minLength={2} maxLength={120} autoComplete="name" />
-        </div>
-        <div className="form-2">
-          <div className="field">
-            <label htmlFor="celular">Celular (WhatsApp)</label>
-            <input id="celular" name="celular" type="tel" inputMode="tel" required pattern="0?9[0-9]{8}" placeholder="09XXXXXXXX" autoComplete="tel" />
+        <div className="card row gap-12" style={{ padding: 16, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <div className="stack">
+            <strong>{profile.name}</strong>
+            <span className="muted" style={{ fontSize: 14 }}>{profile.phone} · {profile.email}</span>
           </div>
-          <div className="field">
-            <label htmlFor="correo">Correo electrónico</label>
-            <input id="correo" name="correo" type="email" required maxLength={160} autoComplete="email" />
-          </div>
+          <Link href="/cuenta" className="link-btn" style={{ textDecoration: 'none' }}>Mi cuenta</Link>
         </div>
       </fieldset>
 
@@ -334,13 +342,9 @@ export function BookingForm({ proId }: { proId: string }) {
         <label className="check">
           <input type="checkbox" name="acepta_privacidad" required />
           <span>
-            Acepto la <Link href="/legal/privacidad" target="_blank">Política de privacidad</Link> y los{' '}
-            <Link href="/legal/terminos" target="_blank">Términos y condiciones</Link>, y que HULUL comparta mi nombre, la dirección y la descripción con {pro.name} para realizar este servicio.
+            Acepto que HULUL comparta mi nombre, la dirección y la descripción con {pro.name} para realizar este servicio, y las reglas de cancelación de los{' '}
+            <Link href="/legal/terminos" target="_blank">Términos y condiciones</Link>.
           </span>
-        </label>
-        <label className="check">
-          <input type="checkbox" name="acepta_promociones" />
-          <span>Quiero recibir novedades y promociones de HULUL (opcional).</span>
         </label>
       </div>
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import type { ConfirmationResult, User } from 'firebase/auth';
+import type { User } from 'firebase/auth';
 import {
   BANKS_EC,
   categories,
@@ -25,7 +25,8 @@ import {
   type ProviderStatus,
 } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
-import { authErrorMessage, logout, sendSmsCode, signInGoogle, useUser } from '@/lib/auth';
+import { logout, useUser } from '@/lib/auth';
+import { SignIn } from '@/components/SignIn';
 
 /* ------------------------------------------------------------------ */
 /* Datos del registro                                                  */
@@ -97,68 +98,8 @@ export function ProviderSignup() {
   const user = useUser();
 
   if (user === undefined) return <p className="muted">Cargando…</p>;
-  if (!user) return <AccountStep />;
+  if (!user) return <SignIn title="Crea tu cuenta de profesional" lead="Con tu cuenta guardas el avance del registro y, cuando te aprobemos, recibes trabajos en la app." />;
   return <Wizard user={user} />;
-}
-
-/* ---------------------------- Paso 0: cuenta ---------------------------- */
-
-function AccountStep() {
-  const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
-  const [confirm, setConfirm] = useState<ConfirmationResult | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const run = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setError('');
-    try { await fn(); } catch (e) { setError(authErrorMessage(e)); } finally { setBusy(false); }
-  };
-
-  return (
-    <div className="stack gap-24">
-      <div className="stack gap-8">
-        <h2 style={{ fontSize: 24 }}>Crea tu cuenta de profesional</h2>
-        <p className="muted">Con tu cuenta guardas el avance del registro y, cuando te aprobemos, recibes trabajos en la app.</p>
-      </div>
-
-      <button type="button" className="btn btn-ghost" style={{ minHeight: 52 }} disabled={busy} onClick={() => run(signInGoogle)}>
-        <GoogleMark /> Continuar con Google
-      </button>
-
-      <div className="or-line"><span>o con tu celular</span></div>
-
-      {!confirm ? (
-        <form className="stack gap-12" onSubmit={(e) => {
-          e.preventDefault();
-          const n = e164Ecuador(phone);
-          if (!n) { setError('Escribe tu celular de 10 dígitos, por ejemplo 0991234567.'); return; }
-          run(async () => setConfirm(await sendSmsCode(n, 'recaptcha-box')));
-        }}>
-          <div className="field">
-            <label htmlFor="cel">Celular</label>
-            <input id="cel" type="tel" inputMode="tel" autoComplete="tel" placeholder="09XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </div>
-          <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Enviando…' : 'Enviarme un código por SMS'}</button>
-        </form>
-      ) : (
-        <form className="stack gap-12" onSubmit={(e) => {
-          e.preventDefault();
-          run(() => confirm.confirm(code.trim()));
-        }}>
-          <div className="field">
-            <label htmlFor="code">Código de 6 dígitos que llegó a {phone}</label>
-            <input id="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} />
-          </div>
-          <button type="submit" className="btn btn-primary" disabled={busy || code.trim().length < 6}>{busy ? 'Verificando…' : 'Entrar'}</button>
-          <button type="button" className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={() => { setConfirm(null); setCode(''); }}>Cambiar número</button>
-        </form>
-      )}
-      <div id="recaptcha-box" />
-      {error && <p role="alert" className="form-error">{error}</p>}
-    </div>
-  );
 }
 
 /* ---------------------------- Asistente ---------------------------- */
@@ -690,16 +631,6 @@ function Row({ k, v }: { k: string; v: string }) {
   return <div className="row gap-12" style={{ alignItems: 'flex-start' }}><span className="muted" style={{ width: 96, flexShrink: 0 }}>{k}</span><span>{v || '—'}</span></div>;
 }
 
-function GoogleMark() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden>
-      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
-      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z" />
-      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z" />
-      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
-    </svg>
-  );
-}
 
 /** Teléfono +5939XXXXXXXX → 09XXXXXXXX. */
 function localPhone(p: string | null): string {

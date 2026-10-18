@@ -325,3 +325,40 @@ details p { margin-top: 10px; color: var(--text-2); }
 .price-table th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .price-table tr:last-child td { border-bottom: none; }
 .addr input { width: 100%; }
+
+.nav-account { display: inline-flex; align-items: center; gap: 6px; color: var(--text); text-decoration: none; font-weight: 700; font-size: 15px; min-height: 44px; padding: 0 4px; }
+.nav-account:hover { color: var(--primary); }
+@media (max-width: 640px) { .nav-account-label { display: none; } }
+.social-btn { min-height: 50px; justify-content: flex-start; padding: 0 18px; gap: 12px; }
+@media (max-width: 440px) {
+  .nav-pro { display: none; }
+  .social-btn { font-size: 14.5px; }
+}
+
+/* Categorías con foto (inicio) */
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.photo-card { position: relative; display: block; aspect-ratio: 4 / 3; border-radius: var(--radius); overflow: hidden; background: var(--surface-warm); text-decoration: none; color: #fff; }
+.photo-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .35s; }
+.photo-card:hover img { transform: scale(1.05); }
+.photo-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(28,26,26,0) 35%, rgba(28,26,26,.78) 100%); }
+.photo-text { position: absolute; left: 14px; right: 14px; bottom: 12px; display: flex; flex-direction: column; gap: 2px; }
+.photo-text strong { font-family: var(--font-display); font-size: 19px; line-height: 1.15; }
+.photo-text span { font-size: 13px; opacity: .9; }
+.photo-card:hover { color: #fff; }
+@media (max-width: 640px) {
+  .photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .photo-card { aspect-ratio: 1 / 1; }
+  .photo-text strong { font-size: 16px; }
+  .photo-text span { display: none; }
+}
+.cat-hero { width: 100%; max-height: 300px; aspect-ratio: 16 / 7; object-fit: cover; border-radius: var(--radius); background: var(--surface-warm); }
+
+/* "¿Qué necesitas?" en la categoría */
+.job-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.job-card { display: flex; align-items: center; gap: 12px; text-align: left; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; min-height: 68px; cursor: pointer; }
+.job-card:hover { border-color: var(--copper); }
+.job-card strong { font-size: 15.5px; }
+.job-card.on { background: var(--text); border-color: var(--text); color: #fff; }
+.job-card.on .muted { color: rgba(255,255,255,.75); }
+.job-icon { width: 42px; height: 42px; border-radius: 12px; background: var(--copper-soft); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.job-card.on .job-icon { background: rgba(255,255,255,.14); }

@@ -6,8 +6,14 @@
  */
 import { useEffect, useState } from 'react';
 import {
+  createUserWithEmailAndPassword,
+  FacebookAuthProvider,
   getAuth,
   GoogleAuthProvider,
+  OAuthProvider,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  type AuthProvider,
   onAuthStateChanged,
   RecaptchaVerifier,
   signInWithPhoneNumber,
@@ -36,9 +42,27 @@ export function useUser(): User | null | undefined {
   return user;
 }
 
-export async function signInGoogle(): Promise<void> {
-  const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: 'select_account' });
+export type SocialProvider = 'google' | 'microsoft' | 'facebook';
+
+function providerFor(name: SocialProvider): AuthProvider {
+  if (name === 'microsoft') {
+    const p = new OAuthProvider('microsoft.com');
+    p.setCustomParameters({ prompt: 'select_account' });
+    return p;
+  }
+  if (name === 'facebook') {
+    const p = new FacebookAuthProvider();
+    p.addScope('email');
+    return p;
+  }
+  const p = new GoogleAuthProvider();
+  p.setCustomParameters({ prompt: 'select_account' });
+  return p;
+}
+
+/** Google, Microsoft (Outlook, Hotmail) o Facebook. */
+export async function signInSocial(name: SocialProvider): Promise<void> {
+  const provider = providerFor(name);
   try {
     await signInWithPopup(webAuth(), provider);
   } catch (e) {
@@ -66,6 +90,16 @@ export async function sendSmsCode(phoneE164: string, containerId: string): Promi
   }
 }
 
+export const signInGoogle = () => signInSocial('google');
+
+/** Correo y contraseña: entra si existe, o crea la cuenta. */
+export async function signInEmail(email: string, password: string, create: boolean): Promise<void> {
+  if (create) await createUserWithEmailAndPassword(webAuth(), email, password);
+  else await signInWithEmailAndPassword(webAuth(), email, password);
+}
+
+export const resetPassword = (email: string) => sendPasswordResetEmail(webAuth(), email);
+
 export const logout = () => signOut(webAuth());
 
 /** Mensaje claro para los errores más comunes de Firebase Authentication. */
@@ -81,7 +115,14 @@ export function authErrorMessage(e: unknown): string {
     'auth/operation-not-allowed': 'Este método de acceso aún no está activado en HULUL.',
     'auth/unauthorized-domain': 'Este sitio aún no está autorizado para iniciar sesión.',
     'auth/network-request-failed': 'Sin conexión. Revisa tu internet.',
-    'auth/quota-exceeded': 'No pudimos enviar el SMS en este momento. Prueba con Google.',
+    'auth/quota-exceeded': 'No pudimos enviar el SMS en este momento. Prueba con otra opción.',
+    'auth/account-exists-with-different-credential': 'Ya tienes una cuenta con ese correo usando otro método. Entra con el método que usaste la primera vez.',
+    'auth/email-already-in-use': 'Ya existe una cuenta con ese correo. Elige "Ya tengo cuenta".',
+    'auth/invalid-credential': 'Correo o contraseña incorrectos.',
+    'auth/wrong-password': 'Correo o contraseña incorrectos.',
+    'auth/user-not-found': 'No hay una cuenta con ese correo. Elige "Crear cuenta".',
+    'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
+    'auth/invalid-email': 'Ese correo no es válido.',
   };
   return map[code] ?? 'No pudimos iniciar sesión. Inténtalo de nuevo.';
 }

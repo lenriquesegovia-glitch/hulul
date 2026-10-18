@@ -42,12 +42,16 @@ service cloud.firestore {
 
     match /bookings/{bookingId} {
       allow create: if request.resource.data.keys().hasOnly([
-            'source', 'professionalId', 'professionalName', 'category',
+            'source', 'clientId', 'professionalId', 'professionalName', 'category',
             'date', 'slot', 'hours', 'address', 'location', 'notes',
             'contactName', 'contactPhone', 'contactEmail', 'paymentMethod',
             'subtotal', 'fee', 'iva', 'total', 'consentMarketing', 'demo',
             'status', 'consentPrivacy', 'privacyVersion', 'createdAt'])
         && request.resource.data.source in ['web', 'app']
+        // Desde la web solo se reserva con cuenta, y a nombre propio.
+        // (La app se suma cuando tenga inicio de sesión.)
+        && (request.resource.data.source == 'app'
+            || (request.auth != null && request.resource.data.clientId == request.auth.uid))
         && str(request.resource.data.professionalId, 1, 80)
         && str(request.resource.data.professionalName, 1, 120)
         && str(request.resource.data.category, 1, 40)
@@ -68,7 +72,31 @@ service cloud.firestore {
         && request.resource.data.demo is bool
         && request.resource.data.status == 'pendiente'
         && consent(request.resource.data);
-      allow read, update, delete: if false;
+      // Cada cliente ve sus reservas.
+      allow read: if request.auth != null && resource.data.clientId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Perfil del cliente: solo su dueño.
+    match /clients/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'consentMarketing', 'consentPrivacy', 'privacyVersion', 'createdAt', 'updatedAt'])
+        && request.resource.data.uid == uid
+        && str(request.resource.data.name, 2, 120)
+        && str(request.resource.data.phone, 9, 15)
+        && str(request.resource.data.email, 3, 160)
+        && request.resource.data.consentMarketing is bool
+        && request.resource.data.consentPrivacy == true
+        && request.resource.data.createdAt == request.time;
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'consentMarketing', 'consentPrivacy', 'privacyVersion', 'createdAt', 'updatedAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && str(request.resource.data.name, 2, 120)
+        && str(request.resource.data.phone, 9, 15)
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
     }
 
     match /applications/{applicationId} {

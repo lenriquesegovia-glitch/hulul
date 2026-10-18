@@ -51,6 +51,8 @@ function withTimeout<T>(p: Promise<T>): Promise<T> {
 /** Datos de una reserva tal como la envía la web o la app. */
 export interface NewBooking {
   source: 'web' | 'app';
+  /** Cuenta del cliente (uid de Firebase Authentication). */
+  clientId?: string;
   professionalId: string;
   professionalName: string;
   category: CategorySlug;

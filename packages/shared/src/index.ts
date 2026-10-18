@@ -11,3 +11,4 @@ export * from './search';
 export * from './provider';
 export * from './policy';
 export * from './terms';
+export * from './images';

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Notice } from '@/components/Notice';
 import { notFound } from 'next/navigation';
 import { categories, cities, getCategory, getCity, prosByCategory } from '@hulul/shared';
-import { ProCard } from '@/components/ProCard';
+import { ServicePicker } from '@/components/ServicePicker';
 import { DownloadBand } from '@/components/DownloadBand';
 import { Faq } from '@/components/Faq';
 import { SITE_URL } from '@/lib/site';
@@ -67,12 +67,7 @@ export default async function CategoryCityPage({ params }: { params: Promise<Par
       <section className="section-sm">
         <div className="container stack gap-24">
           {city.activa && pros.length > 0 ? (
-            <>
-              <h2 style={{ fontSize: 24 }}>Profesionales de {cat.name.toLowerCase()} en {city.name}</h2>
-              <div className="grid-2">
-                {pros.map((p) => <ProCard key={p.id} pro={p} />)}
-              </div>
-            </>
+            <ServicePicker cat={cat} pros={pros} />
           ) : (
             <div className="card stack gap-12">
               <h2 style={{ fontSize: 22 }}>
