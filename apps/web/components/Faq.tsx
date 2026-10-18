@@ -86,7 +86,7 @@ export const faqGroups: { title: string; items: Q[] }[] = [
       },
       {
         q: '¿Qué documentos necesito?',
-        a: 'Cédula, una foto de tu rostro y el certificado de antecedentes penales (se descarga gratis en la web del Ministerio del Interior). En Salud, además, tu título registrado en la SENESCYT. El RUC o RISE lo necesitarás para facturar.',
+        a: 'Cédula, una foto de tu rostro, el certificado de antecedentes penales (se descarga gratis en la web del Ministerio del Interior) y tu RUC, que es obligatorio para facturar tus servicios (se saca gratis en SRI en línea). En Salud, además, tu título registrado en la SENESCYT.',
       },
     ],
   },

@@ -261,7 +261,8 @@ function validate(step: number, d: Draft, bank: Bank): string {
     if (!validCedula(d.cedula)) return 'La cédula no es válida. Revisa los 10 dígitos.';
     if (d.kind === 'empresa' && d.businessName.trim().length < 3) return 'Escribe el nombre de tu empresa.';
     if (d.kind === 'empresa' && !validRuc(d.ruc)) return 'El RUC de la empresa no es válido (13 dígitos que terminan en 001).';
-    if (d.kind === 'persona' && d.ruc && !validRuc(d.ruc)) return 'El RUC no es válido. Déjalo vacío si aún no lo tienes.';
+    if (d.kind === 'persona' && !validRuc(d.ruc)) return 'El RUC es obligatorio para trabajar en HULUL (13 dígitos que terminan en 001). Si aún no lo tienes, sácalo gratis en SRI en línea.';
+    if (d.kind === 'persona' && d.ruc.slice(0, 10) !== d.cedula) return 'Tu RUC debe ser tu número de cédula seguido de 001.';
     if (!e164Ecuador(d.phone)) return 'Escribe tu celular de 10 dígitos (09XXXXXXXX).';
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) return 'Escribe un correo válido.';
   }
@@ -323,7 +324,7 @@ function StepData({ d, set }: { d: Draft; set: SetField }) {
         <Field id="ced" label="Cédula" hint={d.cedula.length === 10 ? (validCedula(d.cedula) ? '✓ Cédula válida' : 'Revisa los dígitos') : undefined}>
           <input id="ced" inputMode="numeric" maxLength={10} value={d.cedula} onChange={(e) => set('cedula', e.target.value.replace(/\D/g, ''))} />
         </Field>
-        <Field id="ruc" label={d.kind === 'empresa' ? 'RUC de la empresa' : 'RUC (opcional)'}>
+        <Field id="ruc" label={d.kind === 'empresa' ? 'RUC de la empresa' : 'RUC'} hint={d.kind === 'persona' ? 'Tu cédula + 001. Si no lo tienes, se saca gratis en SRI en línea.' : undefined}>
           <input id="ruc" inputMode="numeric" maxLength={13} value={d.ruc} onChange={(e) => set('ruc', e.target.value.replace(/\D/g, ''))} />
         </Field>
       </div>

@@ -68,12 +68,12 @@ export const PROVIDER_DOCS: ProviderDocSpec[] = [
   { key: 'selfie', label: 'Foto de tu rostro', help: 'De frente, con buena luz y sin lentes oscuros. La comparamos con tu cédula.', selfie: true, accept: IMG },
   { key: 'antecedentes', label: 'Certificado de antecedentes penales', help: 'Lo descargas gratis en la web del Ministerio del Interior. Vale con menos de 3 meses.', accept: IMG_PDF },
   { key: 'titulo', label: 'Título o certificado profesional', help: 'Obligatorio para Salud (registrado en la SENESCYT). Opcional para otros oficios: suma confianza.', accept: IMG_PDF },
-  { key: 'ruc', label: 'RUC o RISE', help: 'Opcional ahora; lo necesitarás para facturar tus servicios.', accept: IMG_PDF },
+  { key: 'ruc', label: 'Certificado del RUC', help: 'Obligatorio para facturar tus servicios. Lo descargas gratis en SRI en línea (sri.gob.ec).', accept: IMG_PDF },
 ];
 
 /** Documentos obligatorios según las categorías elegidas. */
 export function requiredDocs(cats: CategorySlug[]): ProviderDocSpec['key'][] {
-  const base: ProviderDocSpec['key'][] = ['cedulaFrente', 'cedulaReverso', 'selfie', 'antecedentes'];
+  const base: ProviderDocSpec['key'][] = ['cedulaFrente', 'cedulaReverso', 'selfie', 'antecedentes', 'ruc'];
   return cats.includes('salud') ? [...base, 'titulo'] : base;
 }
 

@@ -22,7 +22,8 @@ export default function WelcomeScreen() {
       return;
     }
     await accept({ analitica });
-    router.replace('/');
+    // Primera vez: elegir si es cliente o profesional.
+    router.replace('/elige');
   };
 
   return (
