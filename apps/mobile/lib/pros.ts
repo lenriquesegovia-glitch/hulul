@@ -29,3 +29,19 @@ export function usePro(id?: string, category?: string): Professional | null | un
   }, [id, category]);
   return pro;
 }
+
+/** Estado de la cuenta de profesional del usuario (null si no es profesional). */
+export function useProviderStatus(uid?: string | null): string | null {
+  const [status, setStatus] = useState<string | null>(null);
+  useEffect(() => {
+    if (!uid) { setStatus(null); return; }
+    let off = false;
+    import('firebase/firestore').then(async (fs) => {
+      const { firestore } = await import('@hulul/shared/firebase');
+      const snap = await fs.getDoc(fs.doc(firestore(), 'providers', uid));
+      if (!off) setStatus(snap.exists() ? String(snap.data().status ?? '') : null);
+    }).catch(() => { if (!off) setStatus(null); });
+    return () => { off = true; };
+  }, [uid]);
+  return status;
+}

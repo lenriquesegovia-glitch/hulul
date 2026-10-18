@@ -7,6 +7,10 @@ import { Icon } from '@/components/Icon';
 import { ActiveBooking } from '@/components/ActiveBooking';
 import { Body, H1, H2 } from '@/components/ui';
 import { c, font, radius } from '@/theme';
+import { useUser } from '@/lib/auth';
+import { useProviderStatus } from '@/lib/pros';
+
+const AGENDA_URL = 'https://hululec.com/profesionales/agenda';
 
 const popular = [
   { slug: 'climatizacion', title: 'Mantenimiento de split', sub: 'Limpieza, revisión de gas y drenaje' },
@@ -15,6 +19,8 @@ const popular = [
 ];
 
 export default function Home() {
+  const user = useUser();
+  const isPro = useProviderStatus(user?.uid) === 'aprobado';
   const [q, setQ] = useState('');
   // Mismo buscador que la web: sugerencias desde la primera letra.
   const suggestions = useMemo(() => suggestServices(q), [q]);
@@ -88,15 +94,20 @@ export default function Home() {
           ))}
         </View>
 
-        <Pressable accessibilityRole="button" onPress={() => Linking.openURL('https://hululec.com/profesionales/registro')} style={({ pressed }) => [s.proCard, pressed && { opacity: 0.9 }]}>
+        <Pressable accessibilityRole="button" onPress={() => Linking.openURL(isPro ? AGENDA_URL : 'https://hululec.com/profesionales/registro')} style={({ pressed }) => [s.proCard, pressed && { opacity: 0.9 }]}>
           <Image source={{ uri: categoryImage('electricidad', 700) }} style={s.proImg} resizeMode="cover" />
           <View style={{ padding: 16, gap: 8 }}>
             <Text style={s.proEyebrow}>PARA TÉCNICOS Y PROFESIONALES</Text>
-            <Text style={s.proTitle}>¿Eres técnico o profesional? Gana más con HULUL</Text>
-            <Text style={s.proText}>Registro gratis. Tú pones tu tarifa, tus zonas y tu horario. Pago garantizado.</Text>
-            <View style={s.proBtn}><Text style={s.proBtnText}>Regístrate gratis</Text></View>
+            <Text style={s.proTitle}>{isPro ? 'Tu agenda de profesional' : '¿Eres técnico o profesional? Gana más con HULUL'}</Text>
+            <Text style={s.proText}>{isPro ? 'Acepta reservas, mira las direcciones en el mapa y marca "Voy en camino".' : 'Registro gratis. Tú pones tu tarifa, tus zonas y tu horario. Pago garantizado.'}</Text>
+            <View style={s.proBtn}><Text style={s.proBtnText}>{isPro ? 'Abrir mi agenda' : 'Regístrate gratis'}</Text></View>
           </View>
         </Pressable>
+        {!isPro && (
+          <Pressable accessibilityRole="link" onPress={() => Linking.openURL(AGENDA_URL)} style={{ alignSelf: 'center', padding: 8 }}>
+            <Text style={{ fontFamily: font.bodyBold, fontSize: 14, color: c.primary }}>Ya soy profesional de HULUL: abrir mi agenda</Text>
+          </Pressable>
+        )}
 
         <View style={s.promise}>
           <H2>Sin presupuestos. Sin esperas.</H2>
