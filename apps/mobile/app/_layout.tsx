@@ -13,6 +13,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BookingProvider } from '@/lib/booking';
 import { PrivacyProvider, usePrivacy } from '@/lib/privacy';
 import { c } from '@/theme';
+import { useAutoUpdate } from '@/lib/updates';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -42,6 +43,7 @@ function Navigator({ fontsLoaded }: { fontsLoaded: boolean }) {
 }
 
 export default function RootLayout() {
+  useAutoUpdate();
   const [fontsLoaded] = useFonts({
     Montserrat_700Bold,
     Montserrat_800ExtraBold,

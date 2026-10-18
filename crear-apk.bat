@@ -14,6 +14,8 @@ echo  Al final, si pregunta "Install and run the Android build on an emulator?",
 echo  responde N (no). Eso es para emuladores de PC; la app se instala en el celular.
 echo.
 call npx.cmd -y eas-cli@latest whoami >nul 2>&1 || call npx.cmd -y eas-cli@latest login
+rem Conecta la app con las actualizaciones automaticas (publicar-app.bat).
+call npx.cmd -y eas-cli@latest update:configure --platform android
 call npx.cmd -y eas-cli@latest build --platform android --profile apk
 if errorlevel 1 (
   echo.
