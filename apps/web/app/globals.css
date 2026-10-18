@@ -362,3 +362,14 @@ details p { margin-top: 10px; color: var(--text-2); }
 .job-card.on .muted { color: rgba(255,255,255,.75); }
 .job-icon { width: 42px; height: 42px; border-radius: 12px; background: var(--copper-soft); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .job-card.on .job-icon { background: rgba(255,255,255,.14); }
+
+/* Reserva activa arriba del inicio */
+.active-booking { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; padding: 16px; background: var(--surface); border: 1px solid var(--copper); border-radius: var(--radius); text-decoration: none; color: var(--text); max-width: calc(var(--max) - 40px); }
+.active-booking:hover { color: var(--text); box-shadow: 0 4px 16px rgba(28,26,26,.08); }
+.ab-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.ab-step { display: flex; flex-direction: column; gap: 6px; }
+.ab-bar { height: 6px; border-radius: 3px; background: var(--border); }
+.ab-step.done .ab-bar { background: var(--success); }
+.ab-step.now .ab-bar { background: var(--copper); }
+.ab-label { font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.ab-step.now .ab-label { color: var(--copper); }

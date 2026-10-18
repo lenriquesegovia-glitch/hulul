@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { categories, categoryImage, suggestServices } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
+import { ActiveBooking } from '@/components/ActiveBooking';
 import { Body, H1, H2 } from '@/components/ui';
 import { c, font, radius } from '@/theme';
 
@@ -34,6 +35,8 @@ export default function Home() {
             <Text style={s.locationText}>Mi cuenta</Text>
           </Pressable>
         </View>
+
+        <ActiveBooking />
 
         <View style={{ gap: 6 }}>
           <Body muted>Hola</Body>

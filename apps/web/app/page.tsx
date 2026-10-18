@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { categories, cities } from '@hulul/shared';
 import { PhotoGrid } from '@/components/PhotoGrid';
+import { ActiveBooking } from '@/components/ActiveBooking';
 import { DownloadBand } from '@/components/DownloadBand';
 import { Faq } from '@/components/Faq';
 import { Icon } from '@/components/Icon';
@@ -24,6 +25,7 @@ export default function HomePage() {
   return (
     <>
 
+      <ActiveBooking />
       <section className="hero">
         <div className="container hero-grid">
         <div className="stack gap-24">

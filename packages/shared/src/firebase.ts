@@ -178,3 +178,18 @@ export const BOOKING_STATUS_LABEL: Record<string, string> = {
   pendiente: 'Por confirmar', confirmada: 'Confirmada', en_camino: 'En camino', en_curso: 'En curso',
   por_aprobar: 'Por aprobar', completada: 'Completada', cancelada: 'Cancelada', en_disputa: 'En revisión',
 };
+
+/** Pasos del seguimiento, en orden (estilo paquete). */
+export const TRACK_STEPS: { status: string; label: string }[] = [
+  { status: 'pendiente', label: 'Recibida' },
+  { status: 'confirmada', label: 'Confirmada' },
+  { status: 'en_camino', label: 'En camino' },
+  { status: 'en_curso', label: 'En curso' },
+  { status: 'por_aprobar', label: 'Terminado' },
+];
+
+/** Próxima reserva activa del cliente (no completada ni cancelada), o null. */
+export function activeBooking(list: ClientBooking[]): ClientBooking | null {
+  const live = list.filter((b) => !['completada', 'cancelada'].includes(b.status));
+  return live.length ? [...live].sort((a, b) => (a.date + a.slot > b.date + b.slot ? 1 : -1))[0] : null;
+}
