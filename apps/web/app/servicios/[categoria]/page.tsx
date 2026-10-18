@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   if (!cat) return {};
   return {
     title: `${cat.seoName} en Ecuador`,
-    description: `${cat.sub}. Reserva ${cat.name.toLowerCase()} a domicilio en Guayaquil, Samborondón y Daule con precio por hora y pago protegido.`,
+    description: `${cat.sub}. Reserva ${cat.name.toLowerCase()} a domicilio en Guayaquil, Samborondón y Daule con precio por visita y pago protegido.`,
     alternates: { canonical: `/servicios/${cat.slug}` },
   };
 }

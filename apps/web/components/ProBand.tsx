@@ -14,7 +14,7 @@ export function ProBand() {
             <h2>¿Eres técnico o profesional? Gana más con HULUL</h2>
             <ul>
               <li>Registro gratis: solo pagas {Math.round(COMMISSION_RATE * 100)} % cuando haces un trabajo.</li>
-              <li>Tú pones tu tarifa por hora, tus zonas y tu horario.</li>
+              <li>Tú pones tu tarifa por visita, tus zonas y tu horario.</li>
               <li>Clientes de Guayaquil, Samborondón y Daule, con pago garantizado.</li>
             </ul>
             <div className="row gap-12" style={{ flexWrap: 'wrap' }}>

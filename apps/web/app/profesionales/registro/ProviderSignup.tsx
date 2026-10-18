@@ -1,27 +1,29 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { User } from 'firebase/auth';
 import {
   BANKS_EC,
   categories,
-  CATEGORY_FLOORS,
+  CATEGORY_REVIEW_LABEL,
   cities,
   e164Ecuador,
+  evidenceProblem,
   getCategory,
   MAX_DOC_MB,
-  MAX_PROVIDER_CATEGORIES,
+  POLICY,
   PRIVACY_VERSION,
   PROVIDER_DOCS,
   requiredDocs,
-  subservicesOf,
   validCedula,
   validRuc,
   TRADE_NAME,
   maxEndHour,
   CATEGORY_SCHEDULE,
   WEEKDAY_NAMES,
+  type CategoryEvidence,
+  type CategoryReview,
   type CategorySlug,
   type ProviderDocSpec,
   type ProviderKind,
@@ -30,6 +32,8 @@ import {
 import { Icon } from '@/components/Icon';
 import { logout, useUser } from '@/lib/auth';
 import { SignIn } from '@/components/SignIn';
+import { EvidenceEditor, Field, RateField, rateProblem, ServicesPicker } from './ServiceBits';
+import { ServiceManager } from './ServiceManager';
 
 /* ------------------------------------------------------------------ */
 /* Datos del registro                                                  */
@@ -48,8 +52,10 @@ interface Draft {
   email: string;
   categories: CategorySlug[];
   services: Partial<Record<CategorySlug, string[]>>;
-  rates: Partial<Record<CategorySlug, number | undefined>>;
-  minHours: Partial<Record<CategorySlug, number>>;
+  /** Tarifa por visita en cada categoría (la pone el profesional). */
+  visitRates: Partial<Record<CategorySlug, number | undefined>>;
+  /** Cómo demuestra que sabe hacer cada categoría. */
+  catEvidence: Partial<Record<CategorySlug, CategoryEvidence>>;
   years: number;
   bio: string;
   cities: string[];
@@ -70,7 +76,7 @@ interface Bank {
 
 const EMPTY: Draft = {
   kind: 'persona', firstName: '', lastName: '', businessName: '', cedula: '', ruc: '', phone: '', email: '',
-  categories: [], services: {}, rates: {}, minHours: {}, years: 0, bio: '',
+  categories: [], services: {}, visitRates: {}, catEvidence: {}, years: 0, bio: '',
   cities: [], days: [1, 2, 3, 4, 5, 6], from: '08:00', to: '17:00', acceptsCash: true, docs: {},
 };
 const EMPTY_BANK: Bank = { bank: '', type: 'ahorros', number: '', holder: '', holderId: '' };
@@ -111,6 +117,7 @@ function Wizard({ user }: { user: User }) {
   const [loaded, setLoaded] = useState(false);
   const [exists, setExists] = useState(false);
   const [status, setStatus] = useState<ProviderStatus>('borrador');
+  const [catStatus, setCatStatus] = useState<Partial<Record<CategorySlug, CategoryReview>> | undefined>();
   const [editing, setEditing] = useState(false);
   const [d, setD] = useState<Draft>(EMPTY);
   const [bank, setBank] = useState<Bank>(EMPTY_BANK);
@@ -131,6 +138,7 @@ function Wizard({ user }: { user: User }) {
         const data = snap.data();
         setExists(true);
         setStatus(data.status ?? 'borrador');
+        setCatStatus(data.catStatus);
         setD({ ...EMPTY, ...pick(data) });
         setStep(Math.min(Number(data.step ?? 0), STEPS.length - 1));
       } else {
@@ -152,7 +160,9 @@ function Wizard({ user }: { user: User }) {
     const ref = fs.doc(db, 'providers', user.uid);
     await fs.setDoc(ref, {
       ...d,
-      minHours: Object.fromEntries(d.categories.map((c) => [c, CATEGORY_FLOORS[c].hours])),
+      // Sin guardar categorías que ya no eligió.
+      visitRates: Object.fromEntries(d.categories.filter((c) => d.visitRates[c]).map((c) => [c, d.visitRates[c]])),
+      catEvidence: Object.fromEntries(d.categories.filter((c) => d.catEvidence[c]).map((c) => [c, d.catEvidence[c]])),
       uid: user.uid,
       status: extra.status ?? status,
       step: nextStep,
@@ -215,7 +225,12 @@ function Wizard({ user }: { user: User }) {
   if (!loaded) return <p className="muted">Cargando tu registro…</p>;
 
   if (!editing && (status === 'en_revision' || status === 'aprobado' || status === 'rechazado' || status === 'suspendido')) {
-    return <StatusCard status={status} name={d.firstName} user={user} onEdit={status === 'en_revision' ? () => { setEditing(true); setStep(0); } : undefined} />;
+    return (
+      <div className="stack gap-24">
+        <StatusCard status={status} name={d.firstName} user={user} onEdit={status === 'en_revision' ? () => { setEditing(true); setStep(0); } : undefined} />
+        {status === 'aprobado' && <ServiceManager uid={user.uid} />}
+      </div>
+    );
   }
 
   return (
@@ -227,11 +242,16 @@ function Wizard({ user }: { user: User }) {
       {status === 'observado' && (
         <p className="notice"><strong>Revisamos tu registro y hay algo por corregir.</strong> Te escribimos por WhatsApp con el detalle. Corrígelo y vuelve a enviarlo.</p>
       )}
+      {catStatus && d.categories.some((c) => catStatus[c] === 'observado' || catStatus[c] === 'rechazado') && (
+        <p className="notice">
+          {d.categories.filter((c) => catStatus[c] === 'observado' || catStatus[c] === 'rechazado').map((c) => `${getCategory(c)?.name}: ${CATEGORY_REVIEW_LABEL[catStatus[c]!].toLowerCase()}`).join(' · ')}. Revisa cómo demuestras que sabes hacer ese trabajo.
+        </p>
+      )}
 
       <Progress step={step} onPick={(i) => i < step && go(i)} />
 
       {step === 0 && <StepData d={d} set={set} />}
-      {step === 1 && <StepServices d={d} setD={setD} />}
+      {step === 1 && <StepServices d={d} setD={setD} uid={user.uid} />}
       {step === 2 && <StepZones d={d} set={set} />}
       {step === 3 && <StepDocs d={d} uid={user.uid} onUploaded={async (key, v) => {
         const next = { ...d, docs: { ...d.docs, [key]: v } };
@@ -276,8 +296,10 @@ function validate(step: number, d: Draft, bank: Bank): string {
     for (const c of d.categories) {
       const name = getCategory(c)?.name ?? c;
       if (!(d.services[c]?.length)) return `Marca qué trabajos haces en ${name}.`;
-      const f = CATEGORY_FLOORS[c];
-      if (!(Number(d.rates[c]) >= f.rate)) return `Tu tarifa en ${name} debe ser de al menos $${f.rate} por hora.`;
+      const r = rateProblem(name, d.visitRates[c]);
+      if (r) return r;
+      const ev = evidenceProblem(c, d.catEvidence[c]);
+      if (ev) return `${name}: ${ev}`;
     }
     if (d.bio.trim().length < 30) return 'Cuéntales a los clientes tu experiencia (al menos 30 caracteres).';
   }
@@ -346,28 +368,15 @@ function StepData({ d, set }: { d: Draft; set: SetField }) {
   );
 }
 
-function StepServices({ d, setD }: { d: Draft; setD: (fn: (x: Draft) => Draft) => void }) {
-  const toggleCat = (c: CategorySlug) => setD((x) => {
-    if (x.categories.includes(c)) return { ...x, categories: x.categories.filter((y) => y !== c) };
-    if (x.categories.length >= MAX_PROVIDER_CATEGORIES) return x;
-    const f = CATEGORY_FLOORS[c];
-    return {
-      ...x,
-      categories: [...x.categories, c],
-      rates: { ...x.rates, [c]: x.rates[c] ?? f.rate },
-      // Las horas mínimas las define HULUL por categoría, no el profesional.
-      minHours: { ...x.minHours, [c]: f.hours },
-    };
-  });
-  const toggleSvc = (c: CategorySlug, s: string) => setD((x) => {
-    const cur = x.services[c] ?? [];
-    return { ...x, services: { ...x.services, [c]: cur.includes(s) ? cur.filter((y) => y !== s) : [...cur, s] } };
-  });
+function StepServices({ d, setD, uid }: { d: Draft; setD: (fn: (x: Draft) => Draft) => void; uid: string }) {
+  const toggleCat = (c: CategorySlug) => setD((x) => (x.categories.includes(c)
+    ? { ...x, categories: x.categories.filter((y) => y !== c) }
+    : { ...x, categories: [...x.categories, c] }));
 
   return (
     <section className="stack gap-16">
       <h2 className="fs-title">2. ¿Qué servicios ofreces?</h2>
-      <p className="muted" style={{ fontSize: 14 }}>Elige hasta {MAX_PROVIDER_CATEGORIES} categorías. Solo te llegarán los trabajos que marques.</p>
+      <p className="muted" style={{ fontSize: 14 }}>Elige todas las categorías que sabes hacer. En cada una pones tu <strong>tarifa por visita</strong> y demuestras que sabes hacerlo; cada categoría se aprueba por separado. Más adelante puedes sumar otras.</p>
       <div className="cat-grid pick-grid">
         {categories.map((c) => {
           const on = d.categories.includes(c.slug);
@@ -380,39 +389,25 @@ function StepServices({ d, setD }: { d: Draft; setD: (fn: (x: Draft) => Draft) =
         })}
       </div>
 
+      {d.categories.length > 0 && (
+        <div className="notice" style={{ fontSize: 13.5 }}>
+          <strong>Cobras por visita, como un taxi.</strong> Tu tarifa cubre ir a la casa, el diagnóstico y el arreglo si se resuelve en esa visita. Si hace falta más (repuestos, más tiempo u otra visita), lo acuerdas directamente con el cliente. HULUL retiene el {Math.round(POLICY.commission * 100)} % de la tarifa.
+        </div>
+      )}
+
       {d.categories.map((c) => {
         const cat = getCategory(c)!;
-        const f = CATEGORY_FLOORS[c];
         return (
           <div key={c} className="card stack gap-12" style={{ padding: 18 }}>
             <strong style={{ fontSize: 17 }}>{cat.name}</strong>
-            <span className="muted" style={{ fontSize: 13.5 }}>Marca lo que haces:</span>
-            <div className="tag-row">
-              {[...subservicesOf(c), ...(d.services[c] ?? []).filter((x) => !subservicesOf(c).includes(x))].map((s) => {
-                const on = (d.services[c] ?? []).includes(s);
-                return <button key={s} type="button" aria-pressed={on} className={`tag ${on ? 'on' : ''}`} onClick={() => toggleSvc(c, s)}>{on && '✓ '}{s}</button>;
-              })}
-            </div>
-            <AddOwnJob onAdd={(job) => setD((x) => {
-              const cur = x.services[c] ?? [];
-              return cur.includes(job) ? x : { ...x, services: { ...x.services, [c]: [...cur, job] } };
-            })} />
+            <ServicesPicker category={c} value={d.services[c] ?? []}
+              onChange={(v) => setD((x) => ({ ...x, services: { ...x.services, [c]: v } }))} />
             <div className="form-2">
-              <Field id={`r-${c}`} label="Tu tarifa por hora (USD)" hint={`Mínimo $${f.rate}`}>
-                <input id={`r-${c}`} type="text" inputMode="numeric" maxLength={3} value={d.rates[c] ? String(d.rates[c]) : ''}
-                  placeholder={String(f.rate)}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/\D/g, '').replace(/^0+/, '');
-                    setD((x) => ({ ...x, rates: { ...x.rates, [c]: v ? Number(v) : undefined } }));
-                  }} />
-              </Field>
+              <RateField category={c} uid={uid} value={d.visitRates[c]}
+                onChange={(v) => setD((x) => ({ ...x, visitRates: { ...x.visitRates, [c]: v } }))} />
             </div>
-            <p className="muted" style={{ fontSize: 13 }}>
-              {f.visit > 0
-                ? <>En {cat.name.toLowerCase()} cada trabajo lleva una <strong>visita técnica de ${f.visit}</strong> (traslado y diagnóstico, es para ti; la fija HULUL igual para todos) más tu tarifa por hora, mínimo {f.hours} h. </>
-                : <>En {cat.name.toLowerCase()} cada trabajo se reserva por al menos {f.hours} h. </>}
-              Con tu tarifa, el mínimo por trabajo es ${(f.visit + (Number(d.rates[c]) || f.rate) * f.hours).toFixed(2).replace('.00', '')}.
-            </p>
+            <EvidenceEditor category={c} uid={uid} value={d.catEvidence[c]}
+              onChange={(v) => setD((x) => ({ ...x, catEvidence: { ...x.catEvidence, [c]: v } }))} />
           </div>
         );
       })}
@@ -575,7 +570,7 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
         <Row k="Nombre" v={name} />
         <Row k="Cédula" v={d.cedula} />
         <Row k="Celular" v={d.phone} />
-        <Row k="Servicios" v={d.categories.map((x) => `${getCategory(x)?.name} ($${d.rates[x]}/h + visita $${CATEGORY_FLOORS[x].visit})`).join(' · ')} />
+        <Row k="Servicios" v={d.categories.map((x) => `${getCategory(x)?.name} ($${d.visitRates[x]} por visita)`).join(' · ')} />
         <Row k="Ciudades" v={d.cities.map((x) => cities.find((y) => y.slug === x)?.name).join(', ')} />
         <Row k="Horario" v={`${d.days.map((i) => WEEKDAY_NAMES[i].slice(0, 3)).join(' ')} · ${d.from} a ${d.to}`} />
         <Row k="Efectivo" v={d.acceptsCash ? 'Acepta' : 'No acepta'} />
@@ -585,12 +580,13 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
       <div className="card stack gap-8" style={{ padding: 18 }}>
         <strong>Reglas del servicio que aceptas</strong>
         <ul className="stack gap-4" style={{ margin: 0, paddingLeft: 20, color: 'var(--text-2)', fontSize: 14 }}>
-          <li>HULUL retiene una comisión del 15 % de cada servicio.</li>
+          <li>Cobras por visita: tu tarifa cubre ir, diagnosticar y arreglar lo que se resuelva en esa visita. Lo que haga falta después lo acuerdas con el cliente.</li>
+          <li>HULUL retiene una comisión del 15 % de tu tarifa por visita.</li>
+          <li>Acepta solo trabajos que sabes hacer. Al terminar registras el resultado y un diagnóstico con fotos.</li>
           <li>Tolerancia de llegada: 15 minutos. Entre 15 y 30 minutos tarde, el cliente recibe un 10 % de descuento que se te descuenta.</li>
           <li>Más de 30 minutos tarde o cancelar con menos de 2 horas: multa de $5. No llegar sin avisar: multa de $10.</li>
           <li>3 faltas o cancelaciones tardías en 30 días: suspensión temporal.</li>
-          <li>Si un reclamo del cliente procede, la devolución se descuenta de tus próximos pagos. Garantía de mano de obra de 30 días.</li>
-          <li>Al terminar cada trabajo marcas &ldquo;Trabajo terminado&rdquo; en la app para volver a estar disponible.</li>
+          <li>Los clientes te califican después de cada visita. Calificaciones bajas o reportes repetidos llevan a la suspensión.</li>
         </ul>
       </div>
       <label className="check"><input type="checkbox" checked={c.truth} onChange={(e) => setC({ ...c, truth: e.target.checked })} /><span>Declaro que los datos y documentos son verdaderos y me pertenecen.</span></label>
@@ -645,24 +641,6 @@ function maxTo(d: Draft): string {
   return `${String(h).padStart(2, '0')}:00`;
 }
 
-/** Agregar un trabajo que no está en la lista. */
-function AddOwnJob({ onAdd }: { onAdd: (job: string) => void }) {
-  const [v, setV] = useState('');
-  const add = () => {
-    const job = v.trim().replace(/\s+/g, ' ');
-    if (job.length < 3) return;
-    onAdd(job.charAt(0).toUpperCase() + job.slice(1, 60));
-    setV('');
-  };
-  return (
-    <div className="row gap-8">
-      <input className="own-job" value={v} maxLength={60} placeholder="¿Haces otro trabajo? Escríbelo"
-        onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
-      <button type="button" className="btn btn-ghost" style={{ minHeight: 44, padding: '0 14px' }} onClick={add}>Agregar</button>
-    </div>
-  );
-}
-
 /** Plantillas editables para "Preséntate a los clientes", con los datos que ya llenó. */
 function bioTemplates(d: Draft): { label: string; text: string }[] {
   const cats = d.categories;
@@ -675,14 +653,14 @@ function bioTemplates(d: Draft): { label: string; text: string }[] {
   const cityText = d.cities.length ? d.cities.map((x) => cities.find((y) => y.slug === x)?.name).join(', ') : 'Guayaquil, Samborondón y Daule';
   if (d.kind === 'empresa') {
     return [
-      { label: 'Empresa con experiencia', text: `Somos ${name}, un equipo dedicado a ${areas} con ${years} de experiencia. Hacemos ${jobsText}. Trabajamos con personal propio, herramientas profesionales y garantía en cada trabajo.` },
+      { label: 'Empresa con experiencia', text: `Somos ${name}, un equipo dedicado a ${areas} con ${years} de experiencia. Hacemos ${jobsText}. Trabajamos con personal propio, herramientas profesionales y un diagnóstico claro en cada visita.` },
       { label: 'Rápidos y garantizados', text: `En ${name} atendemos ${areas} en ${cityText}. Llegamos a la hora acordada, explicamos el trabajo antes de empezar y dejamos todo limpio. ${years} resolviendo ${jobsText}.` },
     ];
   }
   return [
-    { label: 'Con experiencia', text: `Soy ${name}, ${oficio} con ${years} de experiencia. Me especializo en ${jobsText}. Llevo mis propias herramientas, soy puntual y dejo el área limpia. Mi trabajo tiene garantía.` },
-    { label: 'Cercano y confiable', text: `Hola, soy ${name}. Me dedico a ${areas} hace ${years}. Te explico qué voy a hacer y cuánto toma antes de empezar, y no cobro nada fuera de lo acordado en HULUL. Atiendo en ${cityText}.` },
-    { label: 'Corto y directo', text: `${oficio.charAt(0).toUpperCase() + oficio.slice(1)} con ${years} de experiencia: ${jobsText}. Puntual, ordenado y con garantía.` },
+    { label: 'Con experiencia', text: `Soy ${name}, ${oficio} con ${years} de experiencia. Me especializo en ${jobsText}. Llevo mis propias herramientas, soy puntual y dejo el área limpia. Te explico qué encontré antes de cobrar.` },
+    { label: 'Cercano y confiable', text: `Hola, soy ${name}. Me dedico a ${areas} hace ${years}. Te explico qué voy a hacer y cuánto toma antes de empezar, y te digo el precio antes de empezar cualquier trabajo extra. Atiendo en ${cityText}.` },
+    { label: 'Corto y directo', text: `${oficio.charAt(0).toUpperCase() + oficio.slice(1)} con ${years} de experiencia: ${jobsText}. Puntual y ordenado.` },
   ];
 }
 
@@ -695,16 +673,6 @@ function Progress({ step, onPick }: { step: number; onPick: (i: number) => void 
       <div className="progress" aria-hidden>
         {STEPS.map((s, i) => <button key={s} type="button" tabIndex={-1} className={i <= step ? 'on' : ''} onClick={() => onPick(i)} />)}
       </div>
-    </div>
-  );
-}
-
-function Field({ id, label, hint, children }: { id: string; label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div className="field">
-      <label htmlFor={id}>{label}</label>
-      {children}
-      {hint && <span className="muted" style={{ fontSize: 12.5 }}>{hint}</span>}
     </div>
   );
 }

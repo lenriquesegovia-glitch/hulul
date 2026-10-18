@@ -4,7 +4,7 @@ import { usePros } from '@/lib/pros';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { categoryImage, categoryPricing, formatPrice, getCategory, minimumLabel, ratingLabel } from '@hulul/shared';
+import { categoryImage, formatPrice, getCategory, ratingLabel } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { Avatar, BackButton, Body, Card, H1, Pill } from '@/components/ui';
 import { c, font, radius } from '@/theme';
@@ -29,7 +29,7 @@ export default function CategoryScreen() {
   const pros = useMemo(() => {
     let list = all ?? [];
     if (sort === 'today') list = list.filter((p) => p.availableToday);
-    else if (sort === 'price') list = [...list].sort((a, b) => a.hourlyRate - b.hourlyRate);
+    else if (sort === 'price') list = [...list].sort((a, b) => a.visitRate - b.visitRate);
     // Si eligió un trabajo, primero quienes lo marcaron.
     if (job && job !== OTHER) list = [...list].sort((a, b) => Number((b.services ?? []).includes(job)) - Number((a.services ?? []).includes(job)));
     return list;
@@ -63,7 +63,9 @@ export default function CategoryScreen() {
           <Text style={s.section}>¿Qué necesitas?</Text>
           {[...cat.servicios, OTHER].map((t) => {
             const on = job === t;
-            const pr = categoryPricing(cat.slug);
+            // "Visita desde $X": la tarifa más baja de los profesionales de la categoría.
+            const rates = (all ?? []).map((p) => p.visitRate).filter((r) => r > 0);
+            const from = rates.length ? Math.min(...rates) : 0;
             return (
               <Pressable key={t} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => setJob(t)} style={[s.job, on && s.jobOn]}>
                 <View style={[s.jobIcon, on && { backgroundColor: 'rgba(255,255,255,0.14)' }]}>
@@ -72,7 +74,7 @@ export default function CategoryScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[s.jobTitle, on && { color: '#fff' }]}>{t}</Text>
                   <Text style={[s.jobSub, on && { color: 'rgba(255,255,255,0.75)' }]}>
-                    {t === OTHER ? 'Descríbelo al reservar' : `${pr.visit > 0 ? `Visita ${formatPrice(pr.visit)} + ` : ''}desde ${formatPrice(pr.rate)}/h`}
+                    {t === OTHER ? 'Descríbelo al reservar' : from ? `Visita desde ${formatPrice(from)}` : 'Precio por visita'}
                   </Text>
                 </View>
                 {on && <Icon name="check" size={18} color="#fff" strokeWidth={2.4} />}
@@ -126,8 +128,8 @@ export default function CategoryScreen() {
                 </View>
                 <Body numberOfLines={2} style={{ fontSize: 13.5 }}>{p.bio}</Body>
                 <View style={s.proFoot}>
-                  <Body muted style={{ fontSize: 13 }}>{minimumLabel(p)}</Body>
-                  <Text style={s.price}>${p.hourlyRate}<Text style={s.perHour}>/hora</Text></Text>
+                  <Body muted style={{ fontSize: 13 }}>Traslado y diagnóstico incluidos</Body>
+                  <Text style={s.price}>{formatPrice(p.visitRate)}<Text style={s.perHour}> por visita</Text></Text>
                 </View>
                 {p.availableToday && <Pill label="Disponible hoy" />}
               </Card>

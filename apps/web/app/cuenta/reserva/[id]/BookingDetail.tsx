@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { appointmentTime, formatUSD, getCategory, hhmmEcuador, usd } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, usd } from '@hulul/shared';
 import type { ClientBooking } from '@hulul/shared/firebase';
 import { Icon } from '@/components/Icon';
 import { RescheduleBox, shortDay } from '@/components/RescheduleBox';
+import { SafetyNotice, VisitReport } from '@/components/VisitReport';
 import { useUser } from '@/lib/auth';
 import { CancelBox } from '../../Account';
 
@@ -49,8 +50,8 @@ export function BookingDetail({ id }: { id: string }) {
     pendiente: `Esperando que ${first} acepte tu reserva. Te avisamos por correo apenas lo haga.`,
     confirmada: `${first} confirmó. Saldrá hacia tu dirección con el tiempo justo para llegar a las ${b.slot} (puede salir desde las ${hhmmEcuador(new Date(at.getTime() - 120 * 60_000))}). Te avisamos cuando vaya en camino.`,
     en_camino: `${first} va en camino a tu dirección. El mapa con su ubicación en vivo llega con la app del profesional; por ahora te avisamos por correo cuando llegue.`,
-    en_curso: `${first} está trabajando. Al terminar, revisa el trabajo antes de aprobarlo.`,
-    por_aprobar: `${first} marcó el trabajo como terminado. Tienes 48 horas para reportar cualquier problema.`,
+    en_curso: `${first} está trabajando. Al terminar te deja el resultado y un diagnóstico con fotos.`,
+    por_aprobar: `${first} terminó la visita. Revisa su diagnóstico; tienes 48 horas para calificarlo o reportar un problema.`,
     completada: 'Servicio completado. ¡Gracias por usar HULUL!',
     cancelada: b.cancelledBy === 'profesional' ? `${first} canceló esta reserva. No se te cobra nada.` : `Cancelaste esta reserva${b.cancelFee ? ` con un cargo de ${usd(b.cancelFee)}${b.demo ? ' (prueba, no se cobra)' : ''}` : ' sin costo'}.`,
   };
@@ -64,7 +65,7 @@ export function BookingDetail({ id }: { id: string }) {
 
       <div className="stack gap-8">
         <h1 style={{ fontSize: 'clamp(24px, 4vw, 32px)' }}>{cat?.name ?? b.category} con {b.professionalName}</h1>
-        <p style={{ fontSize: 17 }}><strong>{shortDay(b.date)} · {b.slot}</strong>{b.hours ? ` · ${b.hours} h` : ''}</p>
+        <p style={{ fontSize: 17 }}><strong>{shortDay(b.date)} · {b.slot}</strong></p>
       </div>
 
       <div className="card stack gap-16">
@@ -84,6 +85,11 @@ export function BookingDetail({ id }: { id: string }) {
         )}
       </div>
 
+      <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} />
+      {b.outcome && <p className="muted" style={{ fontSize: 14 }}>{AFTER_VISIT_NOTE}</p>}
+
+      {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && <SafetyNotice title={HOME_SAFETY_TITLE} items={HOME_SAFETY_NOTICE} />}
+
       {changeable && (
         <RescheduleBox id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="cliente" other={first} />
       )}
@@ -91,7 +97,7 @@ export function BookingDetail({ id }: { id: string }) {
       <div className="card stack gap-8" style={{ fontSize: 15 }}>
         {b.address && <span>📍 {b.address}</span>}
         {b.notes && <span style={{ color: 'var(--text-2)' }}>{b.notes}</span>}
-        <span>Total: <strong>{formatUSD(b.total)}</strong> · Código {b.id.slice(0, 8).toUpperCase()}</span>
+        <span>{b.visit ? <>Visita {formatUSD(b.visit)} · </> : null}Total: <strong>{formatUSD(b.total)}</strong> · Código {b.id.slice(0, 8).toUpperCase()}</span>
         {b.professionalId && <Link href={`/profesional/${b.professionalId}?c=${b.category}`}>Ver perfil de {first}</Link>}
       </div>
 

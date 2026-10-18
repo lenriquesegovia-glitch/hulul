@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { COMMISSION_RATE, departPlan, durationLabel, formatUSD, getCategory, hhmmEcuador, travelEstimate, type ProviderStatus } from '@hulul/shared';
+import { COMMISSION_RATE, departPlan, durationLabel, formatUSD, getCategory, hhmmEcuador, JOB_OUTCOMES, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS, MIN_DIAGNOSIS_CHARS, travelEstimate, type JobOutcome, type ProviderStatus } from '@hulul/shared';
 import { RescheduleBox } from '@/components/RescheduleBox';
-import type { ProAction, ProBooking } from '@hulul/shared/firebase';
+import type { ProAction, ProBooking, VisitReport as Report } from '@hulul/shared/firebase';
+import { VisitReport } from '@/components/VisitReport';
 import { SignIn } from '@/components/SignIn';
 import { logout, useUser } from '@/lib/auth';
 import { AgendaMap } from './AgendaMap';
@@ -39,7 +40,7 @@ function dayTitle(iso: string): string {
   return `${WEEKDAYS[dt.getUTCDay()][0].toUpperCase()}${WEEKDAYS[dt.getUTCDay()].slice(1)} ${d} ${MONTHS[m - 1]}`;
 }
 
-const earnings = (b: ProBooking) => (b.subtotal ?? 0) * (1 - COMMISSION_RATE);
+const earnings = (b: ProBooking) => (b.visit ?? b.subtotal ?? 0) * (1 - COMMISSION_RATE);
 
 export function Agenda() {
   const user = useUser();
@@ -134,6 +135,7 @@ function AgendaBody({ uid, name, rows, error }: { uid: string; name: string; row
           <span className="muted">Tu agenda se actualiza sola.</span>
         </div>
         <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+          <Link href="/profesionales/registro" className="btn btn-ghost">Mis servicios y tarifas</Link>
           <Link href={`/profesional/${uid}`} className="btn btn-ghost">Mi perfil público</Link>
           <Link href="/" className="btn btn-ghost">Contratar un servicio</Link>
         </div>
@@ -230,14 +232,16 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
   const [busy, setBusy] = useState<ProAction | ''>('');
   const [msg, setMsg] = useState('');
   const [asking, setAsking] = useState<'' | 'rechazar' | 'no_puedo'>('');
+  const [finishing, setFinishing] = useState(false);
   const [reason, setReason] = useState('');
 
-  const act = async (a: ProAction) => {
+  const act = async (a: ProAction, report?: Report) => {
     setBusy(a); setMsg('');
     try {
       const { proAction } = await import('@hulul/shared/firebase');
-      await proAction(b.id, a, reason.trim());
+      await proAction(b.id, a, reason.trim(), report);
       setAsking('');
+      setFinishing(false);
     } catch (e) {
       setMsg((e as { message?: string }).message || 'No se pudo guardar. Inténtalo de nuevo.');
     } finally {
@@ -249,7 +253,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
     <article className="card stack gap-12" style={{ padding: 16, borderColor: highlight ? 'var(--primary)' : undefined, borderWidth: highlight ? 2 : undefined }}>
       <div className="row gap-12" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div className="stack gap-4">
-          <strong style={{ fontSize: 17 }}>{dayTitle(b.date)} · {b.slot} · {b.hours} h</strong>
+          <strong style={{ fontSize: 17 }}>{dayTitle(b.date)} · {b.slot}</strong>
           <span style={{ color: 'var(--text-2)' }}>{cat?.name ?? b.category}{first ? ` · ${first}` : ''}</span>
         </div>
         <span className={`pill ${b.status === 'pendiente' ? 'pill-warm' : accepted ? 'pill-success' : ''}`}>{STATUS[b.status] ?? b.status}</span>
@@ -274,8 +278,11 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
 
       <div className="row gap-12" style={{ justifyContent: 'space-between', flexWrap: 'wrap', fontSize: 14 }}>
         <span className="muted">{PAY[b.paymentMethod] ?? b.paymentMethod}{b.demo ? ' · prueba' : ''}</span>
-        <span>Te queda <strong>{formatUSD(earnings(b))}</strong></span>
+        <span>Visita: te queda <strong>{formatUSD(earnings(b))}</strong></span>
       </div>
+
+      {b.outcome && <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} title="Tu diagnóstico" />}
+      {b.status === 'pendiente' && !compact && <span className="muted" style={{ fontSize: 13.5 }}>Lee bien qué necesita el cliente y acepta solo si sabes hacerlo. Cobras la visita; lo que haga falta después lo acuerdas con el cliente.</span>}
 
       {msg && <p role="alert" className="form-error">{msg}</p>}
 
@@ -283,7 +290,9 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
         <RescheduleBox id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="profesional" other={first || 'El cliente'} />
       )}
 
-      {asking ? (
+      {finishing ? (
+        <FinishPanel bookingId={b.id} busy={!!busy} onCancel={() => setFinishing(false)} onSend={(r) => act('terminar', r)} />
+      ) : asking ? (
         <div className="stack gap-8">
           <div className="field">
             <label htmlFor={`r-${b.id}`}>{asking === 'rechazar' ? '¿Por qué no puedes? (opcional)' : 'Cuéntale al cliente qué pasó'}</label>
@@ -305,13 +314,96 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
           )}
           {b.status === 'confirmada' && <DepartPanel b={b} busy={!!busy} onGo={() => act('en_camino')} />}
           {b.status === 'en_camino' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act('llegue')}>{busy ? 'Guardando…' : 'Llegué, empiezo'}</button>}
-          {b.status === 'en_curso' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act('terminar')}>{busy ? 'Guardando…' : 'Trabajo terminado'}</button>}
+          {b.status === 'en_curso' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => setFinishing(true)}>Terminar la visita</button>}
           {(b.status === 'confirmada' || b.status === 'en_camino') && (
             <button type="button" className="link-btn" disabled={!!busy} onClick={() => setAsking('no_puedo')}>No puedo ir</button>
           )}
         </div>
       )}
     </article>
+  );
+}
+
+/**
+ * Al terminar la visita: cómo quedó, diagnóstico escrito y fotos. Queda como
+ * respaldo para el cliente y el profesional; HULUL cobra solo la visita.
+ */
+function FinishPanel({ bookingId, busy, onCancel, onSend }: { bookingId: string; busy: boolean; onCancel: () => void; onSend: (r: Report) => void }) {
+  const [outcome, setOutcome] = useState<JobOutcome | ''>('');
+  const [diagnosis, setDiagnosis] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState('');
+
+  const upload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setErr('');
+    const list = Array.from(files).filter((f) => f.type.startsWith('image/')).slice(0, MAX_DIAGNOSIS_PHOTOS - photos.length);
+    if (!list.length) { setErr(photos.length >= MAX_DIAGNOSIS_PHOTOS ? `Máximo ${MAX_DIAGNOSIS_PHOTOS} fotos.` : 'Sube fotos (imágenes).'); return; }
+    if (list.some((f) => f.size > 10 * 1024 * 1024)) { setErr('Cada foto debe pesar menos de 10 MB.'); return; }
+    setUploading(true);
+    try {
+      const [{ firebaseApp }, st, au] = await Promise.all([import('@hulul/shared/firebase'), import('firebase/storage'), import('firebase/auth')]);
+      const uid = au.getAuth(firebaseApp()).currentUser?.uid;
+      if (!uid) throw new Error('auth');
+      const storage = st.getStorage(firebaseApp());
+      const urls: string[] = [];
+      for (const f of list) {
+        const ext = (f.name.split('.').pop() || 'jpg').toLowerCase().slice(0, 5);
+        const r = st.ref(storage, `diagnosticos/${uid}/${bookingId}/${Date.now()}-${urls.length}.${ext}`);
+        await st.uploadBytes(r, f, { contentType: f.type });
+        urls.push(await st.getDownloadURL(r));
+      }
+      setPhotos((p) => [...p, ...urls]);
+    } catch {
+      setErr('No se pudieron subir las fotos. Revisa tu conexión e inténtalo de nuevo.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const send = () => {
+    setErr('');
+    if (!outcome) { setErr('Elige cómo quedó el trabajo.'); return; }
+    if (outcome !== 'resuelto' && diagnosis.trim().length < MIN_DIAGNOSIS_CHARS) { setErr('Explica qué encontraste y qué hace falta, para que el cliente lo entienda.'); return; }
+    onSend({ outcome, diagnosis: diagnosis.trim(), photos });
+  };
+
+  return (
+    <div className="stack gap-12" style={{ width: '100%', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+      <strong>¿Cómo quedó?</strong>
+      <div className="stack gap-8">
+        {JOB_OUTCOMES.map((o) => (
+          <label key={o.value} className="check">
+            <input type="radio" name={`out-${bookingId}`} checked={outcome === o.value} onChange={() => setOutcome(o.value)} />
+            <span><strong>{o.label}.</strong> {o.help}</span>
+          </label>
+        ))}
+      </div>
+      <div className="field">
+        <label htmlFor={`dx-${bookingId}`}>Diagnóstico {outcome === 'resuelto' ? '(opcional)' : ''}</label>
+        <textarea id={`dx-${bookingId}`} rows={4} maxLength={MAX_DIAGNOSIS_CHARS} value={diagnosis}
+          placeholder="Qué encontraste, qué hiciste y qué recomiendas. Ej.: La bomba tiene el capacitor dañado. Se cambió el sello. Falta un capacitor de 35 µF."
+          onChange={(e) => setDiagnosis(e.target.value)} />
+        <span className="muted" style={{ fontSize: 12.5 }}>El cliente lo ve en su reserva. Es tu respaldo de lo que encontraste.</span>
+      </div>
+      <div className="doc-row" style={{ alignItems: 'center' }}>
+        <div className="stack gap-4" style={{ flex: 1, minWidth: 0 }}>
+          <strong style={{ fontSize: 14.5 }}>Fotos del trabajo (hasta {MAX_DIAGNOSIS_PHOTOS})</strong>
+          <span className="muted" style={{ fontSize: 13 }}>{photos.length ? `✓ ${photos.length} foto(s)` : 'Antes y después, la falla, la pieza dañada…'}</span>
+        </div>
+        <label className="btn btn-ghost doc-btn" aria-busy={uploading}>
+          {uploading ? 'Subiendo…' : photos.length ? 'Agregar' : 'Tomar o subir'}
+          <input type="file" accept="image/*" multiple disabled={uploading || photos.length >= MAX_DIAGNOSIS_PHOTOS}
+            onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
+        </label>
+      </div>
+      {err && <p role="alert" className="form-error">{err}</p>}
+      <div className="row gap-8">
+        <button type="button" className="btn btn-primary" disabled={busy || uploading} onClick={send}>{busy ? 'Guardando…' : 'Terminar y enviar al cliente'}</button>
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={onCancel}>Volver</button>
+      </div>
+    </div>
   );
 }
 

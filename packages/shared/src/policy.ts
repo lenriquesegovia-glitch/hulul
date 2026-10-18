@@ -4,12 +4,13 @@ import { COMMISSION_RATE, PROTECTION_FEE } from './pricing';
  * Reglas del servicio (cancelaciones, retrasos, reclamos, efectivo).
  * Un solo lugar: los Términos, las preguntas frecuentes, el registro de
  * profesionales y, más adelante, los cobros automáticos leen de aquí.
- * Valores iniciales aprobados por Luis el 17 de octubre de 2026.
+ * Valores iniciales aprobados por Luis el 17 de octubre de 2026; precio por
+ * cita y diagnóstico decididos el 18 de octubre.
  */
 export const POLICY = {
   /** Cargo de plataforma por reserva (USD), lo paga el cliente. */
   platformFee: PROTECTION_FEE,
-  /** Comisión de HULUL sobre el servicio (visita + horas). */
+  /** Comisión de HULUL sobre la tarifa por visita. */
   commission: COMMISSION_RATE,
   /** El cliente cancela gratis hasta estos minutos después de que el profesional acepta. */
   freeCancelMinutes: 5,
@@ -36,10 +37,8 @@ export const POLICY = {
   /** Faltas en la ventana que llevan a suspensión temporal. */
   strikesToSuspend: 3,
   strikesWindowDays: 30,
-  /** Horas para reportar un problema después de terminado el servicio. */
+  /** Horas para calificar o reportar un problema después de terminado el servicio. */
   claimWindowHours: 48,
-  /** Garantía de mano de obra (días). */
-  warrantyDays: 30,
   /** Si el cliente no aprueba ni reclama, el trabajo se aprueba solo a las… (horas). */
   autoApproveHours: 24,
   /** Deuda máxima del profesional por servicios en efectivo antes de desactivar el efectivo (USD). */
@@ -159,3 +158,46 @@ export function hhmmEcuador(d: Date): string {
   const e = new Date(d.getTime() - 5 * 3_600_000);
   return `${String(e.getUTCHours()).padStart(2, '0')}:${String(e.getUTCMinutes()).padStart(2, '0')}`;
 }
+
+/* ------------------------ Resultado de la visita ------------------------ */
+
+/**
+ * Al terminar, el profesional marca cómo quedó y deja un diagnóstico escrito
+ * con fotos. Queda como respaldo para el cliente y el profesional. HULUL cobra
+ * solo la visita: lo que haga falta después lo acuerdan entre ellos.
+ */
+export type JobOutcome = 'resuelto' | 'parcial' | 'no_resuelto';
+
+export const JOB_OUTCOMES: { value: JobOutcome; label: string; help: string }[] = [
+  { value: 'resuelto', label: 'Quedó resuelto', help: 'El problema quedó solucionado en esta visita.' },
+  { value: 'parcial', label: 'Necesita más trabajo', help: 'Hace falta un repuesto, más tiempo u otra visita. Explica qué y acuérdalo con el cliente.' },
+  { value: 'no_resuelto', label: 'No se pudo resolver', help: 'Explica qué encontraste y qué recomiendas.' },
+];
+
+export const OUTCOME_LABEL: Record<JobOutcome, string> = {
+  resuelto: 'Quedó resuelto', parcial: 'Necesita más trabajo', no_resuelto: 'No se pudo resolver',
+};
+
+/** Fotos del diagnóstico. */
+export const MAX_DIAGNOSIS_PHOTOS = 6;
+export const MAX_DIAGNOSIS_CHARS = 1500;
+
+/** Mínimo de caracteres del diagnóstico cuando no quedó resuelto. */
+export const MIN_DIAGNOSIS_CHARS = 20;
+
+/** Qué se le explica al cliente sobre lo que viene después de la visita. */
+export const AFTER_VISIT_NOTE =
+  'HULUL cobra solo la visita. Si hace falta más trabajo, repuestos u otra visita, lo acuerdas directamente con el profesional; HULUL no interviene ni garantiza ese acuerdo. Califica al profesional para que otros clientes sepan cómo trabajó.';
+
+/* ------------------------- Seguridad en el hogar ------------------------- */
+
+/**
+ * Aviso que el cliente acepta al reservar y que se le recuerda cuando el
+ * profesional llega a empezar el trabajo.
+ */
+export const HOME_SAFETY_TITLE = 'Antes de que entre a tu casa';
+export const HOME_SAFETY_NOTICE = [
+  'Ten en casa a una persona adulta de tu confianza mientras dure el trabajo.',
+  'Guarda dinero, joyas, documentos y objetos de valor, y no dejes al profesional solo en áreas que no necesita.',
+  'HULUL verifica la identidad y los antecedentes de los profesionales, pero no se responsabiliza por robos, pérdidas ni daños de objetos durante el servicio. Cualquier reclamo por esos hechos es entre el cliente y el profesional, sin perjuicio de que el cliente denuncie ante las autoridades.',
+];

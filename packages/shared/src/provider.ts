@@ -19,31 +19,121 @@ export type ProviderStatus =
 export type ProviderKind = 'persona' | 'empresa';
 
 /**
- * Precio por categoría, igual para todos los profesionales de esa categoría:
- * - rate: tarifa mínima por hora (cada profesional pone la suya, no menor).
- * - hours: horas mínimas por reserva.
- * - visit: cargo de visita fijo (traslado y diagnóstico). Es para el profesional.
- * Valores iniciales para validar con profesionales reales.
+ * Precio por cita (como un taxi): cada profesional pone su **tarifa por
+ * visita** en cada categoría. HULUL solo le muestra referencias:
+ * - suggested: tarifa sugerida para quien recién empieza (no es obligatoria).
+ * - hours: duración estimada de una visita, solo para validar el horario
+ *   (que el trabajo termine a tiempo). El cliente no la elige ni la paga.
+ * Valores iniciales: se ajustan aquí cuando haya profesionales reales.
  */
-export const CATEGORY_FLOORS: Record<CategorySlug, { rate: number; hours: number; visit: number }> = {
-  climatizacion: { rate: 18, hours: 1, visit: 15 },
-  plomeria: { rate: 15, hours: 1, visit: 12 },
-  electricidad: { rate: 15, hours: 1, visit: 12 },
-  electrodomesticos: { rate: 15, hours: 1, visit: 12 },
-  limpieza: { rate: 5, hours: 4, visit: 0 },
-  jardineria: { rate: 7, hours: 2, visit: 5 },
-  piscinas: { rate: 12, hours: 1, visit: 10 },
-  pintura: { rate: 10, hours: 2, visit: 10 },
-  belleza: { rate: 15, hours: 1, visit: 5 },
-  mascotas: { rate: 8, hours: 1, visit: 5 },
-  clases: { rate: 10, hours: 1, visit: 0 },
-  salud: { rate: 15, hours: 1, visit: 10 },
-  cerrajeria: { rate: 12, hours: 1, visit: 10 },
-  carpinteria: { rate: 12, hours: 2, visit: 10 },
-  albanileria: { rate: 10, hours: 4, visit: 10 },
-  fumigacion: { rate: 20, hours: 1, visit: 10 },
-  mudanzas: { rate: 15, hours: 2, visit: 0 },
-  tecnologia: { rate: 15, hours: 1, visit: 10 },
+export const CATEGORY_PRICING: Record<CategorySlug, { suggested: number; hours: number }> = {
+  climatizacion: { suggested: 25, hours: 2 },
+  plomeria: { suggested: 20, hours: 2 },
+  electricidad: { suggested: 20, hours: 2 },
+  electrodomesticos: { suggested: 20, hours: 2 },
+  limpieza: { suggested: 25, hours: 4 },
+  jardineria: { suggested: 20, hours: 2 },
+  piscinas: { suggested: 20, hours: 1 },
+  pintura: { suggested: 25, hours: 3 },
+  belleza: { suggested: 15, hours: 1 },
+  mascotas: { suggested: 12, hours: 1 },
+  clases: { suggested: 12, hours: 1 },
+  salud: { suggested: 20, hours: 1 },
+  cerrajeria: { suggested: 20, hours: 1 },
+  carpinteria: { suggested: 20, hours: 2 },
+  albanileria: { suggested: 25, hours: 3 },
+  fumigacion: { suggested: 30, hours: 2 },
+  mudanzas: { suggested: 40, hours: 3 },
+  tecnologia: { suggested: 20, hours: 1 },
+};
+
+/** Límites técnicos de la tarifa por visita (solo para evitar errores de tipeo). */
+export const MIN_VISIT_RATE = 5;
+export const MAX_VISIT_RATE = 1000;
+
+/** Duración estimada de una visita en la categoría (horas). */
+export function visitHours(slug: CategorySlug): number {
+  return CATEGORY_PRICING[slug]?.hours ?? 1;
+}
+
+export interface ReferencePrices {
+  suggested: number;
+  /** Cuántos profesionales aprobados tienen tarifa en la categoría. */
+  count: number;
+  min?: number;
+  median?: number;
+  max?: number;
+}
+
+/**
+ * Precios de referencia para que el profesional no esté perdido: la tarifa
+ * sugerida y, con 3 o más profesionales aprobados, el rango y la mediana.
+ */
+export function referencePrices(slug: CategorySlug, rates: number[]): ReferencePrices {
+  const suggested = CATEGORY_PRICING[slug].suggested;
+  const xs = rates.filter((r) => Number.isFinite(r) && r > 0).sort((a, b) => a - b);
+  if (xs.length < 3) return { suggested, count: xs.length };
+  const mid = Math.floor(xs.length / 2);
+  const median = xs.length % 2 ? xs[mid] : Math.round(((xs[mid - 1] + xs[mid]) / 2) * 100) / 100;
+  return { suggested, count: xs.length, min: xs[0], median, max: xs[xs.length - 1] };
+}
+
+/* ----------------------- Validación por categoría ----------------------- */
+
+/**
+ * Cada categoría se aprueba por separado. El profesional demuestra que sabe
+ * hacerlo con un certificado o título, o con fotos de trabajos anteriores y
+ * una referencia. Puede sumar categorías cuando quiera, sin límite.
+ */
+export type CategoryReview = 'en_revision' | 'aprobado' | 'observado' | 'rechazado';
+
+export type EvidenceKind = 'certificado' | 'experiencia';
+
+export interface CategoryEvidence {
+  kind: EvidenceKind;
+  /** Qué certificado es, o cuánta experiencia tiene y dónde trabajó. */
+  note: string;
+  /** Nombre y celular de un cliente o empleador anterior (en "experiencia"). */
+  reference?: string;
+  /** Rutas en Storage (providers/{uid}/...). */
+  files: string[];
+}
+
+export const EVIDENCE_OPTIONS: { value: EvidenceKind; label: string; help: string }[] = [
+  { value: 'certificado', label: 'Tengo certificado o título', help: 'SECAP, instituto, universidad, fabricante o gremio. Sube una foto o PDF.' },
+  { value: 'experiencia', label: 'Tengo experiencia comprobable', help: 'Sube al menos 2 fotos de trabajos que hiciste y deja el contacto de un cliente o empleador que te recomiende.' },
+];
+
+/** Fotos mínimas de trabajos anteriores para validar por experiencia. */
+export const MIN_EXPERIENCE_PHOTOS = 2;
+export const MAX_EVIDENCE_FILES = 6;
+
+/** ¿Está completa la validación de una categoría? Devuelve el problema o ''. */
+export function evidenceProblem(slug: CategorySlug, e: CategoryEvidence | undefined): string {
+  if (!e) return 'Falta demostrar que sabes hacerlo.';
+  if (slug === 'salud' && e.kind !== 'certificado') return 'Salud exige título registrado en la SENESCYT.';
+  if (e.note.trim().length < 5) return e.kind === 'certificado' ? 'Escribe qué certificado o título tienes.' : 'Cuenta tu experiencia: años y dónde trabajaste.';
+  if (e.kind === 'certificado' && e.files.length < 1) return 'Sube la foto o PDF del certificado.';
+  if (e.kind === 'experiencia') {
+    if (e.files.length < MIN_EXPERIENCE_PHOTOS) return `Sube al menos ${MIN_EXPERIENCE_PHOTOS} fotos de trabajos que hiciste.`;
+    if ((e.reference ?? '').trim().length < 8) return 'Deja el nombre y celular de alguien que te recomiende.';
+  }
+  return '';
+}
+
+/**
+ * Categorías en las que el profesional puede recibir trabajos. Los
+ * registrados antes de la validación por categoría (sin `catStatus`) quedan
+ * aprobados en todas las que tenían.
+ */
+export function approvedCategories(p: { categories?: CategorySlug[]; catStatus?: Partial<Record<CategorySlug, CategoryReview>> }): CategorySlug[] {
+  const cats = p.categories ?? [];
+  if (!p.catStatus) return cats;
+  return cats.filter((c) => (p.catStatus?.[c] ?? 'aprobado') === 'aprobado');
+}
+
+export const CATEGORY_REVIEW_LABEL: Record<CategoryReview, string> = {
+  en_revision: 'En revisión', aprobado: 'Aprobada', observado: 'Con observaciones', rechazado: 'No aprobada',
 };
 
 /** Cómo se llama a quien hace cada oficio (para las plantillas de presentación). */
@@ -55,9 +145,6 @@ export const TRADE_NAME: Record<CategorySlug, string> = {
   albanileria: 'maestro albañil', fumigacion: 'técnico en control de plagas', mudanzas: 'transportista de mudanzas',
   tecnologia: 'técnico en tecnología',
 };
-
-/** Máximo de categorías por profesional. */
-export const MAX_PROVIDER_CATEGORIES = 3;
 
 /** Subservicios de una categoría (los mismos "más solicitados" de la web). */
 export function subservicesOf(slug: CategorySlug): string[] {

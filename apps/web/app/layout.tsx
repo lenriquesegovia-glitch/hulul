@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     template: '%s | Hulul',
   },
   description:
-    'Reserva técnicos de aire acondicionado, plomeros, electricistas, limpieza, belleza y más a domicilio en Guayaquil, Samborondón y Daule. Precio por hora visible, profesionales verificados y pago protegido.',
+    'Reserva técnicos de aire acondicionado, plomeros, electricistas, limpieza, belleza y más a domicilio en Guayaquil, Samborondón y Daule. Precio por visita visible, profesionales verificados y pago protegido.',
   applicationName: 'HULUL',
   openGraph: {
     type: 'website',

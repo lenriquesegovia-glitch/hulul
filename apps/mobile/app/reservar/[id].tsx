@@ -7,7 +7,7 @@ import { ClientGate } from '@/components/ClientGate';
 import { Icon } from '@/components/Icon';
 import { MapPicker } from '@/components/MapPicker';
 import type { ClientProfile } from '@hulul/shared/firebase';
-import { BOOKING_DAYS, checkSlot, categoryPricing, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, type PaymentMethod } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, BOOKING_DAYS, checkSlot, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
@@ -20,7 +20,7 @@ const NOTES_MAX = 940;
 /** Para reservar hay que tener cuenta (como Uber). */
 export default function BookingScreen() {
   return (
-    <ClientGate screen title="Crea tu cuenta para reservar" lead="Así sigues tu servicio, recibes la confirmación y tienes la garantía de HULUL.">
+    <ClientGate screen title="Crea tu cuenta para reservar" lead="Así sigues tu servicio, recibes la confirmación y el diagnóstico de cada visita.">
       {({ user, profile }) => <BookingForm uid={user.uid} profile={profile} />}
     </ClientGate>
   );
@@ -60,9 +60,9 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
   const now = useMemo(() => new Date(), []);
   const days = useMemo(() => nextDays(BOOKING_DAYS, now), [now]);
-  // Horas mínimas y cargo de visita: los fija HULUL por categoría.
-  const price = pro ? categoryPricing(pro.category) : { hours: 1, visit: 0, rate: 0 };
-  const minH = Math.max(1, price.hours);
+  // Se paga por visita. La duración estimada solo sirve para validar el horario.
+  const minH = visitHours(pro.category);
+  const hours = minH;
   /** Fecha AAAA-MM-DD de dentro de `d` días. */
   const isoAt = (d: number) => { const x = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
   /** Anticipación + horario de la categoría + horario del profesional. */
@@ -77,7 +77,6 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   }, [now]); // eslint-disable-line react-hooks/exhaustive-deps
   const [day, setDay] = useState(first.day);
   const [slot, setSlot] = useState(first.slot);
-  const [hours, setHours] = useState(minH);
   const [address, setAddress] = useState('');
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const picked = useRef('');
@@ -89,6 +88,8 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   const [error, setError] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [agreeError, setAgreeError] = useState(false);
+  const [safety, setSafety] = useState(false);
+  const [safetyError, setSafetyError] = useState(false);
   const [sending, setSending] = useState(false);
   const [saveError, setSaveError] = useState('');
 
@@ -102,7 +103,6 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   }, [address]);
 
   const check = slot >= 0 ? checkSlot({ category: pro.category, date: isoAt(day), slot: SLOTS[slot], hours, pro }) : null;
-  const canAddHour = slot >= 0 && hours < 8 && okWith(day, slot, hours + 1);
   const [ack, setAck] = useState(false);
   const warnKey = check?.warnings.join('|') ?? '';
   useEffect(() => { setAck(false); }, [warnKey]);
@@ -116,7 +116,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
     );
   }
 
-  const q = quote(pro.hourlyRate, hours, price.visit);
+  const q = quote(pro.visitRate);
 
   const pickDay = (i: number) => {
     setDay(i);
@@ -144,6 +144,10 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
       setError('Escribe la dirección completa para que el profesional pueda llegar.');
       return;
     }
+    if (!safety) {
+      setSafetyError(true);
+      return;
+    }
     if (!agreed) {
       setAgreeError(true);
       return;
@@ -161,6 +165,9 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
         date: dateInDays(day),
         slot: SLOTS[slot],
         hours,
+        pricing: 'visita',
+        visit: q.visit,
+        safetyAccepted: true,
         address: address.trim(),
         location: location ?? undefined,
         notes: [job === OTHER ? '' : job, notes.trim()].filter(Boolean).join('. ').slice(0, 1000),
@@ -192,7 +199,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             <BackButton />
             <View>
               <Text style={s.title}>Reservar</Text>
-              <Body muted style={{ fontSize: 13 }}>{pro.name} · ${pro.hourlyRate}/hora</Body>
+              <Body muted style={{ fontSize: 13 }}>{pro.name} · {visitLabel(pro.visitRate)}</Body>
             </View>
           </View>
 
@@ -228,24 +235,9 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             </View>
           </View>
 
-          <View style={s.hoursBox}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.hoursTitle}>Horas de servicio</Text>
-              <Body muted style={{ fontSize: 12.5 }}>Mínimo {minH} h · puedes ampliar durante el servicio</Body>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Quitar una hora" disabled={hours <= minH} onPress={() => setHours((h) => Math.max(minH, h - 1))} style={s.stepper}>
-                <Text style={s.stepperText}>−</Text>
-              </Pressable>
-              <Text style={s.hoursValue}>{hours}</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel="Añadir una hora" disabled={!canAddHour} onPress={() => setHours((h) => Math.min(8, h + 1))} style={[s.stepper, !canAddHour && { opacity: 0.4 }]}>
-                <Text style={s.stepperText}>+</Text>
-              </Pressable>
-            </View>
-          </View>
           {check ? (
             <Body muted style={{ fontSize: 13 }}>
-              {check.ok ? `Llega a las ${SLOTS[slot]} y termina aprox. a las ${check.end}.` : check.reason}
+              {check.ok ? `Llega a las ${SLOTS[slot]}. Una visita de ${cat.name.toLowerCase()} suele tomar unas ${minH} h.` : check.reason}
             </Body>
           ) : <Body style={{ fontSize: 13, color: c.primary }}>No quedan horas disponibles ese día. Elige otro día.</Body>}
           {check?.ok && check.warnings.length > 0 && (
@@ -352,16 +344,24 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
           <MapPicker visible={mapOpen} initial={location} onClose={() => setMapOpen(false)} onConfirm={(p) => { setLocation(p); setMapOpen(false); }} />
 
           <View style={s.summary}>
-            {q.visit > 0 && <Row label="Visita técnica (traslado y diagnóstico)" value={formatUSD(q.visit)} />}
-            <Row label={`${hours} h × $${pro.hourlyRate}`} value={formatUSD(q.labor)} />
+            <Row label={`Visita de ${pro.name.split(' ')[0]} (traslado, diagnóstico y arreglo si se resuelve en la visita)`} value={formatUSD(q.visit)} />
             <Row label="Cargo de plataforma HULUL" value={formatUSD(q.fee)} />
             <Row label="IVA 15%" value={formatUSD(q.iva)} />
             <View style={s.totalRow}>
               <Text style={s.totalText}>Total</Text>
               <Text style={s.totalText}>{formatUSD(q.total)}</Text>
             </View>
-            <Body muted style={{ fontSize: 12.5 }}>Materiales y repuestos aparte: el profesional te los cotiza en la app. Todo trabajo extra se agrega en la app para que tenga garantía.</Body>
+            <Body muted style={{ fontSize: 12.5 }}>La visita se paga aunque no se resuelva el problema, porque cubre el traslado y el diagnóstico. {AFTER_VISIT_NOTE}</Body>
             <Body style={{ fontSize: 12.5, color: c.copper }}>Versión de prueba: no se pide la tarjeta ni se cobra nada.</Body>
+          </View>
+
+          <View style={[s.warn, { gap: 6 }]}>
+            <Text style={s.mapTitle}>{HOME_SAFETY_TITLE}</Text>
+            {HOME_SAFETY_NOTICE.map((t) => <Body key={t} style={{ fontSize: 13 }}>• {t}</Body>)}
+            <Checkbox checked={safety} onChange={(v) => { setSafety(v); setSafetyError(false); }}>
+              <Body style={{ fontSize: 13.5 }}>Entiendo y acepto: habrá una persona de mi confianza en casa durante el servicio.</Body>
+            </Checkbox>
+            {safetyError && <Text style={s.error}>Marca la casilla del aviso de seguridad.</Text>}
           </View>
 
           <View style={{ gap: 6 }}>

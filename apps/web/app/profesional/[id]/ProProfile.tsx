@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { categoryPricing, formatPrice, formatRating, getCategory, minimumLabel, proHref } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, formatPrice, formatRating, getCategory, proHref } from '@hulul/shared';
 import { DownloadBand } from '@/components/DownloadBand';
 import { Icon } from '@/components/Icon';
 import { usePro } from '@/lib/pros';
@@ -23,7 +23,6 @@ export function ProProfile({ id }: { id: string }) {
     );
   }
   const cat = getCategory(pro.category)!;
-  const price = categoryPricing(cat.slug);
   const book = proHref('reservar', pro);
   const jobs = pro.services?.length ? pro.services : cat.servicios;
 
@@ -59,7 +58,7 @@ export function ProProfile({ id }: { id: string }) {
           )}
 
           <Link href={book} className="btn btn-primary" style={{ alignSelf: 'flex-start', minHeight: 52, fontSize: 16 }}>
-            Reservar ahora · ${pro.hourlyRate}/hora
+            Reservar ahora · {formatPrice(pro.visitRate)} por visita
           </Link>
 
           <div className="grid-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
@@ -69,7 +68,7 @@ export function ProProfile({ id }: { id: string }) {
             </div>
             <div className="card" style={{ textAlign: 'center' }}><div className="price">{pro.jobsDone}</div><div className="muted">servicios</div></div>
             <div className="card" style={{ textAlign: 'center' }}><div className="price">{pro.years}</div><div className="muted">años de experiencia</div></div>
-            <div className="card" style={{ textAlign: 'center' }}><div className="price">${pro.hourlyRate}/h</div><div className="muted">{minimumLabel(pro)}</div></div>
+            <div className="card" style={{ textAlign: 'center' }}><div className="price">{formatPrice(pro.visitRate)}</div><div className="muted">por visita</div></div>
           </div>
 
           {pro.bio && (
@@ -90,9 +89,9 @@ export function ProProfile({ id }: { id: string }) {
           <div className="stack gap-8">
             <h2 style={{ fontSize: 22 }}>Cómo se cobra</h2>
             <ul className="stack gap-8" style={{ listStyle: 'none', padding: 0, margin: 0, color: 'var(--text-2)' }}>
-              {price.visit > 0 && <li>• Visita técnica: <strong>{formatPrice(price.visit)}</strong>, igual para todos los profesionales de {cat.name.toLowerCase()}. Cubre traslado y diagnóstico.</li>}
-              <li>• Mano de obra: <strong>${pro.hourlyRate} por hora</strong>, mínimo {price.hours} h.</li>
-              <li>• Materiales y repuestos: aparte. Te los cotiza en la app y tú decides.</li>
+              <li>• Visita: <strong>{formatPrice(pro.visitRate)}</strong>. Cubre el traslado, el diagnóstico y el arreglo si se resuelve en esa visita.</li>
+              <li>• La visita se paga aunque no se resuelva el problema. Al terminar, {pro.name.split(' ')[0]} te deja el resultado y un diagnóstico con fotos.</li>
+              <li>• {AFTER_VISIT_NOTE}</li>
             </ul>
           </div>
 

@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   if (!cat || !city) return {};
   return {
     title: `${cat.seoName} en ${city.name}`,
-    description: `Contrata ${cat.name.toLowerCase()} a domicilio en ${city.name}: ${cat.servicios.slice(0, 3).join(', ').toLowerCase()}. Precio por hora visible, profesionales verificados y pago protegido con HULUL.`,
+    description: `Contrata ${cat.name.toLowerCase()} a domicilio en ${city.name}: ${cat.servicios.slice(0, 3).join(', ').toLowerCase()}. Precio por visita visible, profesionales verificados y pago protegido con HULUL.`,
     alternates: { canonical: `/servicios/${cat.slug}/${city.slug}` },
   };
 }

@@ -17,7 +17,8 @@ export interface Professional {
   zone: string;
   bio: string;
   years: number;
-  hourlyRate: number;
+  /** Tarifa por visita en esta categoría (USD). */
+  visitRate: number;
   rating: number;
   reviewCount: number;
   jobsDone: number;
@@ -61,6 +62,7 @@ export interface Booking {
   category: CategorySlug;
   /** ISO 8601, hora de Ecuador */
   scheduledAt: string;
+  /** Duración estimada (horas), solo para el horario. */
   hours: number;
   address: string;
   /** Punto marcado en el mapa, si el cliente lo marcó. */

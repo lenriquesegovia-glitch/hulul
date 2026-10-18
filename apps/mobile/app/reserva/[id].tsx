@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { appointmentTime, formatUSD, getCategory, hhmmEcuador, SLOTS, usd } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, OUTCOME_LABEL, SLOTS, usd } from '@hulul/shared';
 import { firestore, reschedule, type ClientBooking, type RescheduleAction } from '@hulul/shared/firebase';
 import { Icon } from '@/components/Icon';
 import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
@@ -57,8 +57,8 @@ function Detail({ b }: { b: ClientBooking }) {
     pendiente: `Esperando que ${first} acepte tu reserva. Te avisamos apenas lo haga.`,
     confirmada: `${first} confirmó. Saldrá con el tiempo justo para llegar a las ${b.slot} (puede salir desde las ${hhmmEcuador(new Date(at.getTime() - 120 * 60_000))}).`,
     en_camino: `${first} va en camino. El mapa con su ubicación en vivo llega pronto; te avisamos cuando llegue.`,
-    en_curso: `${first} está trabajando.`,
-    por_aprobar: `${first} terminó. Tienes 48 horas para reportar cualquier problema.`,
+    en_curso: `${first} está trabajando. Al terminar te deja el resultado y un diagnóstico con fotos.`,
+    por_aprobar: `${first} terminó la visita. Revisa su diagnóstico; tienes 48 horas para calificarlo o reportar un problema.`,
     completada: 'Servicio completado.',
     cancelada: b.cancelledBy === 'profesional' ? `${first} canceló. No se te cobra nada.` : `Cancelaste esta reserva${b.cancelFee ? ` con un cargo de ${usd(b.cancelFee)}${b.demo ? ' (prueba)' : ''}` : ' sin costo'}.`,
   };
@@ -67,7 +67,7 @@ function Detail({ b }: { b: ClientBooking }) {
     <View style={{ gap: 16 }}>
       <View style={{ gap: 4 }}>
         <H1 style={{ fontSize: 24 }}>{cat?.name ?? b.category} con {b.professionalName}</H1>
-        <Text style={s.when}>{shortDay(b.date)} · {b.slot}{b.hours ? ` · ${b.hours} h` : ''}</Text>
+        <Text style={s.when}>{shortDay(b.date)} · {b.slot}</Text>
       </View>
       <Card style={{ gap: 14 }}>
         <Body>{message[b.status] ?? ''}</Body>
@@ -84,11 +84,36 @@ function Detail({ b }: { b: ClientBooking }) {
           );
         })}
       </Card>
+      {b.outcome && (
+        <Card style={{ gap: 10 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Text style={s.boxTitle}>Diagnóstico del profesional</Text>
+            <Text style={[s.badge, b.outcome === 'resuelto' && { backgroundColor: c.successSoft, color: c.success }]}>{OUTCOME_LABEL[b.outcome]}</Text>
+          </View>
+          {b.diagnosis ? <Body>{b.diagnosis}</Body> : null}
+          {!!b.diagnosisPhotos?.length && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {b.diagnosisPhotos.map((u) => (
+                <Pressable key={u} onPress={() => Linking.openURL(u)}>
+                  <Image source={{ uri: u }} style={s.photo} accessibilityLabel="Foto del diagnóstico" />
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <Body muted style={{ fontSize: 13 }}>{AFTER_VISIT_NOTE}</Body>
+        </Card>
+      )}
+      {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && (
+        <View style={s.box}>
+          <Text style={s.boxTitle}>{HOME_SAFETY_TITLE}</Text>
+          {HOME_SAFETY_NOTICE.map((t) => <Body key={t} style={{ fontSize: 13.5 }}>• {t}</Body>)}
+        </View>
+      )}
       {['pendiente', 'confirmada'].includes(b.status) && <Reschedule b={b} other={first} />}
       <Card style={{ gap: 6 }}>
         {b.address ? <Body>📍 {b.address}</Body> : null}
         {b.notes ? <Body muted>{b.notes}</Body> : null}
-        <Body>Total: {formatUSD(b.total)} · Código {b.id.slice(0, 8).toUpperCase()}</Body>
+        <Body>{b.visit ? `Visita ${formatUSD(b.visit)} · ` : ''}Total: {formatUSD(b.total)} · Código {b.id.slice(0, 8).toUpperCase()}</Body>
       </Card>
       <CancelBox row={b} onDone={() => {}} />
     </View>
@@ -163,4 +188,6 @@ const s = StyleSheet.create({
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   chipOn: { backgroundColor: c.text, borderColor: c.text },
   chipText: { fontFamily: font.bodySemi, fontSize: 13, color: c.text },
+  badge: { overflow: 'hidden', paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: c.copperSoft, color: c.text, fontFamily: font.bodyBold, fontSize: 12.5 },
+  photo: { width: 88, height: 88, borderRadius: 10, borderWidth: 1, borderColor: c.border },
 });

@@ -74,7 +74,7 @@ export const categories: Category[] = [
     seoName: 'Plomeros a domicilio',
     sub: 'Fugas, destapes, grifería y bombas de agua',
     icon: 'drop',
-    incluye: ['Diagnóstico de la fuga o atasco', 'Mano de obra por las horas reservadas', 'Materiales cotizados aparte en la app'],
+    incluye: ['Diagnóstico de la fuga o atasco', 'Arreglo si se resuelve en la visita', 'Materiales y trabajo extra: los acuerdas con el profesional'],
     servicios: ['Destape de tuberías', 'Reparación de fugas', 'Bombas de agua', 'Cambio de grifería', 'Instalación de inodoro', 'Calefón y termotanque', 'Cisternas y tanques elevados', 'Lavamanos y fregaderos', 'Detección de fugas ocultas', 'Hidroneumático y presurizador'],
   },
   {
@@ -93,7 +93,7 @@ export const categories: Category[] = [
     seoName: 'Reparación de electrodomésticos a domicilio',
     sub: 'Lavadoras, refrigeradoras, cocinas y secadoras',
     icon: 'washer',
-    incluye: ['Diagnóstico en sitio', 'Reparación si los repuestos están disponibles', 'Garantía sobre la mano de obra'],
+    incluye: ['Diagnóstico en sitio', 'Reparación si los repuestos están disponibles', 'Diagnóstico escrito con fotos en la app'],
     servicios: ['Reparación de lavadoras', 'Reparación de refrigeradoras', 'Cocinas de inducción', 'Secadoras', 'Microondas', 'Hornos y cocinas a gas', 'Lavavajillas', 'Congeladores', 'Instalación de electrodomésticos'],
   },
   {
@@ -175,7 +175,7 @@ export const categories: Category[] = [
     seoName: 'Cerrajeros a domicilio',
     sub: 'Apertura de puertas, cambio de chapas y copias de llaves',
     icon: 'key',
-    incluye: ['Revisión de la cerradura', 'Mano de obra por las horas reservadas', 'Chapas y repuestos cotizados aparte en la app'],
+    incluye: ['Revisión de la cerradura', 'Arreglo si se resuelve en la visita', 'Chapas y repuestos: los acuerdas con el profesional'],
     servicios: ['Apertura de puertas', 'Cambio de chapas y cerraduras', 'Copia de llaves', 'Cerraduras de seguridad', 'Apertura de autos', 'Cajas fuertes', 'Cerraduras digitales'],
   },
   {
@@ -184,7 +184,7 @@ export const categories: Category[] = [
     seoName: 'Carpinteros a domicilio',
     sub: 'Muebles a medida, puertas, closets y reparaciones',
     icon: 'saw',
-    incluye: ['Medición y diagnóstico', 'Mano de obra por las horas reservadas', 'Madera y herrajes cotizados aparte'],
+    incluye: ['Medición y diagnóstico', 'Arreglo si se resuelve en la visita', 'Madera y herrajes: los acuerdas con el profesional'],
     servicios: ['Reparación de muebles', 'Muebles a medida', 'Closets y cocinas', 'Puertas y marcos', 'Armado de muebles', 'Pisos de madera', 'Lacado y restauración'],
   },
   {
@@ -194,7 +194,7 @@ export const categories: Category[] = [
     seoName: 'Albañiles y maestros de obra a domicilio',
     sub: 'Arreglos, cerámica, paredes, losas y pequeñas obras',
     icon: 'brick',
-    incluye: ['Diagnóstico del trabajo', 'Mano de obra por las horas reservadas', 'Materiales cotizados aparte en la app'],
+    incluye: ['Diagnóstico del trabajo', 'Arreglo si se resuelve en la visita', 'Materiales y trabajo extra: los acuerdas con el profesional'],
     servicios: ['Colocación de cerámica y porcelanato', 'Enlucido y paredes', 'Arreglo de goteras y losas', 'Gypsum y cielo falso', 'Contrapisos', 'Remodelación de baños', 'Remodelación de cocinas', 'Cerramientos'],
   },
   {
@@ -212,7 +212,7 @@ export const categories: Category[] = [
     seoName: 'Mudanzas y fletes',
     sub: 'Mudanzas, fletes, cargadores y embalaje',
     icon: 'truck',
-    incluye: ['Vehículo y personal de carga', 'Cuidado de tus muebles', 'Embalaje cotizado aparte si lo necesitas'],
+    incluye: ['Vehículo y personal de carga', 'Cuidado de tus muebles', 'Embalaje: lo acuerdas con el profesional'],
     servicios: ['Mudanza de casa', 'Mudanza de departamento', 'Fletes pequeños', 'Cargadores', 'Embalaje', 'Armado y desarmado de muebles', 'Mudanza de oficina'],
   },
   {
@@ -221,7 +221,7 @@ export const categories: Category[] = [
     seoName: 'Técnicos de computadoras, redes y cámaras a domicilio',
     sub: 'Computadoras, internet y WiFi, cámaras, TV y celulares',
     icon: 'monitor',
-    incluye: ['Diagnóstico del equipo', 'Mano de obra por las horas reservadas', 'Repuestos cotizados aparte'],
+    incluye: ['Diagnóstico del equipo', 'Arreglo si se resuelve en la visita', 'Repuestos: los acuerdas con el profesional'],
     servicios: ['Reparación de computadoras', 'Internet y WiFi', 'Cámaras de seguridad', 'Instalación de TV y soportes', 'Reparación de celulares', 'Impresoras', 'Alarmas y cerco eléctrico', 'Domótica y casa inteligente'],
   },
 ];

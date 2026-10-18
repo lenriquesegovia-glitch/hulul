@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { minimumLabel, proHref, ratingLabel, type Professional } from '@hulul/shared';
+import { formatPrice, proHref, ratingLabel, type Professional } from '@hulul/shared';
 import { Icon } from './Icon';
 
 /** `job`: trabajo elegido en la categoría; se pasa a la reserva. */
@@ -26,8 +26,8 @@ export function ProCard({ pro, job }: { pro: Professional; job?: string }) {
       </Link>
       <div className="row gap-12" style={{ justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
         <div className="stack">
-          <span className="price">${pro.hourlyRate}<span className="muted" style={{ fontSize: 13, fontFamily: 'var(--font-body)' }}>/hora</span></span>
-          <span className="muted" style={{ fontSize: 13 }}>{minimumLabel(pro)}</span>
+          <span className="price">{formatPrice(pro.visitRate)}<span className="muted" style={{ fontSize: 13, fontFamily: 'var(--font-body)' }}> por visita</span></span>
+          <span className="muted" style={{ fontSize: 13 }}>Incluye traslado y diagnóstico</span>
         </div>
         <Link href={bookHref} className="btn btn-primary" aria-label={`Reservar a ${pro.name}`}>Reservar</Link>
       </div>

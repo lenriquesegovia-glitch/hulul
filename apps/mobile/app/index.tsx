@@ -99,7 +99,7 @@ export default function Home() {
           <View style={{ padding: 16, gap: 8 }}>
             <Text style={s.proEyebrow}>PARA TÉCNICOS Y PROFESIONALES</Text>
             <Text style={s.proTitle}>{isPro ? 'Tu agenda de profesional' : '¿Eres técnico o profesional? Gana más con HULUL'}</Text>
-            <Text style={s.proText}>{isPro ? 'Acepta reservas, mira las direcciones en el mapa y marca "Voy en camino".' : 'Registro gratis. Tú pones tu tarifa, tus zonas y tu horario. Pago garantizado.'}</Text>
+            <Text style={s.proText}>{isPro ? 'Acepta reservas, mira las direcciones en el mapa y marca "Voy en camino".' : 'Registro gratis. Tú pones tu tarifa por visita, tus zonas y tu horario.'}</Text>
             <View style={s.proBtn}><Text style={s.proBtnText}>{isPro ? 'Abrir mi agenda' : 'Regístrate gratis'}</Text></View>
           </View>
         </Pressable>

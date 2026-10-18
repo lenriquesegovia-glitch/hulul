@@ -97,8 +97,8 @@ export function checkSlot(input: {
   if (input.pro?.workDays?.length && !input.pro.workDays.includes(wd)) return no(`${first} no atiende los ${WEEKDAY[wd]}.`);
   if (start < rule.start * 60) return no(`Este servicio empieza desde las ${pad(rule.start)}:00.`);
   if (input.pro?.from && start < toMin(input.pro.from)) return no(`${first} empieza a atender a las ${input.pro.from}.`);
-  if (endMin > rule.hardEnd * 60) return no(`Terminaría a las ${end}. Este servicio debe terminar a más tardar a las ${pad(rule.hardEnd)}:00: elige una hora más temprano o menos horas.`);
-  if (input.pro?.to && endMin > toMin(input.pro.to)) return no(`Terminaría a las ${end} y ${first} atiende hasta las ${input.pro.to}: elige una hora más temprano o menos horas.`);
+  if (endMin > rule.hardEnd * 60) return no(`Terminaría a las ${end}. Este servicio debe terminar a más tardar a las ${pad(rule.hardEnd)}:00: elige una hora más temprano.`);
+  if (input.pro?.to && endMin > toMin(input.pro.to)) return no(`Terminaría a las ${end} y ${first} atiende hasta las ${input.pro.to}: elige una hora más temprano.`);
 
   if (endMin > rule.softEnd * 60) warnings.push(`El trabajo terminaría a las ${end}. Algunas urbanizaciones no permiten el ingreso de proveedores después de las ${pad(rule.softEnd)}:00; HULUL no se hace responsable si no le permiten entrar.`);
   if (holiday && rule.holidays === 'aviso') warnings.push(`${holiday} es feriado. Algunas urbanizaciones no permiten trabajos en feriados; la reserva queda bajo tu responsabilidad.`);

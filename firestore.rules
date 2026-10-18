@@ -46,6 +46,7 @@ service cloud.firestore {
             'date', 'slot', 'hours', 'address', 'location', 'notes',
             'contactName', 'contactPhone', 'contactEmail', 'paymentMethod',
             'subtotal', 'fee', 'iva', 'total', 'consentMarketing', 'demo',
+            'pricing', 'visit', 'safetyAccepted',
             'status', 'consentPrivacy', 'privacyVersion', 'createdAt'])
         && request.resource.data.source in ['web', 'app']
         // Desde la web solo se reserva con cuenta, y a nombre propio.
@@ -59,7 +60,12 @@ service cloud.firestore {
         && str(request.resource.data.category, 1, 40)
         && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.slot.matches('^[0-9]{2}:[0-9]{2}$')
+        // Duración estimada de la visita (solo para el horario).
         && num(request.resource.data.hours, 1, 8)
+        // Precio por visita (desde el 18-oct-2026) y aviso de seguridad aceptado.
+        && (!('pricing' in request.resource.data) || request.resource.data.pricing == 'visita')
+        && (!('visit' in request.resource.data) || num(request.resource.data.visit, 1, 1000))
+        && (!('safetyAccepted' in request.resource.data) || request.resource.data.safetyAccepted == true)
         && str(request.resource.data.address, 8, 300)
         && location(request.resource.data)
         && str(request.resource.data.notes, 0, 1000)
@@ -126,7 +132,7 @@ service cloud.firestore {
     function providerFields(d) {
       return d.keys().hasOnly([
         'uid', 'status', 'step', 'kind', 'firstName', 'lastName', 'businessName', 'cedula', 'ruc',
-        'phone', 'email', 'categories', 'services', 'rates', 'minHours', 'years', 'bio',
+        'phone', 'email', 'categories', 'services', 'rates', 'minHours', 'visitRates', 'catEvidence', 'catStatus', 'strikes', 'years', 'bio',
         'cities', 'days', 'from', 'to', 'acceptsCash', 'docs',
         'consentPrivacy', 'privacyVersion', 'termsAccepted', 'submittedAt', 'createdAt', 'updatedAt']);
     }
@@ -136,7 +142,11 @@ service cloud.firestore {
         && d.uid == uid
         && d.status in ['borrador', 'en_revision', 'observado']
         && d.updatedAt == request.time
-        && (!('categories' in d) || (d.categories is list && d.categories.size() <= 3))
+        // Sin límite de categorías (hay 18). Cada una se valida por separado;
+        // su estado (catStatus) lo escribe solo el servidor.
+        && (!('categories' in d) || (d.categories is list && d.categories.size() <= 18))
+        && (!('visitRates' in d) || d.visitRates is map)
+        && (!('catEvidence' in d) || d.catEvidence is map)
         && (!('bio' in d) || str(d.bio, 0, 500))
         && (!('cedula' in d) || str(d.cedula, 0, 10))
         && (!('docs' in d) || d.docs is map);
@@ -146,11 +156,15 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid
         && providerOk(uid, request.resource.data)
+        && !('catStatus' in request.resource.data) && !('strikes' in request.resource.data)
         && request.resource.data.status == 'borrador'
         && request.resource.data.createdAt == request.time;
+      // catStatus (lo pone el servidor) puede existir pero no se cambia desde aquí.
       allow update: if request.auth != null && request.auth.uid == uid
         && resource.data.status in ['borrador', 'en_revision', 'observado']
         && providerOk(uid, request.resource.data)
+        && request.resource.data.get('catStatus', null) == resource.data.get('catStatus', null)
+        && request.resource.data.get('strikes', null) == resource.data.get('strikes', null)
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if false;
 

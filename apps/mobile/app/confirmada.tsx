@@ -49,7 +49,7 @@ export default function ConfirmedScreen() {
           <Avatar initials={pro.initials} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={s.proName}>{pro.name}</Text>
-            <Body muted style={{ fontSize: 13 }}>{last.notes ? `${last.notes} · ` : ''}{cat.name} · {last.hours} h · {formatUSD(last.total)}</Body>
+            <Body muted style={{ fontSize: 13 }}>{last.notes ? `${last.notes} · ` : ''}{cat.name} · visita · {formatUSD(last.total)}</Body>
           </View>
         </Card>
 

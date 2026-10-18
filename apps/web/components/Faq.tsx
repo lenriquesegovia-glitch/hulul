@@ -1,4 +1,4 @@
-import { CATEGORY_FLOORS, POLICY as P, pct, usd } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, POLICY as P, pct, usd } from '@hulul/shared';
 
 /**
  * Preguntas frecuentes. El inicio muestra las de clientes más comunes; la
@@ -7,27 +7,29 @@ import { CATEGORY_FLOORS, POLICY as P, pct, usd } from '@hulul/shared';
 
 interface Q { q: string; a: string }
 
-const climat = CATEGORY_FLOORS.climatizacion;
-
 export const faqGroups: { title: string; items: Q[] }[] = [
   {
     title: 'Precio y pago',
     items: [
       {
-        q: '¿Necesito pedir un presupuesto?',
-        a: `No. El precio tiene tres partes que ves antes de confirmar: una visita técnica fija por categoría, igual con cualquier profesional (por ejemplo, ${usd(climat.visit)} en climatización, cubre traslado y diagnóstico); la tarifa por hora del profesional, con un mínimo de horas por categoría; y el cargo de plataforma de ${usd(P.platformFee)}. A todo se suma el IVA.`,
+        q: '¿Cómo se cobra?',
+        a: `Por visita, como un taxi. Cada profesional publica su tarifa por visita, que cubre el traslado, el diagnóstico y el arreglo si se resuelve en esa visita. Al total se suma el cargo de plataforma de ${usd(P.platformFee)} y el IVA, y lo ves antes de confirmar.`,
       },
       {
-        q: '¿Los materiales están incluidos?',
-        a: 'No. La tarifa por hora es la mano de obra. Si hacen falta materiales o repuestos, el profesional te los cotiza en la app y tú decides si los aprueba o si los compras tú. Cualquier trabajo extra también se agrega en la app: así queda cubierto por la garantía.',
+        q: '¿Qué pasa si el profesional no logra resolver el problema?',
+        a: `La visita se paga igual, porque cubre el traslado y el diagnóstico. Al terminar, el profesional marca si quedó resuelto, si necesita más trabajo o si no se pudo resolver, y te deja un diagnóstico escrito con fotos en la app. ${AFTER_VISIT_NOTE}`,
+      },
+      {
+        q: '¿Los materiales y repuestos están incluidos?',
+        a: 'No. Si hacen falta, el profesional te explica qué se necesita y lo acuerdan directamente entre ustedes. HULUL no interviene en ese acuerdo.',
       },
       {
         q: '¿Cómo se protege mi pago?',
-        a: `Con tarjeta, el monto queda retenido al reservar y se cobra recién cuando apruebas el trabajo (o ${P.autoApproveHours} horas después de terminado si no respondes). Si reportas un problema, el pago sigue retenido hasta resolverlo.`,
+        a: `Con tarjeta, el monto de la visita queda retenido al reservar y se cobra cuando termina la visita (o ${P.autoApproveHours} horas después si no respondes). Si el profesional no llega o cancela, no pagas la visita.`,
       },
       {
         q: '¿Puedo pagar en efectivo?',
-        a: 'Sí, si el profesional acepta efectivo. Pagas el total al terminar. Recuerda que solo lo pagado por la app (o registrado en ella) tiene garantía y opción de reclamo.',
+        a: 'Sí, si el profesional acepta efectivo. Pagas el total de la visita al terminar.',
       },
       {
         q: '¿Emiten factura?',
@@ -40,7 +42,11 @@ export const faqGroups: { title: string; items: Q[] }[] = [
     items: [
       {
         q: '¿Los profesionales están verificados?',
-        a: 'Sí. Antes de aparecer en HULUL cada profesional pasa por una revisión: validamos su cédula y la comparamos con una foto de su rostro, revisamos su certificado de antecedentes penales vigente del Ministerio del Interior, y en Salud exigimos el título registrado en la SENESCYT. Luego cada servicio se califica, y quien baja de 4,5 estrellas o acumula reclamos es suspendido.',
+        a: 'Sí. Antes de aparecer en HULUL cada profesional pasa por una revisión: validamos su cédula y la comparamos con una foto de su rostro, revisamos su certificado de antecedentes penales vigente del Ministerio del Interior, y en cada oficio pedimos un certificado o fotos de trabajos anteriores con una referencia (en Salud, el título registrado en la SENESCYT). Luego cada servicio se califica, y quien baja de 4,5 estrellas o acumula reportes es suspendido.',
+      },
+      {
+        q: '¿HULUL responde si se pierde o daña algo en mi casa?',
+        a: 'No. HULUL verifica la identidad y los antecedentes de los profesionales, pero no se responsabiliza por robos, pérdidas ni daños de objetos durante el servicio. Por eso te pedimos que haya en casa una persona adulta de tu confianza mientras dure el trabajo, y que guardes dinero, joyas, documentos y objetos de valor.',
       },
       {
         q: '¿Puedo ver por dónde viene el profesional?',
@@ -61,7 +67,7 @@ export const faqGroups: { title: string; items: Q[] }[] = [
       },
       {
         q: '¿Puedo cancelar?',
-        a: `Sí, sin costo hasta ${P.freeCancelHoursBefore} horas antes de la cita, o hasta ${P.freeCancelMinutes} minutos después de que el profesional acepte si pediste para lo antes posible. Después, si el profesional ya confirmó o va en camino, hay un cargo de ${usd(P.lateCancelFee)}; te lo mostramos antes de que confirmes. Si llega y no estás, tras ${P.clientNoShowWaitMinutes} minutos de espera se cobra la visita técnica.`,
+        a: `Sí, sin costo hasta ${P.freeCancelHoursBefore} horas antes de la cita, o hasta ${P.freeCancelMinutes} minutos después de que el profesional acepte si pediste para lo antes posible. Después, si el profesional ya confirmó o va en camino, hay un cargo de ${usd(P.lateCancelFee)}; te lo mostramos antes de que confirmes. Si llega y no estás, tras ${P.clientNoShowWaitMinutes} minutos de espera se cobra la visita del profesional.`,
       },
       {
         q: '¿Qué pasa si el profesional llega tarde o no llega?',
@@ -69,7 +75,7 @@ export const faqGroups: { title: string; items: Q[] }[] = [
       },
       {
         q: '¿Y si el trabajo queda mal?',
-        a: `Repórtalo en la app hasta ${P.claimWindowHours} horas después de terminado, con fotos. Revisamos y, si corresponde, el profesional vuelve sin costo o te devolvemos el dinero. Los trabajos tienen ${P.warrantyDays} días de garantía de mano de obra.`,
+        a: `Califica al profesional y cuéntalo en la app hasta ${P.claimWindowHours} horas después de terminado, con fotos. Las calificaciones son públicas y quien acumula malas calificaciones o reportes es suspendido. La calidad del trabajo es responsabilidad del profesional y se arregla directamente con él.`,
       },
     ],
   },
@@ -78,7 +84,11 @@ export const faqGroups: { title: string; items: Q[] }[] = [
     items: [
       {
         q: '¿Cuánto cuesta trabajar con HULUL?',
-        a: `Registrarte es gratis. HULUL retiene una comisión del ${pct(P.commission)} de cada servicio. La visita técnica de tu categoría es para ti.`,
+        a: `Registrarte es gratis. Tú pones tu tarifa por visita y HULUL retiene una comisión del ${pct(P.commission)} de esa tarifa. Lo que acuerdes con el cliente después de la visita es entre ustedes.`,
+      },
+      {
+        q: '¿Puedo ofrecer varios oficios?',
+        a: 'Sí, todos los que sepas hacer, sin límite. Cada categoría se aprueba por separado: subes un certificado o título, o fotos de trabajos que hiciste y el contacto de alguien que te recomiende. Puedes sumar categorías en cualquier momento desde tu perfil.',
       },
       {
         q: '¿Cómo y cuándo me pagan?',
@@ -90,7 +100,7 @@ export const faqGroups: { title: string; items: Q[] }[] = [
       },
       {
         q: '¿Qué documentos necesito?',
-        a: 'Cédula, una foto de tu rostro, el certificado de antecedentes penales (se descarga gratis en la web del Ministerio del Interior) y tu RUC, que es obligatorio para facturar tus servicios (se saca gratis en SRI en línea). En Salud, además, tu título registrado en la SENESCYT.',
+        a: 'Cédula, una foto de tu rostro, el certificado de antecedentes penales (se descarga gratis en la web del Ministerio del Interior) y tu RUC, que es obligatorio para facturar tus servicios (se saca gratis en SRI en línea). Por cada oficio, un certificado o fotos de tus trabajos. En Salud, tu título registrado en la SENESCYT.',
       },
     ],
   },

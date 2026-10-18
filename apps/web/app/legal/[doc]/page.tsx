@@ -17,7 +17,7 @@ const docs: Record<string, { title: string; intro: string; sections: LegalSectio
   },
   terminos: {
     title: 'Términos y condiciones',
-    intro: 'Las reglas para usar HULUL: precio, pago, cancelaciones, retrasos, reclamos y garantía, y las obligaciones de clientes y profesionales.',
+    intro: 'Las reglas para usar HULUL: precio por visita, pago, cancelaciones, retrasos, diagnóstico, seguridad en el hogar y las obligaciones de clientes y profesionales.',
     sections: termsOfService,
     updated: TERMS_UPDATED,
   },

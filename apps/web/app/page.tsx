@@ -12,7 +12,7 @@ import { SearchBox } from '@/components/SearchBox';
 
 const steps = [
   { n: '1', t: 'Elige el servicio', d: 'Busca lo que necesitas y compara profesionales por precio, reseñas y disponibilidad.' },
-  { n: '2', t: 'Reserva y paga', d: 'Elige día, hora y cuántas horas. Ves el total antes de pagar con tarjeta, transferencia o DeUna.' },
+  { n: '2', t: 'Reserva y paga', d: 'Elige día y hora y cuenta qué necesitas. Pagas por visita y ves el total antes de pagar.' },
   { n: '3', t: 'Aprueba el trabajo', d: 'Sigue al profesional en la app. El pago se libera cuando confirmas que todo quedó bien.' },
 ];
 

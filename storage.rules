@@ -12,6 +12,15 @@ service firebase.storage {
         && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
       allow delete: if false;
     }
+    // Fotos del diagnóstico: las sube el profesional al terminar una visita.
+    // El cliente las ve por el enlace que queda guardado en su reserva.
+    match /diagnosticos/{uid}/{bookingId}/{file} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
     match /{allPaths=**} {
       allow read, write: if false;
     }

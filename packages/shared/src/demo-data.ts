@@ -1,6 +1,7 @@
 import type { CategorySlug } from './categories';
 import { cities } from './cities';
 import type { Professional } from './models';
+import { CATEGORY_PRICING } from './provider';
 
 /**
  * Directorio de profesionales REALES.
@@ -17,7 +18,8 @@ export interface PublicPro {
   isCompany: boolean;
   categories: CategorySlug[];
   services: Partial<Record<CategorySlug, string[]>>;
-  rates: Partial<Record<CategorySlug, number>>;
+  /** Tarifa por visita por categoría. */
+  visitRates: Partial<Record<CategorySlug, number>>;
   cities: string[];
   years: number;
   bio: string;
@@ -50,7 +52,8 @@ export function toProfessional(p: PublicPro, category?: CategorySlug): Professio
     zone: p.cities.map((c) => cities.find((x) => x.slug === c)?.name ?? c).join(' · '),
     bio: p.bio,
     years: p.years,
-    hourlyRate: p.rates?.[cat] ?? 0,
+    // Fichas publicadas antes del precio por visita (18-oct-2026): tarifa sugerida.
+    visitRate: p.visitRates?.[cat] ?? CATEGORY_PRICING[cat]?.suggested ?? 0,
     rating: p.rating ?? 0,
     reviewCount: p.reviewCount ?? 0,
     jobsDone: p.jobsDone ?? 0,

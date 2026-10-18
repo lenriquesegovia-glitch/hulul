@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { categoryPricing, formatPrice, type Category } from '@hulul/shared';
+import { formatPrice, type Category } from '@hulul/shared';
 import { usePros } from '@/lib/pros';
 import { Icon } from './Icon';
 import { ProCard } from './ProCard';
@@ -22,7 +22,9 @@ export function ServicePicker({ cat, city, cityName }: { cat: Category; city?: s
     ? [...all].sort((a, b) => Number((b.services ?? []).includes(job)) - Number((a.services ?? []).includes(job)))
     : all;
   const list = useRef<HTMLDivElement>(null);
-  const price = categoryPricing(cat.slug);
+  // "Visita desde $X": la tarifa más baja de los profesionales de la categoría.
+  const rates = (all ?? []).map((p) => p.visitRate).filter((r) => r > 0);
+  const from = rates.length ? Math.min(...rates) : 0;
 
   const pick = (j: string) => {
     setJob(j);
@@ -40,7 +42,7 @@ export function ServicePicker({ cat, city, cityName }: { cat: Category; city?: s
               <span className="stack" style={{ minWidth: 0, flex: 1 }}>
                 <strong>{s}</strong>
                 <span className="muted" style={{ fontSize: 13 }}>
-                  {s === OTHER_JOB ? 'Descríbelo al reservar' : `${price.visit > 0 ? `Visita ${formatPrice(price.visit)} + ` : ''}desde ${formatPrice(price.rate)}/h`}
+                  {s === OTHER_JOB ? 'Descríbelo al reservar' : from ? `Visita desde ${formatPrice(from)}` : 'Precio por visita'}
                 </span>
               </span>
               <Icon name="chevronRight" size={18} color={job === s ? '#fff' : 'var(--muted)'} />

@@ -15,6 +15,8 @@ import { PRIVACY_VERSION } from './legal';
 import type { CategorySlug } from './categories';
 import type { LatLng, PaymentMethod, Professional } from './models';
 import { sortPros, toProfessional, type PublicPro } from './demo-data';
+import type { JobOutcome } from './policy';
+import type { CategoryEvidence } from './provider';
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyAR2w6K7JXPHyPvfLb3piv--48T3gvlL2o',
@@ -62,7 +64,14 @@ export interface NewBooking {
   date: string;
   /** Hora de llegada, HH:MM */
   slot: string;
+  /** Duración estimada de la visita (horas), solo para el horario. */
   hours: number;
+  /** Precio por cita (desde el 18-oct-2026). */
+  pricing: 'visita';
+  /** Tarifa por visita del profesional. */
+  visit: number;
+  /** El cliente aceptó el aviso de seguridad en el hogar. */
+  safetyAccepted: true;
   address: string;
   /** Punto marcado en el mapa (opcional). */
   location?: LatLng;
@@ -176,6 +185,12 @@ export interface ClientBooking {
   location?: LatLng;
   proposal?: Proposal;
   cancelledBy?: string;
+  /** Tarifa por visita (reservas desde el 18-oct-2026). */
+  visit?: number;
+  subtotal?: number;
+  outcome?: JobOutcome;
+  diagnosis?: string;
+  diagnosisPhotos?: string[];
 }
 
 /** Cambio de hora propuesto por una de las partes. */
@@ -223,6 +238,27 @@ export async function loadPro(id: string, category?: CategorySlug): Promise<Prof
   return snap.exists() ? toProfessional({ ...(snap.data() as PublicPro), uid: snap.id }, category) : null;
 }
 
+/** Tarifas por visita de los profesionales aprobados de una categoría (para los precios de referencia). */
+export async function categoryRates(category: CategorySlug, exceptUid?: string): Promise<number[]> {
+  const snap = await getDocs(query(collection(firestore(), 'pros'), where('categories', 'array-contains', category)));
+  return snap.docs
+    .filter((d) => d.id !== exceptUid)
+    .map((d) => Number((d.data() as PublicPro).visitRates?.[category]))
+    .filter((n) => Number.isFinite(n) && n > 0);
+}
+
+/* ------------------------ Servicios del profesional ------------------------ */
+
+export type ServicesUpdate =
+  | { action: 'tarifas'; visitRates?: Partial<Record<CategorySlug, number>>; services?: Partial<Record<CategorySlug, string[]>> }
+  | { action: 'agregar'; category: CategorySlug; visitRate: number; services: string[]; evidence: CategoryEvidence };
+
+/** Un profesional aprobado cambia sus tarifas o suma una categoría (queda en revisión). */
+export async function updateServices(data: ServicesUpdate): Promise<void> {
+  const fn = httpsCallable<ServicesUpdate, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'actualizarServicios');
+  await fn(data);
+}
+
 /* ------------------------------ Cancelación ------------------------------ */
 
 /** Cancela una reserva del cliente. El servidor calcula y devuelve el cargo. */
@@ -244,10 +280,18 @@ export function cancelErrorMessage(e: unknown): string {
 
 export type ProAction = 'aceptar' | 'rechazar' | 'en_camino' | 'llegue' | 'terminar' | 'no_puedo';
 
+/** Resultado de la visita: lo envía el profesional al terminar. */
+export interface VisitReport {
+  outcome: JobOutcome;
+  diagnosis: string;
+  /** Enlaces de descarga de las fotos (Storage, carpeta diagnosticos/{uid}/{reserva}). */
+  photos: string[];
+}
+
 /** El profesional cambia el estado de una reserva suya (lo valida el servidor). */
-export async function proAction(id: string, action: ProAction, reason = ''): Promise<{ status: string }> {
-  const fn = httpsCallable<{ id: string; action: ProAction; reason: string }, { status: string }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'gestionarReserva');
-  return (await fn({ id, action, reason })).data;
+export async function proAction(id: string, action: ProAction, reason = '', report?: VisitReport): Promise<{ status: string }> {
+  const fn = httpsCallable<{ id: string; action: ProAction; reason: string } & Partial<VisitReport>, { status: string }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'gestionarReserva');
+  return (await fn({ id, action, reason, ...(report ?? {}) })).data;
 }
 
 export interface ProBooking {
@@ -268,6 +312,10 @@ export interface ProBooking {
   demo?: boolean;
   cancelledBy?: string;
   proposal?: Proposal;
+  visit?: number;
+  outcome?: JobOutcome;
+  diagnosis?: string;
+  diagnosisPhotos?: string[];
 }
 
 /* ------------------------------ Cambio de hora ------------------------------ */

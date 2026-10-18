@@ -1,7 +1,7 @@
 import { company, type LegalSection } from './legal';
-import { POLICY as P, pct, usd } from './policy';
+import { POLICY as P, HOME_SAFETY_NOTICE, pct, usd } from './policy';
 import { categories } from './categories';
-import { CATEGORY_FLOORS } from './provider';
+import { CATEGORY_PRICING } from './provider';
 
 /**
  * Términos y condiciones de HULUL.
@@ -10,14 +10,10 @@ import { CATEGORY_FLOORS } from './provider';
  * Los montos y plazos salen de `policy.ts` y `provider.ts`.
  */
 
-export const TERMS_VERSION = '2026-10-17';
-export const TERMS_UPDATED = '17 de octubre de 2026';
+export const TERMS_VERSION = '2026-10-18';
+export const TERMS_UPDATED = '18 de octubre de 2026';
 
-const visitList = categories
-  .map((c) => {
-    const f = CATEGORY_FLOORS[c.slug];
-    return `${c.name}: ${f.visit > 0 ? `visita ${usd(f.visit)}, ` : 'sin visita, '}mínimo ${f.hours} h, tarifa desde ${usd(f.rate)}/h`;
-  });
+const suggestedList = categories.map((c) => `${c.name}: ${usd(CATEGORY_PRICING[c.slug].suggested)}`);
 
 export const termsOfService: LegalSection[] = [
   {
@@ -25,7 +21,7 @@ export const termsOfService: LegalSection[] = [
     title: '1. Quiénes somos y qué hace HULUL',
     body: [
       { p: `HULUL es una plataforma digital operada por ${company.razonSocial}, RUC ${company.ruc}, con domicilio en ${company.direccion}. HULUL conecta a personas que necesitan servicios en su hogar u oficina ("clientes") con profesionales independientes que los prestan ("profesionales").` },
-      { p: 'HULUL no presta directamente los servicios: actúa como intermediario. Verifica a los profesionales, gestiona la reserva y el pago, y media si hay un problema. Cada profesional es responsable del trabajo que realiza.' },
+      { p: 'HULUL no presta directamente los servicios: actúa como intermediario. Verifica a los profesionales, gestiona la reserva y el pago de la visita, y aplica las reglas de cancelaciones y retrasos. Cada profesional es responsable del trabajo que realiza.' },
       { p: 'Al crear una cuenta o hacer una reserva aceptas estos Términos y la Política de privacidad. Si no estás de acuerdo, no uses la plataforma.' },
     ],
   },
@@ -42,19 +38,19 @@ export const termsOfService: LegalSection[] = [
   },
   {
     id: 'precio',
-    title: '3. Precio del servicio',
+    title: '3. Precio: se paga por visita',
     body: [
-      { p: 'Antes de confirmar ves el total. El precio se compone de:' },
+      { p: 'HULUL cobra por cita, como un taxi. Antes de confirmar ves el total, que se compone de:' },
       { ul: [
-        'Visita técnica: un valor fijo por categoría, igual para todos los profesionales de esa categoría. Cubre el traslado y el diagnóstico.',
-        'Mano de obra: la tarifa por hora que publica el profesional, por las horas reservadas, con un mínimo de horas por categoría. Si el trabajo toma más tiempo, las horas adicionales se agregan en la app y el cliente las aprueba.',
+        'Tarifa por visita: la fija cada profesional en cada categoría y se publica en su perfil. Cubre el traslado, el diagnóstico y el trabajo que se pueda resolver en esa visita.',
         `Cargo de plataforma: ${usd(P.platformFee)} por reserva.`,
-        'IVA vigente sobre todo lo anterior.',
+        'IVA vigente sobre lo anterior.',
       ] },
-      { p: 'Materiales y repuestos no están incluidos. El profesional los cotiza en la app; el cliente los aprueba o los compra por su cuenta.' },
-      { p: 'Cualquier trabajo adicional debe agregarse y pagarse en la app. Los trabajos acordados o pagados fuera de HULUL no tienen garantía, protección de pago ni posibilidad de reclamo.' },
-      { p: 'Valores por categoría vigentes:' },
-      { ul: visitList },
+      { p: 'Al reservar, el cliente describe el problema para que el profesional acepte sabiendo qué va a hacer. La visita se paga siempre, se resuelva o no el problema, porque cubre el traslado y el diagnóstico.' },
+      { p: 'Al terminar, el profesional registra en la app el resultado (resuelto, necesita más trabajo o no se pudo resolver) y un diagnóstico escrito con fotos, que queda como respaldo para ambos.' },
+      { p: 'Repuestos, materiales, más horas de trabajo u otras visitas no están incluidos en la tarifa. Si hacen falta, el cliente y el profesional los acuerdan directamente. HULUL no interviene, no cobra ni garantiza esos acuerdos.' },
+      { p: 'Tarifas sugeridas por HULUL como referencia para los profesionales (cada uno fija la suya):' },
+      { ul: suggestedList },
     ],
   },
   {
@@ -78,7 +74,7 @@ export const termsOfService: LegalSection[] = [
         `Sin costo: hasta ${P.freeCancelHoursBefore} horas antes de la hora reservada, en reservas programadas.`,
         `Con menos de ${P.freeCancelHoursBefore} horas de anticipación y la reserva ya confirmada por el profesional, o con el profesional en camino: cargo de ${usd(P.lateCancelFee)}. La app o la web muestran el cargo antes de confirmar la cancelación.`,
         'Con tarjeta, el cargo se descuenta del monto retenido. Con efectivo o transferencia, queda como saldo pendiente y se suma a la próxima reserva.',
-        `Si el profesional llega y el cliente no está o no permite el ingreso, después de ${P.clientNoShowWaitMinutes} minutos de espera se cobra la visita técnica de la categoría (o 1 hora de la tarifa si la categoría no tiene visita).`,
+        `Si el profesional llega y el cliente no está o no permite el ingreso, después de ${P.clientNoShowWaitMinutes} minutos de espera se cobra la tarifa por visita del profesional.`,
         `De los cargos de esta sección, el ${pct(P.proShareOfClientFees)} es para el profesional que se trasladó.`,
       ] },
     ],
@@ -99,14 +95,13 @@ export const termsOfService: LegalSection[] = [
   },
   {
     id: 'reclamos',
-    title: '7. Problemas con el trabajo, garantía y reembolsos',
+    title: '7. Calificaciones y problemas con el trabajo',
     body: [
       { ul: [
-        `El cliente puede reportar un problema en la app hasta ${P.claimWindowHours} horas después de terminado el servicio, con fotos y descripción. Mientras se revisa, el pago con tarjeta queda retenido.`,
-        'HULUL revisa el reporte, las fotos, el historial y la versión del profesional, y decide: repetir el trabajo sin costo o devolver total o parcialmente lo pagado.',
-        `Garantía de mano de obra: ${P.warrantyDays} días para trabajos hechos y pagados en HULUL.`,
-        'Las devoluciones que correspondan se descuentan al profesional. Si ya recibió el pago, el valor queda como saldo a su cargo y se descuenta de sus próximos pagos.',
-        'Si el servicio no se realiza por causa del profesional, el cliente no paga las horas no realizadas.',
+        `Después de cada servicio el cliente califica al profesional. Tiene ${P.claimWindowHours} horas para hacerlo o para reportar un problema, con fotos y descripción.`,
+        'La calidad del trabajo y lo acordado después de la visita son responsabilidad del profesional y se resuelven entre el cliente y el profesional. HULUL no garantiza el resultado del trabajo.',
+        'Las calificaciones son públicas. Una calificación baja sostenida o reportes repetidos llevan a un aviso y luego a la suspensión del profesional.',
+        'Si el servicio no se realiza por causa del profesional (no llega o cancela), el cliente no paga la visita y aplican las reglas de la sección 6.',
       ] },
       { p: 'Esto no limita los derechos que la Ley Orgánica de Defensa del Consumidor reconoce al cliente.' },
     ],
@@ -116,12 +111,13 @@ export const termsOfService: LegalSection[] = [
     title: '8. Profesionales',
     body: [
       { ul: [
-        'El profesional es un prestador independiente; no es empleado de HULUL. Decide su tarifa por hora (no menor al mínimo de su categoría), sus zonas, su horario y si acepta efectivo.',
-        `HULUL retiene una comisión del ${pct(P.commission)} del servicio (visita técnica y mano de obra). La visita técnica es para el profesional.`,
+        'El profesional es un prestador independiente; no es empleado de HULUL. Decide su tarifa por visita en cada categoría, sus zonas, su horario y si acepta efectivo.',
+        'Puede ofrecer servicios en las categorías que quiera, sin límite. Cada categoría se aprueba por separado: debe demostrar que sabe hacer ese trabajo con un certificado o título, o con fotos de trabajos anteriores y una referencia. Puede sumar categorías en cualquier momento.',
+        `HULUL retiene una comisión del ${pct(P.commission)} de la tarifa por visita.`,
         'Los pagos con tarjeta se transfieren cada semana a la cuenta registrada, menos comisión, multas y saldos pendientes.',
         `Servicios en efectivo: el cargo de plataforma y la comisión quedan como saldo a cargo del profesional y se descuentan de sus próximos pagos. Si ese saldo supera ${usd(P.cashDebtLimit)}, el efectivo se desactiva hasta que se pague.`,
-        'Debe marcar en la app el inicio (con el código del cliente) y el fin de cada trabajo, y registrar en la app cualquier trabajo adicional o material.',
-        'Está prohibido ofrecer al cliente trabajos o pagos por fuera de HULUL, compartir datos de contacto para ese fin o pedir pagos adicionales no registrados. Hacerlo es causa de suspensión o cierre de la cuenta.',
+        'Debe aceptar solo trabajos que sabe hacer, marcar en la app la llegada y el fin de cada visita, y al terminar registrar el resultado y un diagnóstico escrito con fotos.',
+        'No puede cobrar la visita por fuera de HULUL ni ofrecer al cliente saltarse la plataforma en reservas futuras. Hacerlo es causa de suspensión o cierre de la cuenta.',
         'Debe contar con los permisos, títulos y registros que su oficio exija (en Salud, título registrado en la SENESCYT y lo que disponga la ACESS) y emitir los comprobantes que correspondan ante el SRI.',
       ] },
     ],
@@ -132,6 +128,7 @@ export const termsOfService: LegalSection[] = [
     body: [
       { ul: [
         'Clientes y profesionales se tratan con respeto. El acoso, la discriminación o la violencia llevan al cierre inmediato de la cuenta y, si corresponde, a la denuncia ante las autoridades.',
+        ...HOME_SAFETY_NOTICE,
         'HULUL no atiende emergencias. Ante una emergencia, llama al 911.',
         'Las calificaciones y reseñas deben ser honestas y referirse al servicio recibido.',
       ] },
@@ -141,7 +138,7 @@ export const termsOfService: LegalSection[] = [
     id: 'responsabilidad',
     title: '10. Responsabilidad de HULUL',
     body: [
-      { p: 'HULUL responde por la verificación de los profesionales con la información y documentos que estos entregan, por el manejo del pago y por la mediación en los reclamos según estos Términos. El profesional responde por la calidad y seguridad del trabajo que realiza. Nada en estos Términos excluye responsabilidades que la ley no permita excluir.' },
+      { p: 'HULUL responde por la verificación de los profesionales con la información y documentos que estos entregan, y por el manejo del pago de la visita según estos Términos. El profesional responde por la calidad y seguridad del trabajo que realiza, y por los acuerdos que haga con el cliente después de la visita. HULUL no se responsabiliza por robos, pérdidas ni daños de objetos durante el servicio. Nada en estos Términos excluye responsabilidades que la ley no permita excluir.' },
       { p: 'Horarios: los trabajos se agendan para terminar a más tardar a las 18:00 (cerrajería y salud, 20:00). Los trabajos de obra o con ruido no se agendan domingos ni feriados. Cuando el cliente reserva un trabajo que termina después de las 17:00, en domingo o en feriado, la app le avisa antes de confirmar: cada urbanización o edificio fija sus propias reglas de ingreso, y HULUL no responde si no permiten la entrada del profesional. En ese caso, si el profesional se trasladó, aplica el cargo por cancelación tardía.' },
     ],
   },

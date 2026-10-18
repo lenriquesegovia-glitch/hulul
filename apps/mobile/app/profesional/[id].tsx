@@ -2,7 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator } from 'react-native';
-import { categoryPricing, formatPrice, formatRating, getCategory, minimumLabel } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, formatPrice, formatRating, getCategory } from '@hulul/shared';
 import { usePro } from '@/lib/pros';
 import { Icon } from '@/components/Icon';
 import { Avatar, BackButton, Body, Card, H1, H2, PrimaryButton } from '@/components/ui';
@@ -68,9 +68,9 @@ export default function ProfessionalScreen() {
 
         <View style={{ gap: 6 }}>
           <H2>Cómo se cobra</H2>
-          {categoryPricing(cat.slug).visit > 0 && <Body>• Visita técnica: {formatPrice(categoryPricing(cat.slug).visit)}, igual con cualquier profesional de {cat.name.toLowerCase()} (traslado y diagnóstico).</Body>}
-          <Body>• Mano de obra: ${pro.hourlyRate} por hora, mínimo {categoryPricing(cat.slug).hours} h.</Body>
-          <Body>• Materiales y repuestos: aparte, te los cotiza en la app.</Body>
+          <Body>• Visita: {formatPrice(pro.visitRate)}. Cubre el traslado, el diagnóstico y el arreglo si se resuelve en esa visita.</Body>
+          <Body>• La visita se paga aunque no se resuelva el problema. Al terminar, {pro.name.split(' ')[0]} te deja el resultado y un diagnóstico con fotos.</Body>
+          <Body>• {AFTER_VISIT_NOTE}</Body>
         </View>
 
         <View style={{ gap: 10 }}>
@@ -91,8 +91,8 @@ export default function ProfessionalScreen() {
 
       <View style={s.footer}>
         <View>
-          <Text style={s.price}>${pro.hourlyRate}<Text style={s.perHour}> /hora</Text></Text>
-          <Body muted style={{ fontSize: 12.5 }}>{minimumLabel(pro)}</Body>
+          <Text style={s.price}>{formatPrice(pro.visitRate)}<Text style={s.perHour}> por visita</Text></Text>
+          <Body muted style={{ fontSize: 12.5 }}>Traslado y diagnóstico incluidos</Body>
         </View>
         <PrimaryButton label="Reservar ahora" onPress={() => router.push({ pathname: '/reservar/[id]', params: { id: pro.id, c: pro.category, trabajo: trabajo || undefined } })} />
       </View>

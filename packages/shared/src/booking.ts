@@ -6,9 +6,6 @@ export const SLOTS = Array.from({ length: 11 }, (_, i) => `${String(8 + i).padSt
 /** Cuántos días hacia adelante se puede reservar. */
 export const BOOKING_DAYS = 30;
 
-export const MIN_HOURS = 1;
-export const MAX_HOURS = 8;
-
 export const PAYMENT_OPTIONS: { value: PaymentMethod; label: string }[] = [
   { value: 'tarjeta', label: 'Tarjeta de crédito o débito' },
   { value: 'transferencia', label: 'Transferencia bancaria' },

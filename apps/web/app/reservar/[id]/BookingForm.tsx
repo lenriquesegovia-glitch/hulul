@@ -7,14 +7,15 @@ import {
   firstAvailable,
   formatUSD,
   getCategory,
-  minimumLabel,
+  AFTER_VISIT_NOTE,
+  HOME_SAFETY_NOTICE,
+  HOME_SAFETY_TITLE,
   proHref,
   type Professional,
-  MAX_HOURS,
-  MIN_HOURS,
   BOOKING_DAYS,
-  categoryPricing,
   checkSlot,
+  visitHours,
+  visitLabel,
   nextDays,
   PAYMENT_OPTIONS,
   quote,
@@ -98,7 +99,7 @@ export function BookingForm({ proId }: { proId: string }) {
         <span className="avatar" style={{ width: 56, height: 56, fontSize: 19 }}>{pro.initials}</span>
         <div className="stack gap-4">
           <h1 style={{ fontSize: 'clamp(24px, 3.5vw, 32px)' }}>Reservar a {pro.name}</h1>
-          <p className="muted">{cat.name} · ${pro.hourlyRate}/hora · {minimumLabel(pro)}</p>
+          <p className="muted">{cat.name} · {visitLabel(pro.visitRate)}</p>
         </div>
       </div>
       <BookingGate pro={pro} />
@@ -108,7 +109,7 @@ export function BookingForm({ proId }: { proId: string }) {
 
 function BookingGate({ pro }: { pro: Professional }) {
   return (
-    <ClientGate title="Crea tu cuenta para reservar" lead="Con Google, Outlook, Facebook, tu correo o tu celular. Así sigues tu servicio, recibes la confirmación y tienes la garantía de HULUL.">
+    <ClientGate title="Crea tu cuenta para reservar" lead="Con Google, Outlook, Facebook, tu correo o tu celular. Así sigues tu servicio, recibes la confirmación y el diagnóstico de cada visita.">
       {({ user, profile }) => <BookingFormInner pro={pro} uid={user.uid} profile={profile} />}
     </ClientGate>
   );
@@ -163,10 +164,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
       setSlot(SLOTS.findIndex((_, s) => okWith(now, i, s, hours)));
     }
   };
-  // Horas mínimas y cargo de visita: los fija HULUL por categoría.
-  const price = categoryPricing(pro.category);
-  const minH = Math.max(MIN_HOURS, price.hours);
-  const [hours, setHours] = useState(minH);
+  // Se paga por visita. La duración estimada solo sirve para validar el horario.
+  const hours = visitHours(pro.category);
+  const minH = hours;
   const [service, setService] = useState('');
   // Primero los trabajos que este profesional marcó; luego el resto de la categoría.
   const jobs = useMemo(() => {
@@ -185,10 +185,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
-  const q = quote(pro.hourlyRate, hours, price.visit);
+  const q = quote(pro.visitRate);
   const dayOk = (i: number) => !!now && SLOTS.some((_, sIdx) => okWith(now, i, sIdx, hours));
   const check = now && slot >= 0 ? checkSlot({ category: pro.category, date: isoDay(now, day), slot: SLOTS[slot], hours, pro }) : null;
-  const canAddHour = !!now && slot >= 0 && hours < MAX_HOURS && okWith(now, day, slot, hours + 1);
   const [ack, setAck] = useState(false);
   const warnKey = check?.warnings.join('|') ?? '';
   useEffect(() => { setAck(false); }, [warnKey]);
@@ -212,6 +211,11 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
       return;
     }
     if (check && !check.ok) { setError(check.reason ?? 'Ese horario no está disponible.'); return; }
+    if (!data.get('acepta_seguridad')) {
+      setError('Lee el aviso de seguridad y marca que lo aceptas.');
+      document.getElementById('aviso-seguridad')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     if (check && check.warnings.length && !ack) {
       setError('Lee el aviso sobre el horario y marca que lo entiendes.');
       document.getElementById('aviso-horario')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -230,6 +234,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         date: dateInDays(day),
         slot: SLOTS[slot],
         hours,
+        pricing: 'visita',
+        visit: q.visit,
+        safetyAccepted: true,
         address: get('direccion'),
         location: location ?? undefined,
         // El trabajo elegido va delante de la descripción: "Mantenimiento de split. 2 equipos…"
@@ -264,7 +271,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
           </span>
           <h2 style={{ fontSize: 26 }}>Reserva confirmada{done.name ? `, ${done.name}` : ''}</h2>
           <p style={{ color: 'var(--text-2)' }}>
-            {pro.name} llegará {days[day].long} a las {SLOTS[slot]}. {cat.name} · {hours} h · {formatUSD(q.total)}
+            {pro.name} llegará {days[day].long} a las {SLOTS[slot]}. {cat.name} · visita · {formatUSD(q.total)}
           </p>
           <p className="muted" style={{ fontSize: 13.5 }}>Código de reserva: {done.id.slice(0, 8).toUpperCase()}</p>
           {DEMO_MODE && (
@@ -277,9 +284,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
             { t: 'Reserva recibida', d: `Código ${done.id.slice(0, 8).toUpperCase()}`, state: 'done' },
             { t: 'Profesional confirmado', d: DEMO_MODE ? 'Te escribimos por WhatsApp para confirmar.' : `${pro.name} acepta tu reserva.`, state: 'now' },
             { t: 'En camino', d: 'Verás en el mapa por dónde viene y cuánto falta.' },
-            { t: 'Llegó', d: 'Le das tu código de 4 dígitos para empezar.' },
-            { t: 'Trabajo en curso', d: 'El tiempo se cuenta en la app.' },
-            { t: 'Terminado', d: 'Apruebas el trabajo y calificas. Recién ahí se libera el pago.' },
+            { t: 'Llegó', d: 'Ten en casa a una persona de tu confianza mientras dure el trabajo.' },
+            { t: 'Trabajo en curso', d: 'Revisa el problema y lo arregla si se resuelve en la visita.' },
+            { t: 'Terminado', d: 'Te deja el resultado y un diagnóstico con fotos. Tú lo calificas.' },
           ]} />
         </div>
         <Link href="/" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }}>Volver al inicio</Link>
@@ -326,21 +333,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
               className={`chip-slot ${i === slot ? 'on' : ''}`} onClick={() => setSlot(i)}>{t}</button>
           ))}
         </div>
-        <div className="card row gap-16" style={{ justifyContent: 'space-between', padding: 16, flexWrap: 'wrap' }}>
-          <div className="stack">
-            <strong>Horas de servicio</strong>
-            <span className="muted" style={{ fontSize: 13.5 }}>Mínimo {minH} h en {cat.name.toLowerCase()} · puedes ampliar durante el servicio</span>
-          </div>
-          <div className="row gap-12">
-            <button type="button" className="stepper" aria-label="Quitar una hora" disabled={hours <= minH} onClick={() => setHours((h) => Math.max(minH, h - 1))}>−</button>
-            <span aria-live="polite" style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, minWidth: 24, textAlign: 'center' }}>{hours}</span>
-            <button type="button" className="stepper" aria-label="Añadir una hora" disabled={!canAddHour} onClick={() => setHours((h) => Math.min(MAX_HOURS, h + 1))}>+</button>
-          </div>
-        </div>
         {check && (
           <span className="muted" style={{ fontSize: 14 }}>
-            {check.ok ? <>Llega a las <strong>{SLOTS[slot]}</strong> y termina aprox. a las <strong>{check.end}</strong>.</> : check.reason}
-            {check.ok && !canAddHour && hours < MAX_HOURS && ' Para más horas, elige una hora de llegada más temprano.'}
+            {check.ok ? <>Llega a las <strong>{SLOTS[slot]}</strong>. Una visita de {cat.name.toLowerCase()} suele tomar unas {minH} h.</> : check.reason}
           </span>
         )}
         {slot < 0 && now && <p className="form-error">No quedan horas disponibles ese día. Elige otro día.</p>}
@@ -403,31 +398,32 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
           ))}
         </div>
         <div className="card stack gap-8" style={{ padding: 18 }}>
-          {q.visit > 0 && (
-            <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
-              <span>Visita técnica <span className="muted" style={{ fontSize: 13 }}>(traslado y diagnóstico)</span></span>
-              <span>{formatUSD(q.visit)}</span>
-            </div>
-          )}
           <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
-            <span>{`${hours} h × $${pro.hourlyRate}`}</span>
-            <span>{formatUSD(q.labor)}</span>
+            <span>Visita de {pro.name.split(' ')[0]} <span className="muted" style={{ fontSize: 13 }}>(traslado, diagnóstico y arreglo si se resuelve en la visita)</span></span>
+            <span>{formatUSD(q.visit)}</span>
           </div>
           <div className="row" style={{ justifyContent: 'space-between' }}><span>Cargo de plataforma HULUL</span><span>{formatUSD(q.fee)}</span></div>
           <div className="row" style={{ justifyContent: 'space-between' }}><span>IVA 15%</span><span>{formatUSD(q.iva)}</span></div>
           <div className="row" style={{ justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid var(--border)', fontWeight: 700, fontSize: 18 }}>
             <span>Total</span><span>{formatUSD(q.total)}</span>
           </div>
-          <p className="muted" style={{ fontSize: 13.5 }}>Materiales y repuestos no están incluidos: el profesional te los cotiza en la app y tú decides. Cualquier trabajo extra se agrega y se paga en la app, para que quede cubierto por la garantía.</p>
+          <p className="muted" style={{ fontSize: 13.5 }}>La visita se paga aunque no se resuelva el problema, porque cubre el traslado y el diagnóstico. {AFTER_VISIT_NOTE}</p>
           {DEMO_MODE ? (
             <p className="pill pill-warm" style={{ alignSelf: 'flex-start' }}>Versión de prueba: no se pide la tarjeta ni se cobra nada.</p>
           ) : (
-            <p className="muted" style={{ fontSize: 13.5 }}>Al confirmar ingresas tu tarjeta en la pasarela segura. El monto queda retenido y se cobra cuando apruebas el trabajo.</p>
+            <p className="muted" style={{ fontSize: 13.5 }}>Al confirmar ingresas tu tarjeta en la pasarela segura. El monto queda retenido y se cobra cuando termina la visita.</p>
           )}
         </div>
       </fieldset>
 
       <div className="stack gap-12">
+        <div id="aviso-seguridad" className="notice stack gap-8">
+          <strong>{HOME_SAFETY_TITLE}</strong>
+          <ul className="stack gap-4" style={{ margin: 0, paddingLeft: 20, fontSize: 14 }}>
+            {HOME_SAFETY_NOTICE.map((t) => <li key={t}>{t}</li>)}
+          </ul>
+          <label className="check"><input type="checkbox" name="acepta_seguridad" /><span>Entiendo y acepto: habrá una persona de mi confianza en casa durante el servicio.</span></label>
+        </div>
         <label className="check">
           <input type="checkbox" name="acepta_privacidad" required />
           <span>

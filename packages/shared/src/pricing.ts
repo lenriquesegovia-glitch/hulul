@@ -13,14 +13,12 @@ export const PROTECTION_FEE = 1.99;
  */
 export const COMMISSION_RATE = 0.15;
 
-import { CATEGORY_FLOORS } from './provider';
+import { CATEGORY_PRICING } from './provider';
 import type { CategorySlug } from './categories';
 
 export interface Quote {
-  /** Cargo de visita de la categoría. */
+  /** Tarifa por visita del profesional. */
   visit: number;
-  /** Horas × tarifa. */
-  labor: number;
   subtotal: number;
   fee: number;
   iva: number;
@@ -31,15 +29,20 @@ export interface Quote {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Precio: cargo de visita de la categoría + horas × tarifa del profesional. */
-export function quote(hourlyRate: number, hours: number, visit = 0): Quote {
-  const labor = round2(hourlyRate * hours);
-  const subtotal = round2(visit + labor);
+/**
+ * Precio por cita, como un taxi: tarifa por visita del profesional + cargo de
+ * plataforma + IVA. La visita cubre traslado, diagnóstico y el trabajo que se
+ * pueda resolver en ella. Lo que haga falta después (repuestos, más trabajo)
+ * lo acuerdan directamente el cliente y el profesional.
+ */
+export function quote(visitRate: number): Quote {
+  const visit = round2(visitRate);
+  const subtotal = visit;
   const fee = PROTECTION_FEE;
   const iva = round2((subtotal + fee) * IVA);
   const total = round2(subtotal + fee + iva);
   const proPayout = round2(subtotal * (1 - COMMISSION_RATE));
-  return { visit, labor, subtotal, fee, iva, total, proPayout };
+  return { visit, subtotal, fee, iva, total, proPayout };
 }
 
 export function formatUSD(n: number): string {
@@ -51,13 +54,12 @@ export function formatPrice(n: number): string {
   return '$' + (Number.isInteger(n) ? String(n) : n.toFixed(2));
 }
 
-/** Precio de la categoría (visita, horas mínimas y tarifa mínima). */
+/** Tarifa sugerida y duración estimada de la categoría. */
 export function categoryPricing(slug: CategorySlug) {
-  return CATEGORY_FLOORS[slug];
+  return CATEGORY_PRICING[slug];
 }
 
-/** "Visita $15 · mín. 1 h" o "Mínimo 4 h" si la categoría no cobra visita. */
-export function minimumLabel(p: { category: CategorySlug }): string {
-  const f = CATEGORY_FLOORS[p.category];
-  return f.visit > 0 ? `Visita ${formatPrice(f.visit)} · mín. ${f.hours} h` : `Mínimo ${f.hours} h`;
+/** "$20 por visita" (o "Tarifa por visita" si aún no la tiene). */
+export function visitLabel(rate: number | undefined): string {
+  return rate && rate > 0 ? `${formatPrice(rate)} por visita` : 'Tarifa por visita';
 }
