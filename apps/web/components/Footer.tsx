@@ -33,7 +33,7 @@ export function Footer() {
             <h3>HULUL</h3>
             <ul className="stack gap-8" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               <li><Link href="/profesionales">Ofrece tus servicios</Link></li>
-              <li><Link href="/#preguntas">Preguntas frecuentes</Link></li>
+              <li><Link href="/preguntas-frecuentes">Preguntas frecuentes</Link></li>
               <li><Link href="/legal/terminos">Términos y condiciones</Link></li>
               <li><Link href="/legal/privacidad">Política de privacidad</Link></li>
               <li><Link href="/legal/cookies">Política de cookies</Link></li>

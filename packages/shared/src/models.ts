@@ -18,8 +18,6 @@ export interface Professional {
   bio: string;
   years: number;
   hourlyRate: number;
-  /** Horas mínimas por reserva. El mínimo a pagar es tarifa × horas, nunca un monto suelto. */
-  minHours: number;
   rating: number;
   reviewCount: number;
   jobsDone: number;

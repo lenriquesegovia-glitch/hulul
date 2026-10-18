@@ -452,8 +452,10 @@ function StepServices({ d, setD }: { d: Draft; setD: (fn: (x: Draft) => Draft) =
               </Field>
             </div>
             <p className="muted" style={{ fontSize: 13 }}>
-              Cada trabajo de {cat.name.toLowerCase()} se reserva por al menos {f.hours} h, para cubrir tu traslado.
-              Con tu tarifa, el mínimo que cobras es ${((Number(d.rates[c]) || f.rate) * f.hours).toFixed(2).replace('.00', '')}.
+              {f.visit > 0
+                ? <>En {cat.name.toLowerCase()} cada trabajo lleva una <strong>visita técnica de ${f.visit}</strong> (traslado y diagnóstico, es para ti; la fija HULUL igual para todos) más tu tarifa por hora, mínimo {f.hours} h. </>
+                : <>En {cat.name.toLowerCase()} cada trabajo se reserva por al menos {f.hours} h. </>}
+              Con tu tarifa, el mínimo por trabajo es ${(f.visit + (Number(d.rates[c]) || f.rate) * f.hours).toFixed(2).replace('.00', '')}.
             </p>
           </div>
         );
@@ -603,7 +605,7 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
         <Row k="Nombre" v={name} />
         <Row k="Cédula" v={d.cedula} />
         <Row k="Celular" v={d.phone} />
-        <Row k="Servicios" v={d.categories.map((x) => `${getCategory(x)?.name} ($${d.rates[x]}/h, mín. ${d.minHours[x]} h)`).join(' · ')} />
+        <Row k="Servicios" v={d.categories.map((x) => `${getCategory(x)?.name} ($${d.rates[x]}/h + visita $${CATEGORY_FLOORS[x].visit})`).join(' · ')} />
         <Row k="Ciudades" v={d.cities.map((x) => cities.find((y) => y.slug === x)?.name).join(', ')} />
         <Row k="Horario" v={`${d.days.map((i) => WEEKDAY_NAMES[i].slice(0, 3)).join(' ')} · ${d.from} a ${d.to}`} />
         <Row k="Efectivo" v={d.acceptsCash ? 'Acepta' : 'No acepta'} />

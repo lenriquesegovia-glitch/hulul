@@ -44,7 +44,7 @@ export default async function CategoryPage({ params }: { params: Promise<Params>
           <p style={{ fontSize: 17, color: 'var(--text-2)', maxWidth: 680 }}>{cat.sub}. Elige tu ciudad para ver a los profesionales disponibles.</p>
           <Notice text={cat.aviso} />
           <div className="link-cloud">
-            {cities.map((c) => (
+            {cities.filter((c) => c.activa).map((c) => (
               <Link key={c.slug} href={`/servicios/${cat.slug}/${c.slug}`}>{c.name}</Link>
             ))}
           </div>

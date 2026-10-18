@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { Checkbox } from '@/components/Checkbox';
-import { BOOKING_DAYS, dayAvailable, firstAvailable, formatUSD, getProfessional, quote, slotAvailable, type PaymentMethod } from '@hulul/shared';
+import { BOOKING_DAYS, categoryPricing, dayAvailable, firstAvailable, formatUSD, getProfessional, quote, slotAvailable, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
@@ -19,8 +19,10 @@ export default function BookingScreen() {
   const [day, setDay] = useState(first.day);
   const [slot, setSlot] = useState(first.slot);
   // Arranca en el mínimo del profesional (al menos 2 h) y no baja de ese mínimo.
-  const minH = Math.max(1, pro?.minHours ?? 1);
-  const [hours, setHours] = useState(Math.max(2, minH));
+  // Horas mínimas y cargo de visita: los fija HULUL por categoría.
+  const price = pro ? categoryPricing(pro.category) : { hours: 1, visit: 0, rate: 0 };
+  const minH = Math.max(1, price.hours);
+  const [hours, setHours] = useState(minH);
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
@@ -42,7 +44,7 @@ export default function BookingScreen() {
     );
   }
 
-  const q = quote(pro.hourlyRate, hours);
+  const q = quote(pro.hourlyRate, hours, price.visit);
 
   const pickDay = (i: number) => {
     setDay(i);
@@ -230,8 +232,9 @@ export default function BookingScreen() {
           </View>
 
           <View style={s.summary}>
-            <Row label={`${hours} h × $${pro.hourlyRate}`} value={formatUSD(q.subtotal)} />
-            <Row label="Tarifa de protección HULUL" value={formatUSD(q.fee)} />
+            {q.visit > 0 && <Row label="Visita técnica (traslado y diagnóstico)" value={formatUSD(q.visit)} />}
+            <Row label={`${hours} h × $${pro.hourlyRate}`} value={formatUSD(q.labor)} />
+            <Row label="Cargo de plataforma HULUL" value={formatUSD(q.fee)} />
             <Row label="IVA 15%" value={formatUSD(q.iva)} />
             <View style={s.totalRow}>
               <Text style={s.totalText}>Total</Text>

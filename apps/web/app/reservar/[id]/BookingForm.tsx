@@ -11,6 +11,7 @@ import {
   MAX_HOURS,
   MIN_HOURS,
   BOOKING_DAYS,
+  categoryPricing,
   nextDays,
   PAYMENT_OPTIONS,
   quote,
@@ -20,6 +21,7 @@ import {
   type PaymentMethod,
 } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
+import { AddressInput } from '@/components/AddressInput';
 import { LocationPicker } from '@/components/LocationPicker';
 import { Notice } from '@/components/Notice';
 import { DEMO_MODE } from '@/lib/site';
@@ -29,6 +31,25 @@ import { DEMO_MODE } from '@/lib/site';
  * Guarda la reserva en Firestore (`bookings`) con la prueba del consentimiento.
  * Pendiente: redirigir a la pasarela de pago antes de confirmar.
  */
+const OTHER = 'Otro trabajo';
+
+/** Estado del servicio, estilo seguimiento de paquetes. */
+function Timeline({ steps }: { steps: { t: string; d: string; state?: 'done' | 'now' }[] }) {
+  return (
+    <ol className="timeline">
+      {steps.map((s) => (
+        <li key={s.t} className={s.state ?? ''}>
+          <span className="tl-dot">{s.state === 'done' && <Icon name="check" size={14} color="#fff" strokeWidth={3} />}</span>
+          <div className="stack">
+            <strong>{s.t}</strong>
+            <span className="muted" style={{ fontSize: 13.5 }}>{s.d}</span>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /** Fecha AAAA-MM-DD de dentro de `offset` días (hora local). */
 function isoDay(from: Date, offset: number): string {
   const d = new Date(from.getFullYear(), from.getMonth(), from.getDate() + offset);
@@ -73,9 +94,11 @@ export function BookingForm({ proId }: { proId: string }) {
       setSlot(SLOTS.findIndex((_, s) => slotAvailable(i, s, now)));
     }
   };
-  // Arranca en el mínimo del profesional (al menos 2 h) y no baja de ese mínimo.
-  const minH = Math.max(MIN_HOURS, pro.minHours);
-  const [hours, setHours] = useState(Math.max(2, minH));
+  // Horas mínimas y cargo de visita: los fija HULUL por categoría.
+  const price = categoryPricing(pro.category);
+  const minH = Math.max(MIN_HOURS, price.hours);
+  const [hours, setHours] = useState(minH);
+  const [service, setService] = useState('');
   const [location, setLocation] = useState<LatLng | null>(null);
   const [notesLen, setNotesLen] = useState(0);
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
@@ -83,13 +106,22 @@ export function BookingForm({ proId }: { proId: string }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
-  const q = quote(pro.hourlyRate, hours);
+  const q = quote(pro.hourlyRate, hours, price.visit);
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (sending) return;
     const data = new FormData(e.currentTarget);
     const get = (k: string) => String(data.get(k) ?? '').trim();
+    if (!service) {
+      setError('Elige qué trabajo necesitas (o "Otro trabajo").');
+      document.getElementById('trabajo')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    if (service === OTHER && get('descripcion').length < 10) {
+      setError('Describe el trabajo que necesitas (al menos 10 caracteres).');
+      return;
+    }
     if (slot < 0 || !slotAvailable(day, slot, new Date())) {
       setError('Esa hora ya no está disponible. Elige otra hora de llegada.');
       return;
@@ -109,7 +141,8 @@ export function BookingForm({ proId }: { proId: string }) {
         hours,
         address: get('direccion'),
         location: location ?? undefined,
-        notes: get('descripcion'),
+        // El trabajo elegido va delante de la descripción: "Mantenimiento de split. 2 equipos…"
+        notes: [service === OTHER ? '' : service, get('descripcion')].filter(Boolean).join('. ').slice(0, NOTES_MAX),
         contactName: get('nombre'),
         contactPhone: get('celular'),
         contactEmail: get('correo'),
@@ -146,13 +179,16 @@ export function BookingForm({ proId }: { proId: string }) {
             <p className="pill pill-warm">Versión de prueba: la reserva quedó registrada, pero no se hizo ningún cobro.</p>
           )}
         </div>
-        <div className="card stack gap-12">
-          <h3 style={{ fontSize: 18 }}>Qué sigue</h3>
-          <ol className="stack gap-8" style={{ margin: 0, paddingLeft: 20, color: 'var(--text-2)' }}>
-            <li>{DEMO_MODE ? 'Te contactaremos por WhatsApp para confirmar (en la versión final llegará automático por WhatsApp y correo).' : 'Te enviamos la confirmación por WhatsApp y correo.'}</li>
-            <li>El día del servicio verás cuando el profesional esté en camino.</li>
-            <li>Al terminar, apruebas el trabajo y recién ahí se libera el pago.</li>
-          </ol>
+        <div className="card stack gap-16">
+          <h3 style={{ fontSize: 18 }}>Sigue tu servicio</h3>
+          <Timeline steps={[
+            { t: 'Reserva recibida', d: `Código ${done.id.slice(0, 8).toUpperCase()}`, state: 'done' },
+            { t: 'Profesional confirmado', d: DEMO_MODE ? 'Te escribimos por WhatsApp para confirmar.' : `${pro.name} acepta tu reserva.`, state: 'now' },
+            { t: 'En camino', d: 'Verás en el mapa por dónde viene y cuánto falta.' },
+            { t: 'Llegó', d: 'Le das tu código de 4 dígitos para empezar.' },
+            { t: 'Trabajo en curso', d: 'El tiempo se cuenta en la app.' },
+            { t: 'Terminado', d: 'Apruebas el trabajo y calificas. Recién ahí se libera el pago.' },
+          ]} />
         </div>
         <Link href="/" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }}>Volver al inicio</Link>
       </div>
@@ -201,7 +237,7 @@ export function BookingForm({ proId }: { proId: string }) {
         <div className="card row gap-16" style={{ justifyContent: 'space-between', padding: 16, flexWrap: 'wrap' }}>
           <div className="stack">
             <strong>Horas de servicio</strong>
-            <span className="muted" style={{ fontSize: 13.5 }}>Mínimo {minH} h con {pro.name.split(' ')[0]} · puedes ampliar durante el servicio</span>
+            <span className="muted" style={{ fontSize: 13.5 }}>Mínimo {minH} h en {cat.name.toLowerCase()} · puedes ampliar durante el servicio</span>
           </div>
           <div className="row gap-12">
             <button type="button" className="stepper" aria-label="Quitar una hora" disabled={hours <= minH} onClick={() => setHours((h) => Math.max(minH, h - 1))}>−</button>
@@ -213,21 +249,28 @@ export function BookingForm({ proId }: { proId: string }) {
 
       <fieldset className="stack gap-16 fs">
         <legend className="fs-title">2. ¿Dónde y qué necesitas?</legend>
+        <AddressInput onPlace={(p) => setLocation(p)} />
         <LocationPicker value={location} onChange={setLocation} />
-        <div className="field">
-          <label htmlFor="direccion">Dirección y referencia</label>
-          <input id="direccion" name="direccion" required minLength={8} maxLength={300} autoComplete="street-address" placeholder="Urbanización, manzana y villa" />
+        <div className="field" id="trabajo">
+          <span className="field-label">¿Qué trabajo necesitas?</span>
+          <div className="tag-row" role="radiogroup" aria-label="Trabajo">
+            {[...cat.servicios, OTHER].map((s) => (
+              <button key={s} type="button" role="radio" aria-checked={service === s} className={`tag ${service === s ? 'on' : ''}`} onClick={() => setService(s)}>
+                {service === s && '✓ '}{s}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="field">
-          <label htmlFor="descripcion">Describe lo que necesitas</label>
-          <textarea id="descripcion" name="descripcion" rows={3} required minLength={10} maxLength={NOTES_MAX}
+          <label htmlFor="descripcion">{service === OTHER ? 'Describe el trabajo' : 'Detalles (opcional)'}</label>
+          <textarea id="descripcion" name="descripcion" rows={3} maxLength={NOTES_MAX - 60}
             aria-describedby="descripcion-ayuda"
             onChange={(e) => setNotesLen(e.target.value.length)}
-            placeholder="Ej.: 2 splits de 12.000 BTU, uno gotea agua" />
+            placeholder={service === OTHER ? 'Cuéntanos qué necesitas' : 'Ej.: 2 splits de 12.000 BTU, uno gotea agua'} />
           <div id="descripcion-ayuda" className="row muted" style={{ justifyContent: 'space-between', fontSize: 13, gap: 12 }}>
             <span>Qué equipo, qué falla y cualquier dato que ayude al profesional.</span>
-            <span aria-live="polite" style={{ flexShrink: 0, color: notesLen >= NOTES_MAX ? 'var(--primary)' : undefined }}>
-              {notesLen}/{NOTES_MAX}
+            <span aria-live="polite" style={{ flexShrink: 0, color: notesLen >= NOTES_MAX - 60 ? 'var(--primary)' : undefined }}>
+              {notesLen}/{NOTES_MAX - 60}
             </span>
           </div>
         </div>
@@ -263,16 +306,27 @@ export function BookingForm({ proId }: { proId: string }) {
           ))}
         </div>
         <div className="card stack gap-8" style={{ padding: 18 }}>
+          {q.visit > 0 && (
+            <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
+              <span>Visita técnica <span className="muted" style={{ fontSize: 13 }}>(traslado y diagnóstico)</span></span>
+              <span>{formatUSD(q.visit)}</span>
+            </div>
+          )}
           <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
             <span>{`${hours} h × $${pro.hourlyRate}`}</span>
-            <span>{formatUSD(q.subtotal)}</span>
+            <span>{formatUSD(q.labor)}</span>
           </div>
-          <div className="row" style={{ justifyContent: 'space-between' }}><span>Tarifa de protección HULUL</span><span>{formatUSD(q.fee)}</span></div>
+          <div className="row" style={{ justifyContent: 'space-between' }}><span>Cargo de plataforma HULUL</span><span>{formatUSD(q.fee)}</span></div>
           <div className="row" style={{ justifyContent: 'space-between' }}><span>IVA 15%</span><span>{formatUSD(q.iva)}</span></div>
           <div className="row" style={{ justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid var(--border)', fontWeight: 700, fontSize: 18 }}>
             <span>Total</span><span>{formatUSD(q.total)}</span>
           </div>
-          <p className="muted" style={{ fontSize: 13.5 }}>El pago queda retenido por HULUL y se libera al profesional cuando apruebas el trabajo.</p>
+          <p className="muted" style={{ fontSize: 13.5 }}>Materiales y repuestos no están incluidos: el profesional te los cotiza en la app y tú decides. Cualquier trabajo extra se agrega y se paga en la app, para que quede cubierto por la garantía.</p>
+          {DEMO_MODE ? (
+            <p className="pill pill-warm" style={{ alignSelf: 'flex-start' }}>Versión de prueba: no se pide la tarjeta ni se cobra nada.</p>
+          ) : (
+            <p className="muted" style={{ fontSize: 13.5 }}>Al confirmar ingresas tu tarjeta en la pasarela segura. El monto queda retenido y se cobra cuando apruebas el trabajo.</p>
+          )}
         </div>
       </fieldset>
 
@@ -292,7 +346,7 @@ export function BookingForm({ proId }: { proId: string }) {
 
       {error && <p role="alert" style={{ color: 'var(--primary)', fontWeight: 600 }}>{error}</p>}
       <button type="submit" className="btn btn-primary" style={{ minHeight: 54, fontSize: 16 }} disabled={sending || slot < 0} aria-busy={sending}>
-        {sending ? 'Registrando tu reserva…' : `Confirmar y pagar ${formatUSD(q.total)}`}
+        {sending ? 'Registrando tu reserva…' : DEMO_MODE ? `Confirmar reserva de prueba · ${formatUSD(q.total)}` : `Confirmar y pagar ${formatUSD(q.total)}`}
       </button>
     </form>
   );

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { categories, cities } from '@hulul/shared';
 import { CategoryGrid } from '@/components/CategoryGrid';
 import { DownloadBand } from '@/components/DownloadBand';
-import { Faq, faqJsonLd } from '@/components/Faq';
+import { Faq } from '@/components/Faq';
 import { Icon } from '@/components/Icon';
 import { HeroArt } from '@/components/HeroArt';
 import { SearchBox } from '@/components/SearchBox';
@@ -23,7 +23,6 @@ export default function HomePage() {
   const active = cities.filter((c) => c.activa);
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
 
       <section className="hero">
         <div className="container hero-grid">
@@ -84,6 +83,7 @@ export default function HomePage() {
         <div className="container stack gap-16" style={{ maxWidth: 820 }}>
           <h2 style={{ fontSize: 30 }}>Preguntas frecuentes</h2>
           <Faq />
+          <Link href="/preguntas-frecuentes" className="link-btn" style={{ alignSelf: 'flex-start', textDecoration: 'none' }}>Ver todas las preguntas →</Link>
         </div>
       </section>
     </>

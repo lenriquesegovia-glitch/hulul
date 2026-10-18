@@ -18,20 +18,26 @@ export type ProviderStatus =
 
 export type ProviderKind = 'persona' | 'empresa';
 
-/** Tarifa mínima por hora y horas mínimas por categoría (piso que nadie puede bajar). */
-export const CATEGORY_FLOORS: Record<CategorySlug, { rate: number; hours: number }> = {
-  climatizacion: { rate: 18, hours: 2 },
-  plomeria: { rate: 15, hours: 2 },
-  electricidad: { rate: 15, hours: 2 },
-  electrodomesticos: { rate: 15, hours: 2 },
-  limpieza: { rate: 5, hours: 4 },
-  jardineria: { rate: 7, hours: 3 },
-  piscinas: { rate: 12, hours: 2 },
-  pintura: { rate: 10, hours: 4 },
-  belleza: { rate: 15, hours: 1 },
-  mascotas: { rate: 8, hours: 2 },
-  clases: { rate: 10, hours: 1 },
-  salud: { rate: 15, hours: 1 },
+/**
+ * Precio por categoría, igual para todos los profesionales de esa categoría:
+ * - rate: tarifa mínima por hora (cada profesional pone la suya, no menor).
+ * - hours: horas mínimas por reserva.
+ * - visit: cargo de visita fijo (traslado y diagnóstico). Es para el profesional.
+ * Valores iniciales para validar con profesionales reales.
+ */
+export const CATEGORY_FLOORS: Record<CategorySlug, { rate: number; hours: number; visit: number }> = {
+  climatizacion: { rate: 18, hours: 1, visit: 15 },
+  plomeria: { rate: 15, hours: 1, visit: 12 },
+  electricidad: { rate: 15, hours: 1, visit: 12 },
+  electrodomesticos: { rate: 15, hours: 1, visit: 12 },
+  limpieza: { rate: 5, hours: 4, visit: 0 },
+  jardineria: { rate: 7, hours: 2, visit: 5 },
+  piscinas: { rate: 12, hours: 1, visit: 10 },
+  pintura: { rate: 10, hours: 2, visit: 10 },
+  belleza: { rate: 15, hours: 1, visit: 5 },
+  mascotas: { rate: 8, hours: 1, visit: 5 },
+  clases: { rate: 10, hours: 1, visit: 0 },
+  salud: { rate: 15, hours: 1, visit: 10 },
 };
 
 /** Máximo de categorías por profesional. */

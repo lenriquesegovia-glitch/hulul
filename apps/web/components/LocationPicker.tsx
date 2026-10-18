@@ -74,7 +74,7 @@ export function LocationPicker({ value, onChange }: Props) {
           <span className="loc-icon"><Icon name="pin" size={20} color="var(--success)" strokeWidth={2.2} /></span>
           <div className="stack" style={{ flex: 1, minWidth: 0 }}>
             <strong style={{ fontSize: 15 }}>Ubicación marcada</strong>
-            <span className="muted loc-label">{label || 'Lista para el profesional'}</span>
+            <span className="muted loc-label">{label || 'Toca Cambiar para revisar el punto exacto'}</span>
           </div>
           <button type="button" className="link-btn" onClick={() => setOpen(true)}>Cambiar</button>
         </div>

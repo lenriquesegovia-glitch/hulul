@@ -54,7 +54,7 @@ export default function ProfessionalScreen() {
         </View>
 
         <View style={{ gap: 10 }}>
-          <H2>Qué incluye</H2>
+          <H2>Siempre incluido</H2>
           {cat.incluye.map((i) => (
             <View key={i} style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
               <Icon name="check" size={18} color={c.success} strokeWidth={2.2} />

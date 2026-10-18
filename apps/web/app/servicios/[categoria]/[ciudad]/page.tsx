@@ -93,7 +93,7 @@ export default async function CategoryCityPage({ params }: { params: Promise<Par
       <section className="section-sm">
         <div className="container grid-2">
           <div className="card stack gap-12">
-            <h2 style={{ fontSize: 20 }}>Qué incluye el servicio</h2>
+            <h2 style={{ fontSize: 20 }}>Siempre incluido en el servicio</h2>
             <ul className="stack gap-8" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {cat.incluye.map((i) => <li key={i} style={{ color: 'var(--text-2)' }}>✓ {i}</li>)}
             </ul>

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { COMMISSION_RATE } from '@hulul/shared';
+import { categories, CATEGORY_FLOORS, COMMISSION_RATE } from '@hulul/shared';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
@@ -38,9 +38,31 @@ export default function ProfessionalsPage() {
             </div>
           ))}
         </div>
-        <p className="container muted" style={{ marginTop: 16, fontSize: 14 }}>
-          Comisión por servicio: {Math.round(COMMISSION_RATE * 100)}% (valor provisional).
-        </p>
+        <div className="container stack gap-12" style={{ marginTop: 32 }}>
+          <h2 style={{ fontSize: 24 }}>Cuánto cobras</h2>
+          <p className="muted" style={{ fontSize: 15 }}>
+            Tú pones tu tarifa por hora, desde el mínimo de tu oficio. Además, cada trabajo lleva una visita técnica fija por categoría
+            (traslado y diagnóstico), que es para ti. HULUL retiene una comisión del {Math.round(COMMISSION_RATE * 100)} % de cada servicio.
+          </p>
+          <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
+            <table className="price-table">
+              <thead><tr><th>Categoría</th><th>Visita técnica</th><th>Tarifa mínima</th><th>Horas mínimas</th></tr></thead>
+              <tbody>
+                {categories.map((c) => {
+                  const f = CATEGORY_FLOORS[c.slug];
+                  return (
+                    <tr key={c.slug}>
+                      <td>{c.name}</td>
+                      <td>{f.visit > 0 ? `$${f.visit}` : '—'}</td>
+                      <td>${f.rate}/h</td>
+                      <td>{f.hours} h</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <section className="section">

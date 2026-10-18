@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { demoProfessionals, demoReviews, formatRating, getCategory, getProfessional, minimumLabel } from '@hulul/shared';
+import { demoProfessionals, demoReviews, formatRating, getCategory, getProfessional, minimumLabel, categoryPricing, formatPrice } from '@hulul/shared';
 import { DownloadBand } from '@/components/DownloadBand';
 import { Icon } from '@/components/Icon';
 
@@ -68,7 +68,24 @@ export default async function ProfessionalPage({ params }: { params: Promise<Par
           </div>
 
           <div className="stack gap-8">
-            <h2 style={{ fontSize: 22 }}>Qué incluye</h2>
+            <h2 style={{ fontSize: 22 }}>Trabajos que realiza</h2>
+            <div className="link-cloud">
+              {cat.servicios.map((s) => <span key={s} className="pill pill-warm">{s}</span>)}
+            </div>
+            <p className="muted" style={{ fontSize: 14 }}>¿Necesitas otro trabajo de {cat.name.toLowerCase()}? Elige &ldquo;Otro trabajo&rdquo; al reservar y descríbelo.</p>
+          </div>
+
+          <div className="stack gap-8">
+            <h2 style={{ fontSize: 22 }}>Cómo se cobra</h2>
+            <ul className="stack gap-8" style={{ listStyle: 'none', padding: 0, margin: 0, color: 'var(--text-2)' }}>
+              {categoryPricing(cat.slug).visit > 0 && <li>• Visita técnica: <strong>{formatPrice(categoryPricing(cat.slug).visit)}</strong>, igual para todos los profesionales de {cat.name.toLowerCase()}. Cubre traslado y diagnóstico.</li>}
+              <li>• Mano de obra: <strong>${pro.hourlyRate} por hora</strong>, mínimo {categoryPricing(cat.slug).hours} h.</li>
+              <li>• Materiales y repuestos: aparte. Te los cotiza en la app y tú decides.</li>
+            </ul>
+          </div>
+
+          <div className="stack gap-8">
+            <h2 style={{ fontSize: 22 }}>Siempre incluido</h2>
             <ul className="stack gap-8" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {cat.incluye.map((i) => <li key={i} style={{ color: 'var(--text-2)' }}>✓ {i}</li>)}
             </ul>

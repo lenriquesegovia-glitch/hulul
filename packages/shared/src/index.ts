@@ -9,3 +9,5 @@ export * from './legal';
 export * from './booking';
 export * from './search';
 export * from './provider';
+export * from './policy';
+export * from './terms';
