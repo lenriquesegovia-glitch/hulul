@@ -48,3 +48,60 @@ export const POLICY = {
 
 export const pct = (n: number) => `${Math.round(n * 100)} %`;
 export const usd = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
+
+/* ------------------------------ Cancelación ------------------------------ */
+
+/** Estados en los que el cliente todavía puede cancelar desde la app o la web. */
+export const CANCELLABLE_STATUSES = ['pendiente', 'confirmada', 'en_camino'] as const;
+
+export interface CancelTerms {
+  /** false si ya empezó o terminó (entonces se reporta un problema). */
+  allowed: boolean;
+  /** Cargo por cancelar ahora (USD); 0 = gratis. */
+  fee: number;
+  /** Explicación para el cliente. */
+  reason: string;
+  /** Hasta cuándo se cancela gratis (ISO), si aplica. */
+  freeUntil?: string;
+}
+
+/** Fecha y hora de la cita en Ecuador (UTC-5) como instante. */
+export function appointmentTime(date: string, slot: string): Date {
+  const [y, m, d] = date.split('-').map(Number);
+  const [h, min] = slot.split(':').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, h + 5, min));
+}
+
+/** "1 h 20 min", "45 min", "3 días". */
+export function durationLabel(ms: number): string {
+  const min = Math.max(0, Math.round(ms / 60_000));
+  if (min >= 2880) return `${Math.floor(min / 1440)} días`;
+  if (min >= 60) return `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ''}`;
+  return `${min} min`;
+}
+
+/**
+ * Cuánto cuesta cancelar ahora. Regla (la misma que aplica el servidor):
+ * - Sin profesional confirmado: gratis.
+ * - Confirmada: gratis hasta 2 horas antes; después, cargo de $3.
+ * - Profesional en camino: cargo de $3.
+ * - En curso o terminada: no se cancela; se reporta un problema.
+ */
+export function cancelTerms(b: { date: string; slot: string; status: string }, now: Date = new Date()): CancelTerms {
+  if (!(CANCELLABLE_STATUSES as readonly string[]).includes(b.status)) {
+    return { allowed: false, fee: 0, reason: b.status === 'cancelada' ? 'Esta reserva ya está cancelada.' : 'El servicio ya empezó o terminó. Si algo salió mal, repórtalo desde la reserva.' };
+  }
+  const at = appointmentTime(b.date, b.slot);
+  const freeUntil = new Date(at.getTime() - POLICY.freeCancelHoursBefore * 3_600_000);
+  const fee = POLICY.lateCancelFee;
+  if (b.status === 'en_camino') {
+    return { allowed: true, fee, reason: `El profesional ya va en camino: cancelar ahora tiene un cargo de ${usd(fee)}, que compensa su traslado.` };
+  }
+  if (b.status === 'pendiente') {
+    return { allowed: true, fee: 0, reason: 'Aún ningún profesional confirmó tu reserva: cancelar es gratis.', freeUntil: freeUntil.toISOString() };
+  }
+  if (now < freeUntil) {
+    return { allowed: true, fee: 0, reason: `Faltan ${durationLabel(at.getTime() - now.getTime())} para tu cita: cancelar es gratis (hasta ${POLICY.freeCancelHoursBefore} horas antes).`, freeUntil: freeUntil.toISOString() };
+  }
+  return { allowed: true, fee, reason: `Faltan menos de ${POLICY.freeCancelHoursBefore} horas para tu cita y el profesional ya la confirmó: cancelar ahora tiene un cargo de ${usd(fee)}.` };
+}

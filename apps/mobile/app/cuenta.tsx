@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { formatUSD, getCategory } from '@hulul/shared';
-import { BOOKING_STATUS_LABEL, clientBookings, type ClientBooking } from '@hulul/shared/firebase';
+import { cancelTerms, formatUSD, getCategory, usd } from '@hulul/shared';
+import { BOOKING_STATUS_LABEL, cancelBooking, cancelErrorMessage, clientBookings, type ClientBooking } from '@hulul/shared/firebase';
 import { ClientGate } from '@/components/ClientGate';
 import { BackButton, Body, Card, H1, H2, Pill, PrimaryButton } from '@/components/ui';
 import { logout } from '@/lib/auth';
-import { c, font } from '@/theme';
+import { c, font, radius } from '@/theme';
 
 /** Mi cuenta: datos del cliente y sus reservas. */
 export default function AccountScreen() {
@@ -36,7 +36,8 @@ export default function AccountScreen() {
 function Bookings({ uid }: { uid: string }) {
   const [rows, setRows] = useState<ClientBooking[] | null>(null);
   const [error, setError] = useState(false);
-  useEffect(() => { clientBookings(uid).then(setRows).catch(() => setError(true)); }, [uid]);
+  const [reload, setReload] = useState(0);
+  useEffect(() => { clientBookings(uid).then(setRows).catch(() => setError(true)); }, [uid, reload]);
   return (
     <View style={{ gap: 12 }}>
       <H2>Mis reservas</H2>
@@ -56,13 +57,64 @@ function Bookings({ uid }: { uid: string }) {
           </View>
           <Body muted style={{ fontSize: 13 }}>{r.date} a las {r.slot} · {formatUSD(r.total)} · {r.id.slice(0, 8).toUpperCase()}</Body>
           {r.notes ? <Body style={{ fontSize: 13.5 }}>{r.notes}</Body> : null}
+          {r.status === 'cancelada' && (
+            <Body muted style={{ fontSize: 13 }}>
+              {r.cancelFee ? `Cargo por cancelación tardía: ${usd(r.cancelFee)}${r.demo ? ' (prueba, no se cobra)' : ''}` : 'Cancelada sin costo.'}
+            </Body>
+          )}
+          <CancelBox row={r} onDone={() => setReload((n) => n + 1)} />
         </Card>
       ))}
     </View>
   );
 }
 
+function shortWhen(iso: string): string {
+  const d = new Date(new Date(iso).getTime() - 5 * 3_600_000);
+  const days = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+  return `${days[d.getUTCDay()]} ${d.getUTCDate()}/${d.getUTCMonth() + 1}, ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+
+/** Cancelar: muestra antes de confirmar si es gratis o cuánto cuesta. */
+function CancelBox({ row, onDone }: { row: ClientBooking; onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const t = cancelTerms(row);
+  if (!t.allowed) return null;
+  const hint = row.status === 'pendiente'
+    ? `Gratis mientras ningún profesional la confirme. Ya confirmada, gratis hasta ${t.freeUntil ? shortWhen(t.freeUntil) : '2 h antes'}.`
+    : t.fee === 0 && t.freeUntil ? `Cancelas gratis hasta ${shortWhen(t.freeUntil)}.` : '';
+
+  if (!open) {
+    return (
+      <View style={{ gap: 6, marginTop: 6 }}>
+        {hint ? <Body muted style={{ fontSize: 12.5 }}>{hint}</Body> : null}
+        <Pressable accessibilityRole="button" onPress={() => setOpen(true)}><Text style={s.link}>Cancelar reserva</Text></Pressable>
+      </View>
+    );
+  }
+  const confirm = async () => {
+    setBusy(true); setMsg('');
+    try { await cancelBooking(row.id, reason.trim()); onDone(); } catch (e) { setMsg(cancelErrorMessage(e)); setBusy(false); }
+  };
+  return (
+    <View style={[s.cancel, t.fee > 0 && { backgroundColor: '#F6E7E9' }]}>
+      <Text style={s.name}>{t.fee > 0 ? `Cancelar ahora cuesta ${usd(t.fee)}` : 'Cancelar es gratis'}</Text>
+      <Body style={{ fontSize: 13.5 }}>{t.reason}</Body>
+      {t.fee > 0 && row.demo ? <Body muted style={{ fontSize: 12.5 }}>Versión de prueba: el cargo se registra, pero no se cobra.</Body> : null}
+      <TextInput value={reason} onChangeText={setReason} maxLength={300} placeholder="Motivo (opcional)" placeholderTextColor={c.textMuted} style={s.input} />
+      {msg ? <Text style={{ fontFamily: font.bodySemi, fontSize: 13, color: c.primary }}>{msg}</Text> : null}
+      <PrimaryButton label={busy ? 'Cancelando…' : t.fee > 0 ? `Cancelar y pagar ${usd(t.fee)}` : 'Sí, cancelar'} onPress={busy ? () => {} : confirm} />
+      <Pressable accessibilityRole="button" onPress={() => setOpen(false)}><Text style={[s.link, { textAlign: 'center' }]}>Mantener reserva</Text></Pressable>
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
+  cancel: { gap: 10, marginTop: 8, padding: 14, borderRadius: radius.md, backgroundColor: c.surfaceWarm },
+  input: { minHeight: 46, paddingHorizontal: 12, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, fontFamily: font.body, fontSize: 15, color: c.text },
   content: { padding: 20, paddingBottom: 40, gap: 20 },
   name: { fontFamily: font.bodyBold, fontSize: 17, color: c.text },
   link: { fontFamily: font.bodyBold, fontSize: 14, color: c.primary, marginTop: 6 },

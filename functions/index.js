@@ -11,6 +11,7 @@
  * Google (MAIL_PASSWORD), nunca en el código.
  */
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { defineSecret, defineString } from 'firebase-functions/params';
@@ -156,6 +157,7 @@ export function bookingEmails(b, id, { from, notifyTo }) {
         ['Total', `<strong>${usd(b.total)}</strong>`],
       ]) +
       `<p style="font-size:14px;color:#3F3A37;margin-top:16px">Te escribiremos por WhatsApp para confirmar. El pago queda retenido por HULUL y se libera al profesional cuando apruebas el trabajo.</p>` +
+      `<p style="font-size:14px;color:#3F3A37">Puedes cancelar desde <a href="https://hululec.com/cuenta">Mi cuenta</a>: gratis hasta 2 horas antes de la cita; después, o con el profesional en camino, tiene un cargo de $3.</p>` +
       (b.demo ? `<p style="font-size:13px;color:#9A5B34">Versión de prueba: no se hizo ningún cobro.</p>` : '');
     messages.push({
       from,
@@ -326,5 +328,77 @@ export const directorioProfesionales = onDocumentWritten(
           button(`https://hululec.com/profesional/${uid}`, 'Ver mi perfil')),
       });
     }
+  },
+);
+
+/* ------------------------------ Cancelación ------------------------------ */
+
+// Misma regla que packages/shared/src/policy.ts (cancelTerms). Si cambias una, cambia la otra.
+const FREE_CANCEL_HOURS = 2;
+const LATE_CANCEL_FEE = 3;
+const CANCELLABLE = ['pendiente', 'confirmada', 'en_camino'];
+
+export function cancelFee(b, now = new Date()) {
+  if (!CANCELLABLE.includes(b.status)) return null;
+  if (b.status === 'en_camino') return LATE_CANCEL_FEE;
+  if (b.status === 'pendiente') return 0;
+  const [y, m, d] = String(b.date).split('-').map(Number);
+  const [h, min] = String(b.slot).split(':').map(Number);
+  const at = Date.UTC(y, m - 1, d, h + 5, min); // Ecuador, UTC-5
+  return now.getTime() < at - FREE_CANCEL_HOURS * 3_600_000 ? 0 : LATE_CANCEL_FEE;
+}
+
+/**
+ * El cliente cancela su reserva. El cargo lo calcula el servidor (no la web
+ * ni la app) y queda registrado en la reserva y como saldo del cliente.
+ */
+export const cancelarReserva = onCall(
+  { region: REGION, secrets: [MAIL_PASSWORD] },
+  async (req) => {
+    const uid = req.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión para cancelar.');
+    const id = String(req.data?.id ?? '');
+    const reason = String(req.data?.reason ?? '').slice(0, 300);
+    if (!/^[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('invalid-argument', 'Reserva no válida.');
+    const ref = db().doc(`bookings/${id}`);
+
+    const result = await db().runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
+      const b = snap.data();
+      if (b.clientId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
+      const fee = cancelFee(b);
+      if (fee === null) throw new HttpsError('failed-precondition', b.status === 'cancelada' ? 'Esta reserva ya está cancelada.' : 'El servicio ya empezó o terminó; no se puede cancelar.');
+      tx.update(ref, {
+        status: 'cancelada', cancelledBy: 'cliente', cancelledAt: FieldValue.serverTimestamp(),
+        cancelFee: fee, cancelReason: reason, previousStatus: b.status,
+      });
+      // Con tarjeta se descontará del monto retenido; sin tarjeta queda como saldo pendiente.
+      if (fee > 0 && !b.demo) tx.set(db().doc(`clients/${uid}`), { balance: FieldValue.increment(fee) }, { merge: true });
+      return { b, fee };
+    });
+
+    const { b, fee } = result;
+    try {
+      const { from, notifyTo } = senders();
+      const mail = transport();
+      const cat = CATEGORIES[b.category] ?? b.category;
+      const when = `${longDate(b.date)} a las ${b.slot}`;
+      const feeText = fee > 0 ? `Cargo por cancelación tardía: <strong>${usd(fee)}</strong>${b.demo ? ' (versión de prueba: no se cobra)' : ''}.` : 'Sin costo.';
+      const info = rows([['Código', `<strong>${code(id)}</strong>`], ['Servicio', esc(cat)], ['Profesional', esc(b.professionalName)], ['Fecha', esc(when)], ['Cancelación', feeText], ...(reason ? [['Motivo', esc(reason)]] : [])]);
+      await mail.sendMail({ from, to: notifyTo, subject: `Reserva cancelada ${code(id)} · ${cat}${fee > 0 ? ` · cargo ${usd(fee)}` : ''}`, html: layout('El cliente canceló una reserva', info) });
+      if (b.contactEmail) await mail.sendMail({ from, to: b.contactEmail, replyTo: notifyTo, subject: `Cancelaste tu reserva ${code(id)}`, html: layout('Reserva cancelada', info) });
+      const pro = await db().doc(`providers/${b.professionalId}`).get();
+      const p = pro.exists ? pro.data() : null;
+      if (p?.email && p.status === 'aprobado') {
+        await mail.sendMail({ from, to: p.email, replyTo: notifyTo, subject: `Se canceló la reserva ${code(id)} del ${when}`,
+          html: layout('Reserva cancelada', `<p style="font-size:15px">Hola ${esc(p.firstName)}, el cliente canceló esta reserva. Ya no tienes que ir.</p>` + rows([['Código', code(id)], ['Servicio', esc(cat)], ['Fecha', esc(when)]]) +
+            (fee > 0 ? `<p style="font-size:14px">Por cancelar tarde, el cliente paga ${usd(fee)}; el 80 % es para ti.</p>` : '')) });
+      }
+    } catch (e) {
+      logger.warn('No se pudieron enviar los correos de cancelación', { id, e: String(e) });
+    }
+    logger.info('Reserva cancelada por el cliente', { id, fee });
+    return { fee };
   },
 );

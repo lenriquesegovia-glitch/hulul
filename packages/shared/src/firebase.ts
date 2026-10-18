@@ -10,6 +10,7 @@
  */
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import { addDoc, collection, doc, getDoc, getDocs, getFirestore, query, serverTimestamp, setDoc, where, type Firestore } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { PRIVACY_VERSION } from './legal';
 import type { CategorySlug } from './categories';
 import type { LatLng, PaymentMethod, Professional } from './models';
@@ -166,6 +167,9 @@ export interface ClientBooking {
   total: number;
   status: string;
   notes?: string;
+  /** Cargo cobrado al cancelar (USD). */
+  cancelFee?: number;
+  demo?: boolean;
 }
 
 /** Reservas del cliente, de la más próxima a la más antigua. */
@@ -208,4 +212,21 @@ export async function listPros(category: CategorySlug, city?: string): Promise<P
 export async function loadPro(id: string, category?: CategorySlug): Promise<Professional | null> {
   const snap = await getDoc(doc(firestore(), 'pros', id));
   return snap.exists() ? toProfessional({ ...(snap.data() as PublicPro), uid: snap.id }, category) : null;
+}
+
+/* ------------------------------ Cancelación ------------------------------ */
+
+/** Cancela una reserva del cliente. El servidor calcula y devuelve el cargo. */
+export async function cancelBooking(id: string, reason = ''): Promise<{ fee: number }> {
+  const fn = httpsCallable<{ id: string; reason: string }, { fee: number }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'cancelarReserva');
+  const res = await fn({ id, reason });
+  return res.data;
+}
+
+/** Mensaje claro para un error al cancelar. */
+export function cancelErrorMessage(e: unknown): string {
+  const msg = (e as { message?: string }).message ?? '';
+  const code = (e as { code?: string }).code ?? '';
+  if (code.includes('unavailable') || code.includes('internal') || !msg) return 'No pudimos cancelar en este momento. Revisa tu conexión e inténtalo de nuevo.';
+  return msg;
 }

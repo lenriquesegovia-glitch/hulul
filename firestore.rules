@@ -89,8 +89,10 @@ service cloud.firestore {
         && request.resource.data.consentMarketing is bool
         && request.resource.data.consentPrivacy == true
         && request.resource.data.createdAt == request.time;
+      // El saldo pendiente (cargos por cancelar tarde) lo escribe solo el servidor.
       allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'consentMarketing', 'consentPrivacy', 'privacyVersion', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'consentMarketing', 'consentPrivacy', 'privacyVersion', 'createdAt', 'updatedAt', 'balance'])
+        && request.resource.data.get('balance', 0) == resource.data.get('balance', 0)
         && request.resource.data.uid == uid
         && request.resource.data.createdAt == resource.data.createdAt
         && str(request.resource.data.name, 2, 120)
