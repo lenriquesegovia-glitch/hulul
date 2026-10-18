@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { demoProfessionals, getCategory, getProfessional } from '@hulul/shared';
+import { demoProfessionals, getCategory, getProfessional, minimumLabel } from '@hulul/shared';
 import { BookingForm } from './BookingForm';
 
 type Params = { id: string };
@@ -35,7 +35,7 @@ export default async function BookPage({ params }: { params: Promise<Params> }) 
           <span className="avatar" style={{ width: 56, height: 56, fontSize: 19 }}>{pro.initials}</span>
           <div className="stack gap-4">
             <h1 style={{ fontSize: 'clamp(24px, 3.5vw, 32px)' }}>Reservar a {pro.name}</h1>
-            <p className="muted">{cat.name} · ${pro.hourlyRate}/hora · Reserva mínima ${pro.minimumBooking}</p>
+            <p className="muted">{cat.name} · ${pro.hourlyRate}/hora · {minimumLabel(pro)}</p>
           </div>
         </div>
         <BookingForm proId={pro.id} />

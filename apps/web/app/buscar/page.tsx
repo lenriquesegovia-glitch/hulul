@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { categories } from '@hulul/shared';
+import { categories, searchCategories } from '@hulul/shared';
 import { CategoryGrid } from '@/components/CategoryGrid';
 
 export const metadata: Metadata = {
@@ -8,16 +8,11 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
-const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q = '' } = await searchParams;
-  const term = normalize(q.trim());
-  const results = term
-    ? categories.filter((c) =>
-        [c.name, c.sub, c.seoName, ...c.servicios].some((t) => normalize(t).includes(term)),
-      )
-    : [];
+  // Mismo criterio que las sugerencias del inicio (incluye "gasfitero", "refri"…).
+  const slugs = searchCategories(q);
+  const results = categories.filter((c) => slugs.includes(c.slug));
 
   return (
     <section className="section-sm">

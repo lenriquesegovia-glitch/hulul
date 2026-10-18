@@ -54,7 +54,9 @@ export function BookingForm({ proId }: { proId: string }) {
       setSlot(SLOTS.findIndex((_, s) => slotAvailable(i, s, now)));
     }
   };
-  const [hours, setHours] = useState(2);
+  // Arranca en el mínimo del profesional (al menos 2 h) y no baja de ese mínimo.
+  const minH = Math.max(MIN_HOURS, pro.minHours);
+  const [hours, setHours] = useState(Math.max(2, minH));
   const [location, setLocation] = useState<LatLng | null>(null);
   const [notesLen, setNotesLen] = useState(0);
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
@@ -62,8 +64,7 @@ export function BookingForm({ proId }: { proId: string }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
-  const q = quote(pro.hourlyRate, hours, pro.minimumBooking);
-  const belowMinimum = pro.hourlyRate * hours < pro.minimumBooking;
+  const q = quote(pro.hourlyRate, hours);
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -165,10 +166,10 @@ export function BookingForm({ proId }: { proId: string }) {
         <div className="card row gap-16" style={{ justifyContent: 'space-between', padding: 16, flexWrap: 'wrap' }}>
           <div className="stack">
             <strong>Horas de servicio</strong>
-            <span className="muted" style={{ fontSize: 13.5 }}>Puedes ampliar durante el servicio</span>
+            <span className="muted" style={{ fontSize: 13.5 }}>Mínimo {minH} h con {pro.name.split(' ')[0]} · puedes ampliar durante el servicio</span>
           </div>
           <div className="row gap-12">
-            <button type="button" className="stepper" aria-label="Quitar una hora" onClick={() => setHours((h) => Math.max(MIN_HOURS, h - 1))}>−</button>
+            <button type="button" className="stepper" aria-label="Quitar una hora" disabled={hours <= minH} onClick={() => setHours((h) => Math.max(minH, h - 1))}>−</button>
             <span aria-live="polite" style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, minWidth: 24, textAlign: 'center' }}>{hours}</span>
             <button type="button" className="stepper" aria-label="Añadir una hora" onClick={() => setHours((h) => Math.min(MAX_HOURS, h + 1))}>+</button>
           </div>
@@ -228,7 +229,7 @@ export function BookingForm({ proId }: { proId: string }) {
         </div>
         <div className="card stack gap-8" style={{ padding: 18 }}>
           <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
-            <span>{belowMinimum ? `Reserva mínima (${hours} h × $${pro.hourlyRate})` : `${hours} h × $${pro.hourlyRate}`}</span>
+            <span>{`${hours} h × $${pro.hourlyRate}`}</span>
             <span>{formatUSD(q.subtotal)}</span>
           </div>
           <div className="row" style={{ justifyContent: 'space-between' }}><span>Tarifa de protección HULUL</span><span>{formatUSD(q.fee)}</span></div>

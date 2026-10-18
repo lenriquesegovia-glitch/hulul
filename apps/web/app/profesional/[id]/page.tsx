@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { demoProfessionals, demoReviews, formatRating, getCategory, getProfessional } from '@hulul/shared';
+import { demoProfessionals, demoReviews, formatRating, getCategory, getProfessional, minimumLabel } from '@hulul/shared';
 import { DownloadBand } from '@/components/DownloadBand';
 import { Icon } from '@/components/Icon';
 
@@ -59,7 +59,7 @@ export default async function ProfessionalPage({ params }: { params: Promise<Par
             <div className="card" style={{ textAlign: 'center' }}><div className="price">★ {formatRating(pro.rating)}</div><div className="muted">{pro.reviewCount} reseñas</div></div>
             <div className="card" style={{ textAlign: 'center' }}><div className="price">{pro.jobsDone}</div><div className="muted">servicios</div></div>
             <div className="card" style={{ textAlign: 'center' }}><div className="price">{pro.years}</div><div className="muted">años de experiencia</div></div>
-            <div className="card" style={{ textAlign: 'center' }}><div className="price">${pro.hourlyRate}/h</div><div className="muted">Reserva mín. ${pro.minimumBooking}</div></div>
+            <div className="card" style={{ textAlign: 'center' }}><div className="price">${pro.hourlyRate}/h</div><div className="muted">{minimumLabel(pro)}</div></div>
           </div>
 
           <div className="stack gap-8">

@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { demoReviews, formatRating, getCategory, getProfessional } from '@hulul/shared';
+import { demoReviews, formatRating, getCategory, getProfessional, minimumLabel } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { Avatar, BackButton, Body, Card, H1, H2, PrimaryButton } from '@/components/ui';
 import { c, font } from '@/theme';
@@ -80,7 +80,7 @@ export default function ProfessionalScreen() {
       <View style={s.footer}>
         <View>
           <Text style={s.price}>${pro.hourlyRate}<Text style={s.perHour}> /hora</Text></Text>
-          <Body muted style={{ fontSize: 12.5 }}>Reserva mínima ${pro.minimumBooking}</Body>
+          <Body muted style={{ fontSize: 12.5 }}>{minimumLabel(pro)}</Body>
         </View>
         <PrimaryButton label="Reservar ahora" onPress={() => router.push(`/reservar/${pro.id}`)} />
       </View>

@@ -18,7 +18,9 @@ export default function BookingScreen() {
   const first = useMemo(() => firstAvailable(now), [now]);
   const [day, setDay] = useState(first.day);
   const [slot, setSlot] = useState(first.slot);
-  const [hours, setHours] = useState(2);
+  // Arranca en el mínimo del profesional (al menos 2 h) y no baja de ese mínimo.
+  const minH = Math.max(1, pro?.minHours ?? 1);
+  const [hours, setHours] = useState(Math.max(2, minH));
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
@@ -40,8 +42,7 @@ export default function BookingScreen() {
     );
   }
 
-  const q = quote(pro.hourlyRate, hours, pro.minimumBooking);
-  const belowMinimum = pro.hourlyRate * hours < pro.minimumBooking;
+  const q = quote(pro.hourlyRate, hours);
 
   const pickDay = (i: number) => {
     setDay(i);
@@ -146,10 +147,10 @@ export default function BookingScreen() {
           <View style={s.hoursBox}>
             <View style={{ flex: 1 }}>
               <Text style={s.hoursTitle}>Horas de servicio</Text>
-              <Body muted style={{ fontSize: 12.5 }}>Puedes ampliar durante el servicio</Body>
+              <Body muted style={{ fontSize: 12.5 }}>Mínimo {minH} h · puedes ampliar durante el servicio</Body>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Quitar una hora" onPress={() => setHours((h) => Math.max(1, h - 1))} style={s.stepper}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Quitar una hora" disabled={hours <= minH} onPress={() => setHours((h) => Math.max(minH, h - 1))} style={s.stepper}>
                 <Text style={s.stepperText}>−</Text>
               </Pressable>
               <Text style={s.hoursValue}>{hours}</Text>
@@ -228,7 +229,7 @@ export default function BookingScreen() {
           </View>
 
           <View style={s.summary}>
-            <Row label={belowMinimum ? `Reserva mínima (${hours} h × $${pro.hourlyRate})` : `${hours} h × $${pro.hourlyRate}`} value={formatUSD(q.subtotal)} />
+            <Row label={`${hours} h × $${pro.hourlyRate}`} value={formatUSD(q.subtotal)} />
             <Row label="Tarifa de protección HULUL" value={formatUSD(q.fee)} />
             <Row label="IVA 15%" value={formatUSD(q.iva)} />
             <View style={s.totalRow}>

@@ -24,8 +24,8 @@ export interface Quote {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export function quote(hourlyRate: number, hours: number, minimum = 0): Quote {
-  const subtotal = round2(Math.max(hourlyRate * hours, minimum));
+export function quote(hourlyRate: number, hours: number): Quote {
+  const subtotal = round2(hourlyRate * hours);
   const fee = PROTECTION_FEE;
   const iva = round2((subtotal + fee) * IVA);
   const total = round2(subtotal + fee + iva);
@@ -35,4 +35,14 @@ export function quote(hourlyRate: number, hours: number, minimum = 0): Quote {
 
 export function formatUSD(n: number): string {
   return '$' + n.toFixed(2);
+}
+
+/** "$36" o "$36.50": precios cortos para tarjetas y etiquetas. */
+export function formatPrice(n: number): string {
+  return '$' + (Number.isInteger(n) ? String(n) : n.toFixed(2));
+}
+
+/** "Mínimo 2 h · $36": siempre cuadra con la tarifa por hora. */
+export function minimumLabel(p: { hourlyRate: number; minHours: number }): string {
+  return `Mínimo ${p.minHours} h · ${formatPrice(p.hourlyRate * p.minHours)}`;
 }

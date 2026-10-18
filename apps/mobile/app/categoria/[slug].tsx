@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { formatRating, getCategory, prosByCategory } from '@hulul/shared';
+import { formatRating, getCategory, minimumLabel, prosByCategory } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { Avatar, BackButton, Body, Card, H1, Pill } from '@/components/ui';
 import { c, font, radius } from '@/theme';
@@ -80,7 +80,7 @@ export default function CategoryScreen() {
                 </View>
                 <Body numberOfLines={2} style={{ fontSize: 13.5 }}>{p.bio}</Body>
                 <View style={s.proFoot}>
-                  <Body muted style={{ fontSize: 13 }}>Reserva mín. ${p.minimumBooking}</Body>
+                  <Body muted style={{ fontSize: 13 }}>{minimumLabel(p)}</Body>
                   <Text style={s.price}>${p.hourlyRate}<Text style={s.perHour}>/hora</Text></Text>
                 </View>
                 {p.availableToday && <Pill label="Disponible hoy" />}

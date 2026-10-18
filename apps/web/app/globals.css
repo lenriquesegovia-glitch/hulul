@@ -75,6 +75,18 @@ img { max-width: 100%; }
   display: flex; align-items: center; gap: 10px; max-width: 620px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 6px 6px 6px 16px;
 }
+/* Sugerencias del buscador */
+.search-ac { position: relative; }
+.search-ac input::-webkit-search-cancel-button { display: none; }
+.ac-panel { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 10px 28px rgba(28,26,26,.14); padding: 6px; }
+.ac-panel ul { list-style: none; margin: 0; padding: 0; }
+.ac-head { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 8px 10px 4px; }
+.ac-item { width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; font: inherit; color: var(--text); background: none; border: none; border-radius: 10px; padding: 8px 10px; min-height: 52px; cursor: pointer; }
+.ac-item:hover, .ac-item.on { background: var(--surface-warm); }
+.ac-icon { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; background: var(--copper-soft); flex-shrink: 0; }
+.ac-label { font-weight: 700; font-size: 15px; }
+.ac-cat { font-size: 13px; color: var(--muted); }
+.ac-empty { font-size: 14px; color: var(--text-2); padding: 12px 10px; }
 .search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; font: inherit; font-size: 16px; color: var(--text); min-height: 44px; }
 
 /* Categorías: ícono y nombre, igual que en la app */
@@ -253,3 +265,6 @@ details p { margin-top: 10px; color: var(--text-2); }
   .hero-grid { grid-template-columns: minmax(0, 1fr); }
   .hero-art { display: none; }
 }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.stepper:disabled { opacity: .4; cursor: default; }

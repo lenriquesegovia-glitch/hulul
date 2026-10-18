@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { formatRating, type Professional } from '@hulul/shared';
+import { formatRating, minimumLabel, type Professional } from '@hulul/shared';
 import { Icon } from './Icon';
 
 export function ProCard({ pro }: { pro: Professional }) {
@@ -25,7 +25,7 @@ export function ProCard({ pro }: { pro: Professional }) {
       <div className="row gap-12" style={{ justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
         <div className="stack">
           <span className="price">${pro.hourlyRate}<span className="muted" style={{ fontSize: 13, fontFamily: 'var(--font-body)' }}>/hora</span></span>
-          <span className="muted" style={{ fontSize: 13 }}>Reserva mín. ${pro.minimumBooking}</span>
+          <span className="muted" style={{ fontSize: 13 }}>{minimumLabel(pro)}</span>
         </div>
         <Link href={`/reservar/${pro.id}`} className="btn btn-primary" aria-label={`Reservar a ${pro.name}`}>Reservar</Link>
       </div>

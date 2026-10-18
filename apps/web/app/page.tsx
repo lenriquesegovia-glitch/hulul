@@ -5,6 +5,7 @@ import { DownloadBand } from '@/components/DownloadBand';
 import { Faq, faqJsonLd } from '@/components/Faq';
 import { Icon } from '@/components/Icon';
 import { HeroArt } from '@/components/HeroArt';
+import { SearchBox } from '@/components/SearchBox';
 
 const steps = [
   { n: '1', t: 'Elige el servicio', d: 'Busca lo que necesitas y compara profesionales por precio, reseñas y disponibilidad.' },
@@ -29,14 +30,7 @@ export default function HomePage() {
         <div className="stack gap-24">
           <span className="eyebrow">Guayaquil · Samborondón · Daule</span>
           <h1>¿Qué necesitas resolver hoy en tu hogar?</h1>
-          <form action="/buscar" className="search" role="search">
-            <Icon name="search" size={20} color="#6B6560" />
-            <label htmlFor="q" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
-              Buscar servicio
-            </label>
-            <input id="q" name="q" type="search" placeholder="Aire acondicionado, limpieza, uñas…" />
-            <button type="submit" className="btn btn-primary">Buscar</button>
-          </form>
+          <SearchBox />
           <ul className="trust-row" aria-label="Por qué HULUL">
             {promises.map((p) => (
               <li key={p.t}><Icon name={p.icon} size={18} color="#9A5B34" strokeWidth={2} />{p.t}</li>
