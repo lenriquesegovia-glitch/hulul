@@ -12,10 +12,12 @@
       "bundleIdentifier": "com.hulul.app",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "HULUL usa tu ubicación para marcar dónde es el servicio y que el profesional llegue directo."
-      }
+      },
+      "buildNumber": "1"
     },
     "android": {
-      "package": "com.hulul.app"
+      "package": "com.hulul.app",
+      "versionCode": 1
     },
     "plugins": [
       "expo-router",
@@ -29,6 +31,7 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "owner": "lsegovia941"
   }
 }
