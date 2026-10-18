@@ -280,7 +280,8 @@ export function proBookingEmail(b, id, p, { from, notifyTo }) {
       ['Pago', esc(PAYMENTS[b.paymentMethod] ?? b.paymentMethod)],
       ['Te queda', `<strong>${usd((b.subtotal ?? 0) * 0.85)}</strong> aprox. (menos la comisión)`],
     ]) +
-    `<p style="font-size:14px;color:#3F3A37;margin-top:16px">Responde este correo o escríbenos por WhatsApp para confirmar que vas. Pronto podrás aceptar desde la app de profesionales.</p>`;
+    `<p style="font-size:14px;color:#3F3A37;margin-top:16px">Acéptala o recházala en tu agenda.</p>` +
+    button('https://hululec.com/profesionales/agenda', 'Abrir mi agenda');
   return { from, to: p.email, replyTo: notifyTo, subject: `Reserva nueva ${code(id)} · ${cat} · ${when}`, html: layout('Tienes una reserva', body) };
 }
 
@@ -325,7 +326,7 @@ export const directorioProfesionales = onDocumentWritten(
         from, to: after.email, replyTo: notifyTo,
         subject: '¡Ya estás en HULUL!',
         html: layout('Tu perfil fue aprobado', `<p style="font-size:15px">Hola ${esc(after.firstName)}, revisamos tus datos y documentos. Tu perfil ya aparece en HULUL y los clientes pueden reservarte. Te llegará un correo por cada reserva.</p>` +
-          button(`https://hululec.com/profesional/${uid}`, 'Ver mi perfil')),
+          button('https://hululec.com/profesionales/agenda', 'Abrir mi agenda') + button(`https://hululec.com/profesional/${uid}`, 'Ver mi perfil', '#9A5B34')),
       });
     }
   },
@@ -400,5 +401,86 @@ export const cancelarReserva = onCall(
     }
     logger.info('Reserva cancelada por el cliente', { id, fee });
     return { fee };
+  },
+);
+
+/* --------------------------- Agenda del profesional --------------------------- */
+
+/** Qué puede hacer el profesional en cada estado. */
+const PRO_ACTIONS = {
+  aceptar: { from: ['pendiente'], to: 'confirmada', stamp: 'acceptedAt' },
+  rechazar: { from: ['pendiente'], to: 'cancelada', stamp: 'cancelledAt' },
+  en_camino: { from: ['confirmada'], to: 'en_camino', stamp: 'enRouteAt' },
+  llegue: { from: ['en_camino'], to: 'en_curso', stamp: 'startedAt' },
+  terminar: { from: ['en_curso'], to: 'por_aprobar', stamp: 'finishedAt' },
+  no_puedo: { from: ['confirmada', 'en_camino'], to: 'cancelada', stamp: 'cancelledAt' },
+};
+
+/**
+ * El profesional acepta, rechaza, sale, llega o termina un servicio. Lo
+ * valida el servidor: solo el profesional asignado y aprobado, y solo en el
+ * orden correcto. El cliente ve el cambio al instante en su seguimiento.
+ */
+export const gestionarReserva = onCall(
+  { region: REGION, secrets: [MAIL_PASSWORD] },
+  async (req) => {
+    const uid = req.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+    const id = String(req.data?.id ?? '');
+    const action = String(req.data?.action ?? '');
+    const reason = String(req.data?.reason ?? '').slice(0, 300);
+    const rule = PRO_ACTIONS[action];
+    if (!rule || !/^[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('invalid-argument', 'Acción no válida.');
+    const proSnap = await db().doc(`providers/${uid}`).get();
+    const pro = proSnap.data();
+    if (!pro || pro.status !== 'aprobado') throw new HttpsError('permission-denied', 'Tu cuenta de profesional no está activa.');
+    const ref = db().doc(`bookings/${id}`);
+
+    const b = await db().runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
+      const cur = snap.data();
+      if (cur.professionalId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
+      if (!rule.from.includes(cur.status)) throw new HttpsError('failed-precondition', 'La reserva cambió de estado. Actualiza la página.');
+      const patch = { status: rule.to, [rule.stamp]: FieldValue.serverTimestamp(), previousStatus: cur.status };
+      if (action === 'rechazar' || action === 'no_puedo') {
+        patch.cancelledBy = 'profesional';
+        patch.cancelReason = reason;
+        patch.cancelFee = 0;
+        // Cancelar algo ya aceptado con menos de 2 horas (o yendo en camino) es una falta.
+        if (action === 'no_puedo' && cancelFee({ ...cur, status: cur.status }) > 0) {
+          patch.proFine = 5;
+          tx.set(db().doc(`providers/${uid}`), { strikes: FieldValue.increment(1) }, { merge: true });
+        }
+      }
+      tx.update(ref, patch);
+      return cur;
+    });
+
+    // Aviso al cliente (y a HULUL si se cayó la reserva).
+    try {
+      const { from, notifyTo } = senders();
+      const mail = transport();
+      const cat = CATEGORIES[b.category] ?? b.category;
+      const when = `${longDate(b.date)} a las ${b.slot}`;
+      const first = String(b.contactName ?? '').split(' ')[0];
+      const msgs = {
+        aceptar: [`${b.professionalName} confirmó tu reserva`, `Hola ${esc(first)}, ${esc(b.professionalName)} confirmó tu servicio de ${esc(cat)} para el ${esc(when)}. Te avisaremos cuando salga hacia tu dirección.`],
+        en_camino: [`${b.professionalName} va en camino`, `Hola ${esc(first)}, ${esc(b.professionalName)} ya salió hacia ${esc(b.address)}. Míralo en <a href="https://hululec.com/cuenta">Mi cuenta</a>.`],
+        llegue: [`${b.professionalName} llegó`, `Hola ${esc(first)}, ${esc(b.professionalName)} marcó que llegó y empezó el trabajo.`],
+        terminar: ['Tu servicio terminó: revísalo', `Hola ${esc(first)}, ${esc(b.professionalName)} marcó el trabajo como terminado. Revísalo; tienes 48 horas para reportar cualquier problema.`],
+        rechazar: ['Tu reserva necesita otro profesional', `Hola ${esc(first)}, ${esc(b.professionalName)} no puede atender tu reserva del ${esc(when)}. No se te cobra nada. Elige otro profesional en <a href="https://hululec.com/servicios/${esc(b.category)}">HULUL</a>.`],
+        no_puedo: ['Tu profesional canceló', `Hola ${esc(first)}, ${esc(b.professionalName)} canceló tu reserva del ${esc(when)}. No se te cobra nada y te ayudamos a encontrar otro profesional.`],
+      }[action];
+      if (msgs && b.contactEmail) await mail.sendMail({ from, to: b.contactEmail, replyTo: notifyTo, subject: msgs[0], html: layout(msgs[0], `<p style="font-size:15px">${msgs[1]}</p>`) });
+      if (action === 'rechazar' || action === 'no_puedo') {
+        await mail.sendMail({ from, to: notifyTo, subject: `El profesional ${action === 'rechazar' ? 'rechazó' : 'canceló'} la reserva ${code(id)}`,
+          html: layout('Reserva sin profesional', rows([['Código', code(id)], ['Profesional', esc(b.professionalName)], ['Cliente', esc(b.contactName)], ['Celular', esc(b.contactPhone)], ['Fecha', esc(when)], ['Motivo', esc(reason)]])) });
+      }
+    } catch (e) {
+      logger.warn('No se pudo avisar el cambio de estado', { id, action, e: String(e) });
+    }
+    logger.info('Reserva actualizada por el profesional', { id, action });
+    return { status: rule.to };
   },
 );

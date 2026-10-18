@@ -73,7 +73,10 @@ service cloud.firestore {
         && request.resource.data.status == 'pendiente'
         && consent(request.resource.data);
       // Cada cliente ve sus reservas.
-      allow read: if request.auth != null && resource.data.clientId == request.auth.uid;
+      // Las ve el cliente que reservó y el profesional asignado. Los cambios de
+      // estado los hace el servidor (cancelarReserva, gestionarReserva).
+      allow read: if request.auth != null
+        && (resource.data.clientId == request.auth.uid || resource.data.professionalId == request.auth.uid);
       allow update, delete: if false;
     }
 

@@ -230,3 +230,32 @@ export function cancelErrorMessage(e: unknown): string {
   if (code.includes('unavailable') || code.includes('internal') || !msg) return 'No pudimos cancelar en este momento. Revisa tu conexión e inténtalo de nuevo.';
   return msg;
 }
+
+/* --------------------------- Agenda del profesional --------------------------- */
+
+export type ProAction = 'aceptar' | 'rechazar' | 'en_camino' | 'llegue' | 'terminar' | 'no_puedo';
+
+/** El profesional cambia el estado de una reserva suya (lo valida el servidor). */
+export async function proAction(id: string, action: ProAction, reason = ''): Promise<{ status: string }> {
+  const fn = httpsCallable<{ id: string; action: ProAction; reason: string }, { status: string }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'gestionarReserva');
+  return (await fn({ id, action, reason })).data;
+}
+
+export interface ProBooking {
+  id: string;
+  category: CategorySlug;
+  date: string;
+  slot: string;
+  hours: number;
+  address: string;
+  location?: LatLng;
+  notes: string;
+  contactName: string;
+  contactPhone: string;
+  paymentMethod: PaymentMethod;
+  subtotal: number;
+  total: number;
+  status: string;
+  demo?: boolean;
+  cancelledBy?: string;
+}

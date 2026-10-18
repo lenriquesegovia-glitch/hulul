@@ -600,7 +600,7 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
 function StatusCard({ status, name, user, onEdit }: { status: ProviderStatus; name: string; user: User; onEdit?: () => void }) {
   const info: Record<string, { t: string; d: string; ok?: boolean }> = {
     en_revision: { t: `¡Listo${name ? `, ${name}` : ''}! Tu registro está en revisión`, d: 'Revisamos tus datos y documentos en 1 a 3 días hábiles. Te escribiremos por WhatsApp y correo con el resultado.', ok: true },
-    aprobado: { t: '¡Ya estás en HULUL!', d: 'Tu perfil está publicado y los clientes pueden reservarte. Te llega un correo por cada reserva nueva.', ok: true },
+    aprobado: { t: '¡Ya estás en HULUL!', d: 'Tu perfil está publicado y los clientes pueden reservarte. En tu agenda aceptas las reservas, ves direcciones y marcas “Voy en camino”.', ok: true },
     rechazado: { t: 'No pudimos aprobar tu registro', d: 'Te escribimos por correo con el motivo. Si crees que es un error, contáctanos.' },
     suspendido: { t: 'Tu cuenta está suspendida', d: 'Te escribimos por correo con el motivo y los pasos para reactivarla.' },
   };
@@ -611,7 +611,12 @@ function StatusCard({ status, name, user, onEdit }: { status: ProviderStatus; na
         {s.ok && <span className="avatar" style={{ width: 64, height: 64, background: 'var(--success-soft)' }}><Icon name="check" size={32} color="var(--success)" strokeWidth={2.4} /></span>}
         <h2 style={{ fontSize: 24 }}>{s.t}</h2>
         <p style={{ color: 'var(--text-2)' }}>{s.d}</p>
-        {status === 'aprobado' && <Link href={`/profesional/${user.uid}`} className="btn btn-primary">Ver mi perfil público</Link>}
+        {status === 'aprobado' && (
+          <div className="row gap-12" style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Link href="/profesionales/agenda" className="btn btn-primary">Abrir mi agenda</Link>
+            <Link href={`/profesional/${user.uid}`} className="btn btn-ghost">Ver mi perfil público</Link>
+          </div>
+        )}
       </div>
       <div className="row gap-12" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <span className="muted" style={{ fontSize: 13.5 }}>Cuenta: {user.email ?? user.phoneNumber}</span>

@@ -76,6 +76,7 @@ export default function ProfessionalsPage() {
               <li>Te revisamos en 1 a 3 días hábiles y empiezas a recibir trabajos.</li>
             </ol>
             <Link href="/profesionales/registro" className="btn btn-primary" style={{ minHeight: 54, fontSize: 16 }}>Empezar mi registro</Link>
+            <Link href="/profesionales/agenda" className="btn btn-ghost" style={{ minHeight: 54, fontSize: 16 }}>Ya soy profesional: mi agenda</Link>
           </div>
         </div>
       </section>
