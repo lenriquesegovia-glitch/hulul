@@ -142,6 +142,7 @@ export const termsOfService: LegalSection[] = [
     title: '10. Responsabilidad de HULUL',
     body: [
       { p: 'HULUL responde por la verificación de los profesionales con la información y documentos que estos entregan, por el manejo del pago y por la mediación en los reclamos según estos Términos. El profesional responde por la calidad y seguridad del trabajo que realiza. Nada en estos Términos excluye responsabilidades que la ley no permita excluir.' },
+      { p: 'Horarios: los trabajos se agendan para terminar a más tardar a las 18:00 (cerrajería y salud, 20:00). Los trabajos de obra o con ruido no se agendan domingos ni feriados. Cuando el cliente reserva un trabajo que termina después de las 17:00, en domingo o en feriado, la app le avisa antes de confirmar: cada urbanización o edificio fija sus propias reglas de ingreso, y HULUL no responde si no permiten la entrada del profesional. En ese caso, si el profesional se trasladó, aplica el cargo por cancelación tardía.' },
     ],
   },
   {

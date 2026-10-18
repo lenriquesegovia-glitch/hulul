@@ -14,6 +14,7 @@ import {
   MIN_HOURS,
   BOOKING_DAYS,
   categoryPricing,
+  checkSlot,
   nextDays,
   PAYMENT_OPTIONS,
   quote,
@@ -137,19 +138,29 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
 
   useEffect(() => {
     const n = new Date();
-    const first = firstAvailable(n);
     setNow(n);
+    // Primer día y hora que cumplan el horario del servicio y del profesional.
+    const first = firstAvailable(n);
+    for (let d = first.day; d < BOOKING_DAYS; d++) {
+      const sIdx = SLOTS.findIndex((_, i) => okWith(n, d, i, minH));
+      if (sIdx >= 0) { setDay(d); setSlot(sIdx); return; }
+    }
     setDay(first.day);
-    setSlot(first.slot);
-  }, []);
+    setSlot(-1);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** ¿Se puede ese día y hora? Anticipación + horario de la categoría + horario del profesional. */
+  function okWith(n: Date, d: number, sIdx: number, h: number): boolean {
+    return slotAvailable(d, sIdx, n) && checkSlot({ category: pro.category, date: isoDay(n, d), slot: SLOTS[sIdx], hours: h, pro }).ok;
+  }
 
   const dayRow = useRef<HTMLDivElement>(null);
   const pickDay = (i: number) => {
     setDay(i);
     // Si se eligió en el calendario, lleva ese día a la vista.
     (dayRow.current?.children[i] as HTMLElement | undefined)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    if (now && (slot < 0 || !slotAvailable(i, slot, now))) {
-      setSlot(SLOTS.findIndex((_, s) => slotAvailable(i, s, now)));
+    if (now && (slot < 0 || !okWith(now, i, slot, hours))) {
+      setSlot(SLOTS.findIndex((_, s) => okWith(now, i, s, hours)));
     }
   };
   // Horas mínimas y cargo de visita: los fija HULUL por categoría.
@@ -175,6 +186,12 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
   const [error, setError] = useState('');
 
   const q = quote(pro.hourlyRate, hours, price.visit);
+  const dayOk = (i: number) => !!now && SLOTS.some((_, sIdx) => okWith(now, i, sIdx, hours));
+  const check = now && slot >= 0 ? checkSlot({ category: pro.category, date: isoDay(now, day), slot: SLOTS[slot], hours, pro }) : null;
+  const canAddHour = !!now && slot >= 0 && hours < MAX_HOURS && okWith(now, day, slot, hours + 1);
+  const [ack, setAck] = useState(false);
+  const warnKey = check?.warnings.join('|') ?? '';
+  useEffect(() => { setAck(false); }, [warnKey]);
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -192,6 +209,12 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
     }
     if (slot < 0 || !slotAvailable(day, slot, new Date())) {
       setError('Esa hora ya no está disponible. Elige otra hora de llegada.');
+      return;
+    }
+    if (check && !check.ok) { setError(check.reason ?? 'Ese horario no está disponible.'); return; }
+    if (check && check.warnings.length && !ack) {
+      setError('Lee el aviso sobre el horario y marca que lo entiendes.');
+      document.getElementById('aviso-horario')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     setSending(true);
@@ -279,7 +302,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
                 min={isoDay(now, 0)} max={isoDay(now, BOOKING_DAYS - 1)} value={isoDay(now, day)}
                 onChange={(e) => {
                   const off = dayOffset(now, e.target.value);
-                  if (off >= 0 && off < BOOKING_DAYS && dayAvailable(off, now)) pickDay(off);
+                  if (off >= 0 && off < BOOKING_DAYS && dayOk(off)) pickDay(off);
                 }} />
             </label>
           )}
@@ -287,7 +310,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         <div className="chip-row" role="radiogroup" aria-label="Día" ref={dayRow}>
           {days.map((d, i) => (
             <button key={i} type="button" role="radio" aria-checked={i === day} aria-label={d.long}
-              disabled={!now || !dayAvailable(i, now)}
+              disabled={!now || !dayAvailable(i, now) || !dayOk(i)}
               className={`chip-day ${i === day ? 'on' : ''}`} onClick={() => pickDay(i)}>
               <span className="chip-month">{d.month}</span>
               <span style={{ fontSize: 12, fontWeight: 700 }}>{d.top}</span>
@@ -299,7 +322,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         <div className="slot-grid" role="radiogroup" aria-label="Hora de llegada">
           {SLOTS.map((t, i) => (
             <button key={t} type="button" role="radio" aria-checked={i === slot}
-              disabled={!now || !slotAvailable(day, i, now)}
+              disabled={!now || !okWith(now, day, i, hours)}
               className={`chip-slot ${i === slot ? 'on' : ''}`} onClick={() => setSlot(i)}>{t}</button>
           ))}
         </div>
@@ -311,9 +334,22 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
           <div className="row gap-12">
             <button type="button" className="stepper" aria-label="Quitar una hora" disabled={hours <= minH} onClick={() => setHours((h) => Math.max(minH, h - 1))}>−</button>
             <span aria-live="polite" style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, minWidth: 24, textAlign: 'center' }}>{hours}</span>
-            <button type="button" className="stepper" aria-label="Añadir una hora" onClick={() => setHours((h) => Math.min(MAX_HOURS, h + 1))}>+</button>
+            <button type="button" className="stepper" aria-label="Añadir una hora" disabled={!canAddHour} onClick={() => setHours((h) => Math.min(MAX_HOURS, h + 1))}>+</button>
           </div>
         </div>
+        {check && (
+          <span className="muted" style={{ fontSize: 14 }}>
+            {check.ok ? <>Llega a las <strong>{SLOTS[slot]}</strong> y termina aprox. a las <strong>{check.end}</strong>.</> : check.reason}
+            {check.ok && !canAddHour && hours < MAX_HOURS && ' Para más horas, elige una hora de llegada más temprano.'}
+          </span>
+        )}
+        {slot < 0 && now && <p className="form-error">No quedan horas disponibles ese día. Elige otro día.</p>}
+        {check?.ok && check.warnings.length > 0 && (
+          <div id="aviso-horario" className="notice stack gap-8">
+            {check.warnings.map((w) => <span key={w}>⚠️ {w}</span>)}
+            <label className="check"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /><span>Entiendo y reservo bajo mi responsabilidad.</span></label>
+          </div>
+        )}
       </fieldset>
 
       <fieldset className="stack gap-16 fs">

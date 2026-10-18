@@ -19,6 +19,8 @@ import {
   validCedula,
   validRuc,
   TRADE_NAME,
+  maxEndHour,
+  CATEGORY_SCHEDULE,
   WEEKDAY_NAMES,
   type CategorySlug,
   type ProviderDocSpec,
@@ -69,7 +71,7 @@ interface Bank {
 const EMPTY: Draft = {
   kind: 'persona', firstName: '', lastName: '', businessName: '', cedula: '', ruc: '', phone: '', email: '',
   categories: [], services: {}, rates: {}, minHours: {}, years: 0, bio: '',
-  cities: [], days: [1, 2, 3, 4, 5, 6], from: '08:00', to: '18:00', acceptsCash: true, docs: {},
+  cities: [], days: [1, 2, 3, 4, 5, 6], from: '08:00', to: '17:00', acceptsCash: true, docs: {},
 };
 const EMPTY_BANK: Bank = { bank: '', type: 'ahorros', number: '', holder: '', holderId: '' };
 
@@ -283,6 +285,7 @@ function validate(step: number, d: Draft, bank: Bank): string {
     if (!d.cities.length) return 'Elige al menos una ciudad donde trabajas.';
     if (!d.days.length) return 'Elige al menos un día de trabajo.';
     if (d.from >= d.to) return 'La hora de inicio debe ser antes de la hora de fin.';
+    if (d.to > maxTo(d)) return `Tu horario debe terminar a más tardar a las ${maxTo(d)}.`;
   }
   if (step === 3) {
     const missing = requiredDocs(d.categories).filter((k) => !d.docs[k]);
@@ -457,11 +460,16 @@ function StepZones({ d, set }: { d: Draft; set: SetField }) {
       </div>
       <div className="form-2">
         <Field id="from" label="Desde">
-          <select id="from" value={d.from} onChange={(e) => set('from', e.target.value)}>{HOURS.map((h) => <option key={h}>{h}</option>)}</select>
+          <select id="from" value={d.from} onChange={(e) => set('from', e.target.value)}>{HOURS.filter((h) => h >= '07:00' && h <= '17:00').map((h) => <option key={h}>{h}</option>)}</select>
         </Field>
         <Field id="to" label="Hasta">
-          <select id="to" value={d.to} onChange={(e) => set('to', e.target.value)}>{HOURS.map((h) => <option key={h}>{h}</option>)}</select>
+          <select id="to" value={d.to} onChange={(e) => set('to', e.target.value)}>{HOURS.filter((h) => h >= '09:00' && h <= maxTo(d)).map((h) => <option key={h}>{h}</option>)}</select>
         </Field>
+      </div>
+      <div className="notice" style={{ fontSize: 13.5 }}>
+        <strong>Horarios de HULUL.</strong> Los trabajos deben <strong>terminar</strong> a más tardar a las 18:00 (cerrajería y salud, 20:00).
+        {d.categories.some((c) => CATEGORY_SCHEDULE[c] === 'obra') && ' Los trabajos de obra o con ruido (aire, plomería, electricidad, albañilería, pintura…) no se agendan domingos ni feriados, porque muchas urbanizaciones no lo permiten.'}
+        {' '}Si un trabajo termina después de las 17:00, el cliente recibe un aviso por el ingreso a urbanizaciones.
       </div>
       <p className="muted" style={{ fontSize: 13.5 }}>Este es tu horario base. En la app podrás bloquear días puntuales, y al terminar cada trabajo marcarás &ldquo;Trabajo terminado&rdquo; para volver a estar disponible.</p>
       <label className="check">
@@ -630,6 +638,12 @@ function StatusCard({ status, name, user, onEdit }: { status: ProviderStatus; na
 }
 
 /* ---------------------------- Piezas ---------------------------- */
+
+/** Hora máxima de fin según sus categorías (18:00; 20:00 si solo urgentes). */
+function maxTo(d: Draft): string {
+  const h = d.categories.length ? Math.max(...d.categories.map((c) => maxEndHour(c))) : 18;
+  return `${String(h).padStart(2, '0')}:00`;
+}
 
 /** Agregar un trabajo que no está en la lista. */
 function AddOwnJob({ onAdd }: { onAdd: (job: string) => void }) {

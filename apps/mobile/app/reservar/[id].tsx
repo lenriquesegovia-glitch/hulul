@@ -7,7 +7,7 @@ import { ClientGate } from '@/components/ClientGate';
 import { Icon } from '@/components/Icon';
 import { MapPicker } from '@/components/MapPicker';
 import type { ClientProfile } from '@hulul/shared/firebase';
-import { BOOKING_DAYS, categoryPricing, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, type PaymentMethod } from '@hulul/shared';
+import { BOOKING_DAYS, checkSlot, categoryPricing, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
@@ -60,13 +60,23 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
   const now = useMemo(() => new Date(), []);
   const days = useMemo(() => nextDays(BOOKING_DAYS, now), [now]);
-  const first = useMemo(() => firstAvailable(now), [now]);
-  const [day, setDay] = useState(first.day);
-  const [slot, setSlot] = useState(first.slot);
-  // Arranca en el mínimo del profesional (al menos 2 h) y no baja de ese mínimo.
   // Horas mínimas y cargo de visita: los fija HULUL por categoría.
   const price = pro ? categoryPricing(pro.category) : { hours: 1, visit: 0, rate: 0 };
   const minH = Math.max(1, price.hours);
+  /** Fecha AAAA-MM-DD de dentro de `d` días. */
+  const isoAt = (d: number) => { const x = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+  /** Anticipación + horario de la categoría + horario del profesional. */
+  const okWith = (d: number, k: number, h: number) => slotAvailable(d, k, now) && checkSlot({ category: pro.category, date: isoAt(d), slot: SLOTS[k], hours: h, pro }).ok;
+  const first = useMemo(() => {
+    const f = firstAvailable(now);
+    for (let d = f.day; d < BOOKING_DAYS; d++) {
+      const k = SLOTS.findIndex((_, i) => okWith(d, i, minH));
+      if (k >= 0) return { day: d, slot: k };
+    }
+    return { day: f.day, slot: -1 };
+  }, [now]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [day, setDay] = useState(first.day);
+  const [slot, setSlot] = useState(first.slot);
   const [hours, setHours] = useState(minH);
   const [address, setAddress] = useState('');
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
@@ -91,6 +101,12 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
     return () => { clearTimeout(tm); ctrl.abort(); };
   }, [address]);
 
+  const check = slot >= 0 ? checkSlot({ category: pro.category, date: isoAt(day), slot: SLOTS[slot], hours, pro }) : null;
+  const canAddHour = slot >= 0 && hours < 8 && okWith(day, slot, hours + 1);
+  const [ack, setAck] = useState(false);
+  const warnKey = check?.warnings.join('|') ?? '';
+  useEffect(() => { setAck(false); }, [warnKey]);
+
   if (!pro || !cat) {
     return (
       <SafeAreaView style={{ flex: 1, padding: 20, gap: 16 }}>
@@ -104,11 +120,14 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
   const pickDay = (i: number) => {
     setDay(i);
-    if (!slotAvailable(i, slot, now)) setSlot(SLOTS.findIndex((_, k) => slotAvailable(i, k, now)));
+    if (slot < 0 || !okWith(i, slot, hours)) setSlot(SLOTS.findIndex((_, k) => okWith(i, k, hours)));
   };
+
 
   const onConfirm = async () => {
     if (sending) return;
+    if (check && !check.ok) { setError(check.reason ?? 'Ese horario no está disponible.'); return; }
+    if (check && check.warnings.length && !ack) { setError('Lee el aviso sobre el horario y marca que lo entiendes.'); return; }
     if (slot < 0 || !slotAvailable(day, slot, new Date())) {
       setError('Esa hora ya no está disponible. Elige otra hora de llegada.');
       return;
@@ -182,7 +201,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {days.map((d, i) => {
                 const on = i === day;
-                const off = !dayAvailable(i, now);
+                const off = !dayAvailable(i, now) || !SLOTS.some((_, k) => okWith(i, k, hours));
                 return (
                   <Pressable key={i} disabled={off} accessibilityRole="button" accessibilityState={{ selected: on, disabled: off }} accessibilityLabel={d.long} onPress={() => pickDay(i)} style={[s.day, on && s.on, off && s.off]}>
                     <Text style={[s.dayMonth, on && s.onText]}>{d.month}</Text>
@@ -199,7 +218,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             <View style={s.slots}>
               {SLOTS.map((t, i) => {
                 const on = i === slot;
-                const off = !slotAvailable(day, i, now);
+                const off = !okWith(day, i, hours);
                 return (
                   <Pressable key={t} disabled={off} accessibilityRole="button" accessibilityState={{ selected: on, disabled: off }} onPress={() => setSlot(i)} style={[s.slot, on && s.on, off && s.off]}>
                     <Text style={[s.slotText, on && s.onText, off && { textDecorationLine: 'line-through' }]}>{t}</Text>
@@ -219,11 +238,24 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
                 <Text style={s.stepperText}>−</Text>
               </Pressable>
               <Text style={s.hoursValue}>{hours}</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel="Añadir una hora" onPress={() => setHours((h) => Math.min(8, h + 1))} style={s.stepper}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Añadir una hora" disabled={!canAddHour} onPress={() => setHours((h) => Math.min(8, h + 1))} style={[s.stepper, !canAddHour && { opacity: 0.4 }]}>
                 <Text style={s.stepperText}>+</Text>
               </Pressable>
             </View>
           </View>
+          {check ? (
+            <Body muted style={{ fontSize: 13 }}>
+              {check.ok ? `Llega a las ${SLOTS[slot]} y termina aprox. a las ${check.end}.` : check.reason}
+            </Body>
+          ) : <Body style={{ fontSize: 13, color: c.primary }}>No quedan horas disponibles ese día. Elige otro día.</Body>}
+          {check?.ok && check.warnings.length > 0 && (
+            <View style={s.warn}>
+              {check.warnings.map((w) => <Body key={w} style={{ fontSize: 13 }}>⚠️ {w}</Body>)}
+              <Checkbox checked={ack} onChange={(v) => { setAck(v); setError(''); }}>
+                <Body style={{ fontSize: 13 }}>Entiendo y reservo bajo mi responsabilidad.</Body>
+              </Checkbox>
+            </View>
+          )}
 
           <View style={{ gap: 10 }}>
             <Text style={s.label}>¿Qué trabajo necesitas?</Text>
@@ -362,6 +394,7 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const s = StyleSheet.create({
+  warn: { gap: 8, padding: 12, borderRadius: 10, backgroundColor: c.copperSoft, borderLeftWidth: 4, borderLeftColor: c.primary },
   content: { padding: 20, paddingBottom: 32, gap: 22 },
   title: { fontFamily: font.display, fontSize: 18, color: c.text },
   label: { fontFamily: font.bodyBold, fontSize: 14, color: c.textSecondary },

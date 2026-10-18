@@ -56,6 +56,10 @@ export const faqGroups: { title: string; items: Q[] }[] = [
     title: 'Cancelaciones, retrasos y reclamos',
     items: [
       {
+        q: '¿En qué horarios puedo reservar?',
+        a: 'De 08:00 en adelante, y el trabajo debe terminar a más tardar a las 18:00 (cerrajería y salud, hasta las 20:00). Los trabajos de obra o con ruido —aire acondicionado, plomería, electricidad, albañilería, pintura y similares— no se agendan domingos ni feriados. Si tu reserva termina después de las 17:00, cae en domingo o en feriado, te avisamos antes de confirmar: cada urbanización tiene sus reglas de ingreso y HULUL no responde si no dejan entrar al profesional.',
+      },
+      {
         q: '¿Puedo cancelar?',
         a: `Sí, sin costo hasta ${P.freeCancelHoursBefore} horas antes de la cita, o hasta ${P.freeCancelMinutes} minutos después de que el profesional acepte si pediste para lo antes posible. Después, si el profesional ya confirmó o va en camino, hay un cargo de ${usd(P.lateCancelFee)}; te lo mostramos antes de que confirmes. Si llega y no estás, tras ${P.clientNoShowWaitMinutes} minutos de espera se cobra la visita técnica.`,
       },

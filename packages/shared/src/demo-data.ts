@@ -57,6 +57,9 @@ export function toProfessional(p: PublicPro, category?: CategorySlug): Professio
     verified: true,
     availableToday: (p.days ?? []).includes(weekdayEcuador()),
     hours: p.from && p.to ? `${p.from} a ${p.to}` : undefined,
+    workDays: p.days,
+    from: p.from || undefined,
+    to: p.to || undefined,
   };
 }
 

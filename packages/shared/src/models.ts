@@ -29,6 +29,10 @@ export interface Professional {
   services?: string[];
   /** Horario, p. ej. "08:00 a 18:00". */
   hours?: string;
+  /** Días que atiende (0 = domingo) y su horario. */
+  workDays?: number[];
+  from?: string;
+  to?: string;
 }
 
 export type BookingStatus =
