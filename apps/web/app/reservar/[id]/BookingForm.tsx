@@ -27,6 +27,9 @@ import { DEMO_MODE } from '@/lib/site';
  * Guarda la reserva en Firestore (`bookings`) con la prueba del consentimiento.
  * Pendiente: redirigir a la pasarela de pago antes de confirmar.
  */
+/** Largo máximo de la descripción (el mismo límite que las reglas de Firestore). */
+const NOTES_MAX = 1000;
+
 export function BookingForm({ proId }: { proId: string }) {
   const pro = getProfessional(proId)!;
   const cat = getCategory(pro.category)!;
@@ -53,6 +56,7 @@ export function BookingForm({ proId }: { proId: string }) {
   };
   const [hours, setHours] = useState(2);
   const [location, setLocation] = useState<LatLng | null>(null);
+  const [notesLen, setNotesLen] = useState(0);
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
   const [done, setDone] = useState<{ name: string; id: string } | null>(null);
   const [sending, setSending] = useState(false);
@@ -180,7 +184,16 @@ export function BookingForm({ proId }: { proId: string }) {
         </div>
         <div className="field">
           <label htmlFor="descripcion">Describe lo que necesitas</label>
-          <textarea id="descripcion" name="descripcion" rows={3} maxLength={1000} placeholder="Ej.: 2 splits de 12.000 BTU, uno gotea agua" />
+          <textarea id="descripcion" name="descripcion" rows={3} required minLength={10} maxLength={NOTES_MAX}
+            aria-describedby="descripcion-ayuda"
+            onChange={(e) => setNotesLen(e.target.value.length)}
+            placeholder="Ej.: 2 splits de 12.000 BTU, uno gotea agua" />
+          <div id="descripcion-ayuda" className="row muted" style={{ justifyContent: 'space-between', fontSize: 13, gap: 12 }}>
+            <span>Qué equipo, qué falla y cualquier dato que ayude al profesional.</span>
+            <span aria-live="polite" style={{ flexShrink: 0, color: notesLen >= NOTES_MAX ? 'var(--primary)' : undefined }}>
+              {notesLen}/{NOTES_MAX}
+            </span>
+          </div>
         </div>
       </fieldset>
 
