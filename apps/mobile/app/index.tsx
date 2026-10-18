@@ -88,6 +88,16 @@ export default function Home() {
           ))}
         </View>
 
+        <Pressable accessibilityRole="button" onPress={() => Linking.openURL('https://hululec.com/profesionales/registro')} style={({ pressed }) => [s.proCard, pressed && { opacity: 0.9 }]}>
+          <Image source={{ uri: categoryImage('electricidad', 700) }} style={s.proImg} resizeMode="cover" />
+          <View style={{ padding: 16, gap: 8 }}>
+            <Text style={s.proEyebrow}>PARA TÉCNICOS Y PROFESIONALES</Text>
+            <Text style={s.proTitle}>¿Eres técnico o profesional? Gana más con HULUL</Text>
+            <Text style={s.proText}>Registro gratis. Tú pones tu tarifa, tus zonas y tu horario. Pago garantizado.</Text>
+            <View style={s.proBtn}><Text style={s.proBtnText}>Regístrate gratis</Text></View>
+          </View>
+        </Pressable>
+
         <View style={s.promise}>
           <H2>Sin presupuestos. Sin esperas.</H2>
           {[
@@ -115,14 +125,6 @@ export default function Home() {
           ))}
         </View>
 
-        <Pressable accessibilityRole="button" onPress={() => Linking.openURL('https://hululec.com/profesionales/registro')} style={s.listItem}>
-          <Icon name="user" size={20} color={c.copper} />
-          <View style={{ flex: 1, gap: 3 }}>
-            <Text style={s.listTitle}>¿Eres profesional? Regístrate</Text>
-            <Body muted style={{ fontSize: 13 }}>Recibe trabajos en Guayaquil, Samborondón y Daule</Body>
-          </View>
-          <Icon name="chevronRight" size={20} color={c.textMuted} />
-        </Pressable>
 
         <Pressable accessibilityRole="link" onPress={() => router.push('/privacidad')} style={{ alignSelf: 'center', paddingVertical: 12 }}>
           <Text style={{ fontFamily: font.bodySemi, fontSize: 13, color: c.textMuted, textDecorationLine: 'underline' }}>Política de privacidad</Text>
@@ -152,5 +154,12 @@ const s = StyleSheet.create({
   promise: { gap: 12, padding: 18, borderRadius: radius.lg, backgroundColor: c.surfaceWarm, borderWidth: 1, borderColor: c.border },
   promiseRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   listItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: radius.md, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
+  proCard: { borderRadius: 18, overflow: 'hidden', backgroundColor: c.primary },
+  proImg: { width: '100%', aspectRatio: 16 / 7, backgroundColor: c.primaryDark },
+  proEyebrow: { fontFamily: font.bodyBold, fontSize: 11, letterSpacing: 1, color: '#E9C9B3' },
+  proTitle: { fontFamily: font.display, fontSize: 19, lineHeight: 24, color: '#fff' },
+  proText: { fontFamily: font.body, fontSize: 13.5, lineHeight: 19, color: 'rgba(255,255,255,0.9)' },
+  proBtn: { alignSelf: 'flex-start', marginTop: 4, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12 },
+  proBtnText: { fontFamily: font.bodyBold, fontSize: 14.5, color: c.primary },
   listTitle: { fontFamily: font.bodyBold, fontSize: 15, color: c.text },
 });

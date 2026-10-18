@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { categories, cities } from '@hulul/shared';
 import { PhotoGrid } from '@/components/PhotoGrid';
 import { ActiveBooking } from '@/components/ActiveBooking';
+import { ProBand } from '@/components/ProBand';
 import { DownloadBand } from '@/components/DownloadBand';
 import { Faq } from '@/components/Faq';
 import { Icon } from '@/components/Icon';
@@ -48,6 +49,8 @@ export default function HomePage() {
           <PhotoGrid />
         </div>
       </section>
+
+      <ProBand />
 
       <section id="como-funciona" className="section" style={{ background: 'var(--surface-warm)' }}>
         <div className="container stack gap-32">
