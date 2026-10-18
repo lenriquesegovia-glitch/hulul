@@ -57,6 +57,10 @@ function Bookings({ uid }: { uid: string }) {
           </View>
           <Body muted style={{ fontSize: 13 }}>{r.date} a las {r.slot} · {formatUSD(r.total)} · {r.id.slice(0, 8).toUpperCase()}</Body>
           {r.notes ? <Body style={{ fontSize: 13.5 }}>{r.notes}</Body> : null}
+          {r.proposal ? <Text style={{ fontFamily: font.bodyBold, fontSize: 13, color: c.primary }}>Cambio de hora pendiente: {r.proposal.date} a las {r.proposal.slot}</Text> : null}
+          <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/reserva/[id]', params: { id: r.id } })}>
+            <Text style={s.link}>Ver detalle y seguimiento →</Text>
+          </Pressable>
           {r.status === 'cancelada' && (
             <Body muted style={{ fontSize: 13 }}>
               {r.cancelFee ? `Cargo por cancelación tardía: ${usd(r.cancelFee)}${r.demo ? ' (prueba, no se cobra)' : ''}` : 'Cancelada sin costo.'}
@@ -76,7 +80,7 @@ function shortWhen(iso: string): string {
 }
 
 /** Cancelar: muestra antes de confirmar si es gratis o cuánto cuesta. */
-function CancelBox({ row, onDone }: { row: ClientBooking; onDone: () => void }) {
+export function CancelBox({ row, onDone }: { row: ClientBooking; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);

@@ -1,0 +1,101 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { appointmentTime, formatUSD, getCategory, hhmmEcuador, usd } from '@hulul/shared';
+import type { ClientBooking } from '@hulul/shared/firebase';
+import { Icon } from '@/components/Icon';
+import { RescheduleBox, shortDay } from '@/components/RescheduleBox';
+import { useUser } from '@/lib/auth';
+import { CancelBox } from '../../Account';
+
+/**
+ * Detalle de una reserva para el cliente, en vivo: en qué paso va (como el
+ * seguimiento de un paquete), cambio de hora y cancelación.
+ */
+const STEPS = [
+  { status: 'pendiente', t: 'Reserva recibida' },
+  { status: 'confirmada', t: 'Profesional confirmado' },
+  { status: 'en_camino', t: 'En camino' },
+  { status: 'en_curso', t: 'Trabajando' },
+  { status: 'por_aprobar', t: 'Terminado' },
+];
+
+export function BookingDetail({ id }: { id: string }) {
+  const user = useUser();
+  const [b, setB] = useState<ClientBooking | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!user) return;
+    let unsub = () => {};
+    (async () => {
+      const [{ firestore }, fs] = await Promise.all([import('@hulul/shared/firebase'), import('firebase/firestore')]);
+      unsub = fs.onSnapshot(fs.doc(firestore(), 'bookings', id),
+        (snap) => setB(snap.exists() ? ({ id: snap.id, ...(snap.data() as Omit<ClientBooking, 'id'>) }) : null),
+        () => setB(null));
+    })();
+    return () => unsub();
+  }, [user, id]);
+
+  if (user === null) return <div className="card stack gap-12"><p>Inicia sesión para ver tu reserva.</p><Link href="/cuenta" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>Entrar</Link></div>;
+  if (b === undefined) return <p className="muted">Cargando…</p>;
+  if (!b) return <div className="card stack gap-12"><p>No encontramos esta reserva.</p><Link href="/cuenta" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>Mis reservas</Link></div>;
+
+  const cat = getCategory(b.category);
+  const first = b.professionalName.split(' ')[0];
+  const idx = STEPS.findIndex((s) => s.status === b.status);
+  const at = appointmentTime(b.date, b.slot);
+  const message: Record<string, string> = {
+    pendiente: `Esperando que ${first} acepte tu reserva. Te avisamos por correo apenas lo haga.`,
+    confirmada: `${first} confirmó. Saldrá hacia tu dirección con el tiempo justo para llegar a las ${b.slot} (puede salir desde las ${hhmmEcuador(new Date(at.getTime() - 120 * 60_000))}). Te avisamos cuando vaya en camino.`,
+    en_camino: `${first} va en camino a tu dirección. El mapa con su ubicación en vivo llega con la app del profesional; por ahora te avisamos por correo cuando llegue.`,
+    en_curso: `${first} está trabajando. Al terminar, revisa el trabajo antes de aprobarlo.`,
+    por_aprobar: `${first} marcó el trabajo como terminado. Tienes 48 horas para reportar cualquier problema.`,
+    completada: 'Servicio completado. ¡Gracias por usar HULUL!',
+    cancelada: b.cancelledBy === 'profesional' ? `${first} canceló esta reserva. No se te cobra nada.` : `Cancelaste esta reserva${b.cancelFee ? ` con un cargo de ${usd(b.cancelFee)}${b.demo ? ' (prueba, no se cobra)' : ''}` : ' sin costo'}.`,
+  };
+  const changeable = ['pendiente', 'confirmada'].includes(b.status);
+
+  return (
+    <>
+      <nav className="breadcrumbs" aria-label="Migas de pan">
+        <Link href="/">Inicio</Link><span>/</span><Link href="/cuenta">Mi cuenta</Link><span>/</span><span>Reserva {b.id.slice(0, 8).toUpperCase()}</span>
+      </nav>
+
+      <div className="stack gap-8">
+        <h1 style={{ fontSize: 'clamp(24px, 4vw, 32px)' }}>{cat?.name ?? b.category} con {b.professionalName}</h1>
+        <p style={{ fontSize: 17 }}><strong>{shortDay(b.date)} · {b.slot}</strong>{b.hours ? ` · ${b.hours} h` : ''}</p>
+      </div>
+
+      <div className="card stack gap-16">
+        <p style={{ fontSize: 15.5 }}>{message[b.status] ?? ''}</p>
+        {b.status !== 'cancelada' && (
+          <ol className="timeline">
+            {STEPS.map((s, i) => {
+              const state = idx > i || b.status === 'completada' ? 'done' : idx === i ? 'now' : '';
+              return (
+                <li key={s.status} className={state}>
+                  <span className="tl-dot">{state === 'done' && <Icon name="check" size={14} color="#fff" strokeWidth={3} />}</span>
+                  <div className="stack"><strong>{s.t}</strong></div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+
+      {changeable && (
+        <RescheduleBox id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="cliente" other={first} />
+      )}
+
+      <div className="card stack gap-8" style={{ fontSize: 15 }}>
+        {b.address && <span>📍 {b.address}</span>}
+        {b.notes && <span style={{ color: 'var(--text-2)' }}>{b.notes}</span>}
+        <span>Total: <strong>{formatUSD(b.total)}</strong> · Código {b.id.slice(0, 8).toUpperCase()}</span>
+        {b.professionalId && <Link href={`/profesional/${b.professionalId}?c=${b.category}`}>Ver perfil de {first}</Link>}
+      </div>
+
+      <CancelBox row={b} onDone={() => {}} />
+    </>
+  );
+}

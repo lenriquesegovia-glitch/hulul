@@ -105,3 +105,57 @@ export function cancelTerms(b: { date: string; slot: string; status: string }, n
   }
   return { allowed: true, fee, reason: `Faltan menos de ${POLICY.freeCancelHoursBefore} horas para tu cita y el profesional ya la confirmó: cancelar ahora tiene un cargo de ${usd(fee)}.` };
 }
+
+/* ------------------------- Salida del profesional ------------------------- */
+
+/** Lo antes que el profesional puede marcar "Voy en camino" (minutos antes de la cita). */
+export const EARLIEST_DEPART_MINUTES = 120;
+/** Margen para estacionar, subir y presentarse (minutos). */
+export const ARRIVAL_BUFFER_MINUTES = 10;
+/** Un cambio de hora debe quedar al menos a esta distancia de ahora (minutos). */
+export const RESCHEDULE_LEAD_MINUTES = 60;
+
+/**
+ * Tiempo de viaje estimado en Guayaquil, Samborondón y Daule: distancia en
+ * línea recta × 1,4 (calles reales) a 22 km/h promedio con tráfico, + 5 min.
+ * Es una estimación prudente; Google Maps o Waze dan el tiempo exacto.
+ */
+export function travelEstimate(from: { lat: number; lng: number }, to: { lat: number; lng: number }): { km: number; minutes: number } {
+  const R = 6371;
+  const dLat = ((to.lat - from.lat) * Math.PI) / 180;
+  const dLng = ((to.lng - from.lng) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((from.lat * Math.PI) / 180) * Math.cos((to.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  const km = 2 * R * Math.asin(Math.sqrt(a)) * 1.4;
+  return { km: Math.round(km * 10) / 10, minutes: Math.round((km / 22) * 60 + 5) };
+}
+
+export interface DepartPlan {
+  /** Desde cuándo puede marcar "Voy en camino". */
+  earliest: Date;
+  /** A más tardar debe salir a esta hora para llegar puntual (si se conoce el viaje). */
+  latest?: Date;
+  /** ¿Ya puede salir? */
+  canGo: boolean;
+  /** Minutos que llegaría tarde si sale ahora (0 si llega a tiempo). */
+  lateBy: number;
+}
+
+/**
+ * Cuándo debe salir el profesional. Sin ubicación: puede salir desde 2 horas
+ * antes. Con ubicación: desde el viaje + 30 min antes (máx. 2 h), y debe salir
+ * a más tardar con el viaje + 10 min de margen.
+ */
+export function departPlan(b: { date: string; slot: string }, now: Date = new Date(), tripMinutes?: number): DepartPlan {
+  const at = appointmentTime(b.date, b.slot).getTime();
+  const lead = tripMinutes != null ? Math.min(EARLIEST_DEPART_MINUTES, tripMinutes + 30) : EARLIEST_DEPART_MINUTES;
+  const earliest = new Date(at - lead * 60_000);
+  const latest = tripMinutes != null ? new Date(at - (tripMinutes + ARRIVAL_BUFFER_MINUTES) * 60_000) : undefined;
+  const lateBy = tripMinutes != null ? Math.max(0, Math.round((now.getTime() + tripMinutes * 60_000 - at) / 60_000)) : 0;
+  return { earliest, latest, canGo: now >= earliest, lateBy };
+}
+
+/** "16:25" en hora de Ecuador. */
+export function hhmmEcuador(d: Date): string {
+  const e = new Date(d.getTime() - 5 * 3_600_000);
+  return `${String(e.getUTCHours()).padStart(2, '0')}:${String(e.getUTCMinutes()).padStart(2, '0')}`;
+}

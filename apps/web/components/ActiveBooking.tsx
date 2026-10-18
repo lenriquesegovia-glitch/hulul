@@ -24,7 +24,7 @@ export function ActiveBooking() {
   if (!b) return null;
   const idx = Math.max(0, steps.findIndex((s) => s.status === b.status));
   return (
-    <Link href="/cuenta" className="active-booking container" aria-label="Ver mi reserva">
+    <Link href={`/cuenta/reserva/${b.id}`} className="active-booking container" aria-label="Ver mi reserva">
       <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
         <strong>Tu reserva · {getCategory(b.category)?.name}</strong>
         <span className="muted" style={{ fontSize: 13 }}>{b.date} · {b.slot}</span>

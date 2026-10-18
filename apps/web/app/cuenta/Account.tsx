@@ -6,7 +6,7 @@ import { cancelTerms, formatUSD, getCategory, usd } from '@hulul/shared';
 import { ClientGate } from '@/components/ClientGate';
 import { logout } from '@/lib/auth';
 
-interface Row { id: string; category: string; professionalName: string; date: string; slot: string; total: number; status: string; notes?: string; cancelFee?: number; demo?: boolean }
+interface Row { id: string; category: string; professionalName: string; date: string; slot: string; total: number; status: string; notes?: string; cancelFee?: number; demo?: boolean; proposal?: { date: string; slot: string; by: string } }
 
 const STATUS: Record<string, string> = {
   pendiente: 'Por confirmar', confirmada: 'Confirmada', en_camino: 'En camino', en_curso: 'En curso',
@@ -59,7 +59,7 @@ function Bookings({ uid }: { uid: string }) {
       {rows?.map((r) => (
         <div key={r.id} className="card stack gap-4" style={{ padding: 16 }}>
           <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
-            <strong>{getCategory(r.category)?.name ?? r.category} · {r.professionalName}</strong>
+            <Link href={`/cuenta/reserva/${r.id}`} style={{ color: 'inherit' }}><strong>{getCategory(r.category)?.name ?? r.category} · {r.professionalName}</strong></Link>
             <span className="pill pill-warm">{STATUS[r.status] ?? r.status}</span>
           </div>
           <span className="muted" style={{ fontSize: 14 }}>{r.date} a las {r.slot} · {formatUSD(r.total)} · Código {r.id.slice(0, 8).toUpperCase()}</span>
@@ -69,6 +69,8 @@ function Bookings({ uid }: { uid: string }) {
               {r.cancelFee ? `Cargo por cancelación tardía: ${usd(r.cancelFee)}${r.demo ? ' (versión de prueba, no se cobra)' : ''}` : 'Cancelada sin costo.'}
             </span>
           )}
+          {r.proposal && <span style={{ fontSize: 13.5, color: 'var(--primary)', fontWeight: 700 }}>Cambio de hora pendiente: {r.proposal.date} a las {r.proposal.slot}</span>}
+          <Link href={`/cuenta/reserva/${r.id}`} style={{ fontSize: 14, fontWeight: 700 }}>Ver detalle y seguimiento →</Link>
           <CancelBox row={r} onDone={() => setReload((n) => n + 1)} />
         </div>
       ))}
@@ -82,7 +84,7 @@ function shortWhen(iso: string): string {
 }
 
 /** Cancelar: muestra antes de confirmar si es gratis o cuánto cuesta. */
-function CancelBox({ row, onDone }: { row: Row; onDone: () => void }) {
+export function CancelBox({ row, onDone }: { row: Row; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);

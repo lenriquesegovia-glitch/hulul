@@ -20,7 +20,7 @@ export function ActiveBooking() {
   if (!b) return null;
   const idx = Math.max(0, TRACK_STEPS.findIndex((s) => s.status === b.status));
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Ver mi reserva" onPress={() => router.push('/cuenta')} style={s.card}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Ver mi reserva" onPress={() => router.push({ pathname: '/reserva/[id]', params: { id: b.id } })} style={s.card}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
         <Text style={s.title}>Tu reserva · {getCategory(b.category)?.name}</Text>
         <Body muted style={{ fontSize: 12.5 }}>{b.date} · {b.slot}</Body>

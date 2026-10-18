@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { COMMISSION_RATE, formatUSD, getCategory, type ProviderStatus } from '@hulul/shared';
+import { COMMISSION_RATE, departPlan, durationLabel, formatUSD, getCategory, hhmmEcuador, travelEstimate, type ProviderStatus } from '@hulul/shared';
+import { RescheduleBox } from '@/components/RescheduleBox';
 import type { ProAction, ProBooking } from '@hulul/shared/firebase';
 import { SignIn } from '@/components/SignIn';
 import { logout, useUser } from '@/lib/auth';
@@ -278,6 +279,10 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
 
       {msg && <p role="alert" className="form-error">{msg}</p>}
 
+      {!compact && ['pendiente', 'confirmada'].includes(b.status) && (
+        <RescheduleBox id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="profesional" other={first || 'El cliente'} />
+      )}
+
       {asking ? (
         <div className="stack gap-8">
           <div className="field">
@@ -298,7 +303,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
               <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => setAsking('rechazar')}>Rechazar</button>
             </>
           )}
-          {b.status === 'confirmada' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act('en_camino')}>{busy ? 'Guardando…' : 'Voy en camino'}</button>}
+          {b.status === 'confirmada' && <DepartPanel b={b} busy={!!busy} onGo={() => act('en_camino')} />}
           {b.status === 'en_camino' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act('llegue')}>{busy ? 'Guardando…' : 'Llegué, empiezo'}</button>}
           {b.status === 'en_curso' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act('terminar')}>{busy ? 'Guardando…' : 'Trabajo terminado'}</button>}
           {(b.status === 'confirmada' || b.status === 'en_camino') && (
@@ -307,5 +312,49 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
         </div>
       )}
     </article>
+  );
+}
+
+/**
+ * Cuándo salir: con su ubicación calcula el viaje hasta el cliente y le dice
+ * desde qué hora puede marcar "Voy en camino" y a más tardar cuándo salir.
+ * Si ya no alcanza, le sugiere avisar, proponer otra hora o cancelar.
+ */
+function DepartPanel({ b, busy, onGo }: { b: ProBooking; busy: boolean; onGo: () => void }) {
+  const [trip, setTrip] = useState<{ km: number; minutes: number } | null>(null);
+  const [geoMsg, setGeoMsg] = useState('');
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(t); }, []);
+  const plan = departPlan(b, now, trip?.minutes);
+
+  const locate = () => {
+    if (!b.location) { setGeoMsg('El cliente no marcó su ubicación en el mapa. Usa "Cómo llegar" para ver el tiempo.'); return; }
+    if (!('geolocation' in navigator)) { setGeoMsg('Tu navegador no permite ver tu ubicación.'); return; }
+    setGeoMsg('Buscando tu ubicación…');
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setTrip(travelEstimate({ lat: p.coords.latitude, lng: p.coords.longitude }, b.location!)); setGeoMsg(''); },
+      () => setGeoMsg('No pudimos ver tu ubicación. Permite el acceso a la ubicación e inténtalo de nuevo.'),
+      { enableHighAccuracy: true, timeout: 12_000 },
+    );
+  };
+
+  return (
+    <div className="stack gap-8" style={{ width: '100%' }}>
+      {trip && (
+        <div style={{ padding: 12, borderRadius: 12, background: plan.lateBy > 0 ? '#F6E7E9' : 'var(--success-soft)', fontSize: 14.5 }}>
+          Estás a <strong>{trip.km} km</strong>, unos <strong>{durationLabel(trip.minutes * 60_000)}</strong> de viaje.{' '}
+          {plan.lateBy > 0
+            ? <>Si sales ahora llegarías <strong>{plan.lateBy} min tarde</strong>. Propón otra hora al cliente o, si no alcanzas, marca &ldquo;No puedo ir&rdquo;.</>
+            : plan.latest && <>Para llegar a las {b.slot}, sal a más tardar a las <strong>{hhmmEcuador(plan.latest)}</strong>.</>}
+        </div>
+      )}
+      {geoMsg && <span className="muted" style={{ fontSize: 13.5 }}>{geoMsg}</span>}
+      <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+        <button type="button" className="btn btn-primary" disabled={busy || !plan.canGo} onClick={onGo}>
+          {busy ? 'Guardando…' : plan.canGo ? 'Voy en camino' : `Podrás salir desde las ${hhmmEcuador(plan.earliest)}`}
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={locate}>{trip ? 'Recalcular' : '¿Cuándo debo salir?'}</button>
+      </div>
+    </div>
   );
 }

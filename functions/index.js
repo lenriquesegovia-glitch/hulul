@@ -339,6 +339,14 @@ const FREE_CANCEL_HOURS = 2;
 const LATE_CANCEL_FEE = 3;
 const CANCELLABLE = ['pendiente', 'confirmada', 'en_camino'];
 
+const EARLIEST_DEPART_MIN = 120;
+const appointmentMs = (date, slot) => {
+  const [y, m, d] = String(date).split('-').map(Number);
+  const [h, min] = String(slot).split(':').map(Number);
+  return Date.UTC(y, m - 1, d, h + 5, min); // Ecuador, UTC-5
+};
+const hhmm = (ms) => { const e = new Date(ms - 5 * 3_600_000); return `${String(e.getUTCHours()).padStart(2, '0')}:${String(e.getUTCMinutes()).padStart(2, '0')}`; };
+
 export function cancelFee(b, now = new Date()) {
   if (!CANCELLABLE.includes(b.status)) return null;
   if (b.status === 'en_camino') return LATE_CANCEL_FEE;
@@ -442,6 +450,13 @@ export const gestionarReserva = onCall(
       const cur = snap.data();
       if (cur.professionalId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
       if (!rule.from.includes(cur.status)) throw new HttpsError('failed-precondition', 'La reserva cambió de estado. Actualiza la página.');
+      if (action === 'en_camino') {
+        const at = appointmentMs(cur.date, cur.slot);
+        const earliest = at - EARLIEST_DEPART_MIN * 60_000;
+        if (Date.now() < earliest) {
+          throw new HttpsError('failed-precondition', `Aún es temprano: la cita es a las ${cur.slot}. Podrás marcar "Voy en camino" desde las ${hhmm(earliest)}. Si quieres ir antes, propón otra hora al cliente.`);
+        }
+      }
       const patch = { status: rule.to, [rule.stamp]: FieldValue.serverTimestamp(), previousStatus: cur.status };
       if (action === 'rechazar' || action === 'no_puedo') {
         patch.cancelledBy = 'profesional';
@@ -482,5 +497,82 @@ export const gestionarReserva = onCall(
     }
     logger.info('Reserva actualizada por el profesional', { id, action });
     return { status: rule.to };
+  },
+);
+
+/* ------------------------------ Cambio de hora ------------------------------ */
+
+/**
+ * Cliente o profesional proponen otra fecha u hora (para adelantar o
+ * atrasar); la otra parte acepta o rechaza. Hasta que se acepte, vale la hora
+ * original.
+ */
+export const reprogramarReserva = onCall(
+  { region: REGION, secrets: [MAIL_PASSWORD] },
+  async (req) => {
+    const uid = req.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+    const id = String(req.data?.id ?? '');
+    const action = String(req.data?.action ?? '');
+    if (!/^[A-Za-z0-9]{10,40}$/.test(id) || !['proponer', 'aceptar', 'rechazar', 'retirar'].includes(action)) throw new HttpsError('invalid-argument', 'Acción no válida.');
+    const ref = db().doc(`bookings/${id}`);
+
+    const out = await db().runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
+      const b = snap.data();
+      const who = b.clientId === uid ? 'cliente' : b.professionalId === uid ? 'profesional' : null;
+      if (!who) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
+      if (!['pendiente', 'confirmada'].includes(b.status)) throw new HttpsError('failed-precondition', 'Ya no se puede cambiar la hora de esta reserva.');
+      const p = b.proposal;
+
+      if (action === 'proponer') {
+        const date = String(req.data?.date ?? '');
+        const slot = String(req.data?.slot ?? '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(0[8-9]|1[0-8]):00$/.test(slot)) throw new HttpsError('invalid-argument', 'Elige una fecha y una hora entre 08:00 y 18:00.');
+        const at = appointmentMs(date, slot);
+        if (at < Date.now() + 60 * 60_000) throw new HttpsError('invalid-argument', 'La nueva hora debe ser al menos dentro de 1 hora.');
+        if (at > Date.now() + 31 * 86_400_000) throw new HttpsError('invalid-argument', 'La nueva fecha debe ser dentro de los próximos 30 días.');
+        if (date === b.date && slot === b.slot) throw new HttpsError('invalid-argument', 'Es la misma hora de la reserva.');
+        tx.update(ref, { proposal: { date, slot, by: who, at: FieldValue.serverTimestamp() } });
+        return { b, who, date, slot };
+      }
+      if (!p) throw new HttpsError('failed-precondition', 'No hay un cambio de hora pendiente.');
+      if (action === 'retirar') {
+        if (p.by !== who) throw new HttpsError('permission-denied', 'Solo quien propuso el cambio puede retirarlo.');
+        tx.update(ref, { proposal: FieldValue.delete() });
+        return { b, who, date: p.date, slot: p.slot };
+      }
+      if (p.by === who) throw new HttpsError('failed-precondition', 'Espera la respuesta de la otra parte.');
+      if (action === 'aceptar') {
+        if (appointmentMs(p.date, p.slot) < Date.now() + 30 * 60_000) throw new HttpsError('failed-precondition', 'Esa hora ya pasó o está muy cerca. Propón otra.');
+        tx.update(ref, { date: p.date, slot: p.slot, proposal: FieldValue.delete(), rescheduledAt: FieldValue.serverTimestamp(), previousDate: b.date, previousSlot: b.slot });
+      } else {
+        tx.update(ref, { proposal: FieldValue.delete(), lastRejectedProposal: { date: p.date, slot: p.slot, by: p.by } });
+      }
+      return { b, who, date: p.date, slot: p.slot };
+    });
+
+    // Aviso por correo a la otra parte.
+    try {
+      const { b, who, date, slot } = out;
+      const { from, notifyTo } = senders();
+      const cat = CATEGORIES[b.category] ?? b.category;
+      const pro = (await db().doc(`providers/${b.professionalId}`).get()).data();
+      const toClient = who === 'profesional';
+      const to = toClient ? b.contactEmail : pro?.email;
+      const otherName = toClient ? b.professionalName : String(b.contactName ?? '').split(' ')[0];
+      const link = toClient ? 'https://hululec.com/cuenta' : 'https://hululec.com/profesionales/agenda';
+      const texts = {
+        proponer: [`${otherName} propone cambiar la hora`, `${esc(otherName)} propone cambiar tu servicio de ${esc(cat)} del ${esc(longDate(b.date))} a las ${esc(b.slot)} al <strong>${esc(longDate(date))} a las ${esc(slot)}</strong>. Acepta o rechaza el cambio.`],
+        aceptar: ['Cambio de hora aceptado', `${esc(otherName)} aceptó: el servicio de ${esc(cat)} queda para el <strong>${esc(longDate(date))} a las ${esc(slot)}</strong>.`],
+        rechazar: ['Cambio de hora rechazado', `${esc(otherName)} no aceptó el cambio. Se mantiene el ${esc(longDate(b.date))} a las ${esc(b.slot)}.`],
+        retirar: ['Se retiró el cambio de hora', `Se mantiene el ${esc(longDate(b.date))} a las ${esc(b.slot)}.`],
+      }[action];
+      if (to && texts) await transport().sendMail({ from, to, replyTo: notifyTo, subject: texts[0], html: layout(texts[0], `<p style="font-size:15px">${texts[1]}</p>` + button(link, 'Ver la reserva')) });
+    } catch (e) {
+      logger.warn('No se pudo avisar el cambio de hora', { id, e: String(e) });
+    }
+    return { ok: true };
   },
 );

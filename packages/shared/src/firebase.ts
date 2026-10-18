@@ -170,7 +170,16 @@ export interface ClientBooking {
   /** Cargo cobrado al cancelar (USD). */
   cancelFee?: number;
   demo?: boolean;
+  professionalId?: string;
+  hours?: number;
+  address?: string;
+  location?: LatLng;
+  proposal?: Proposal;
+  cancelledBy?: string;
 }
+
+/** Cambio de hora propuesto por una de las partes. */
+export interface Proposal { date: string; slot: string; by: 'cliente' | 'profesional' }
 
 /** Reservas del cliente, de la más próxima a la más antigua. */
 export async function clientBookings(uid: string): Promise<ClientBooking[]> {
@@ -258,4 +267,15 @@ export interface ProBooking {
   status: string;
   demo?: boolean;
   cancelledBy?: string;
+  proposal?: Proposal;
+}
+
+/* ------------------------------ Cambio de hora ------------------------------ */
+
+export type RescheduleAction = 'proponer' | 'aceptar' | 'rechazar' | 'retirar';
+
+/** Proponer, aceptar, rechazar o retirar un cambio de fecha u hora. */
+export async function reschedule(id: string, action: RescheduleAction, date?: string, slot?: string): Promise<void> {
+  const fn = httpsCallable<{ id: string; action: RescheduleAction; date?: string; slot?: string }, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'reprogramarReserva');
+  await fn({ id, action, date, slot });
 }
