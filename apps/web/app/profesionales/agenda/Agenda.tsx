@@ -132,7 +132,10 @@ function AgendaBody({ uid, name, rows, error }: { uid: string; name: string; row
           <h1 style={{ fontSize: 'clamp(26px, 4vw, 34px)' }}>Hola{name ? `, ${name}` : ''}</h1>
           <span className="muted">Tu agenda se actualiza sola.</span>
         </div>
-        <Link href={`/profesional/${uid}`} className="btn btn-ghost">Mi perfil público</Link>
+        <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+          <Link href={`/profesional/${uid}`} className="btn btn-ghost">Mi perfil público</Link>
+          <Link href="/" className="btn btn-ghost">Contratar un servicio</Link>
+        </div>
       </div>
 
       <div className="grid-3" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>

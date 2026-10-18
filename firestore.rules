@@ -52,6 +52,8 @@ service cloud.firestore {
         // (La app se suma cuando tenga inicio de sesión.)
         && (request.resource.data.source == 'app'
             || (request.auth != null && request.resource.data.clientId == request.auth.uid))
+        // Un profesional puede reservar otros servicios, pero no a sí mismo.
+        && (request.auth == null || request.resource.data.professionalId != request.auth.uid)
         && str(request.resource.data.professionalId, 1, 80)
         && str(request.resource.data.professionalName, 1, 120)
         && str(request.resource.data.category, 1, 40)

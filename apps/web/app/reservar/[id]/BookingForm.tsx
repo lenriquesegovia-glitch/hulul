@@ -114,6 +114,19 @@ function BookingGate({ pro }: { pro: Professional }) {
 }
 
 function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: string; profile: ClientProfile }) {
+  if (pro.id === uid) {
+    return (
+      <div className="card stack gap-12">
+        <strong>Este es tu propio perfil</strong>
+        <p className="muted">No puedes reservarte a ti mismo. Con esta misma cuenta sí puedes reservar a otros profesionales.</p>
+        <Link href="/profesionales/agenda" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>Ir a mi agenda</Link>
+      </div>
+    );
+  }
+  return <BookingFormBody pro={pro} uid={uid} profile={profile} />;
+}
+
+function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string; profile: ClientProfile }) {
   const cat = getCategory(pro.category)!;
   // La hora real se toma en el navegador, no al publicar la página.
   const [now, setNow] = useState<Date | null>(null);

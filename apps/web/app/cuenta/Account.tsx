@@ -23,6 +23,7 @@ export function Account() {
             <span className="muted">{profile.phone} · {profile.email}</span>
             <button type="button" className="link-btn" style={{ alignSelf: 'flex-start', padding: 0 }} onClick={logout}>Cerrar sesión</button>
           </div>
+          <ProSwitch uid={user.uid} />
           <Bookings uid={user.uid} />
         </div>
       )}
@@ -131,6 +132,30 @@ function CancelBox({ row, onDone }: { row: Row; onDone: () => void }) {
         </button>
         <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setOpen(false)}>Mantener reserva</button>
       </div>
+    </div>
+  );
+}
+
+/** Si esta cuenta también es de profesional, el acceso a su agenda. */
+function ProSwitch({ uid }: { uid: string }) {
+  const [status, setStatus] = useState<string | null>(null);
+  useEffect(() => {
+    (async () => {
+      const [{ firestore }, fs] = await Promise.all([import('@hulul/shared/firebase'), import('firebase/firestore')]);
+      const snap = await fs.getDoc(fs.doc(firestore(), 'providers', uid));
+      setStatus(snap.exists() ? String(snap.data().status ?? '') : null);
+    })().catch(() => setStatus(null));
+  }, [uid]);
+  if (!status) return null;
+  return (
+    <div className="card row gap-12" style={{ justifyContent: 'space-between', flexWrap: 'wrap', background: 'var(--surface-warm)' }}>
+      <div className="stack gap-4">
+        <strong>También eres profesional en HULUL</strong>
+        <span className="muted" style={{ fontSize: 14 }}>Aquí ves tus reservas como cliente. Tus trabajos están en tu agenda.</span>
+      </div>
+      <Link href={status === 'aprobado' ? '/profesionales/agenda' : '/profesionales/registro'} className="btn btn-primary">
+        {status === 'aprobado' ? 'Ir a mi agenda' : 'Ver mi registro'}
+      </Link>
     </div>
   );
 }

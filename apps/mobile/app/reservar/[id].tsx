@@ -38,6 +38,14 @@ function BookingForm({ uid, profile }: { uid: string; profile: ClientProfile }) 
       </SafeAreaView>
     );
   }
+  if (pro.id === uid) {
+    return (
+      <SafeAreaView style={{ flex: 1, padding: 20, gap: 16 }}>
+        <BackButton />
+        <Body>Este es tu propio perfil: no puedes reservarte a ti mismo. Con esta misma cuenta sí puedes reservar a otros profesionales.</Body>
+      </SafeAreaView>
+    );
+  }
   return <BookingFormInner pro={pro} uid={uid} profile={profile} />;
 }
 
