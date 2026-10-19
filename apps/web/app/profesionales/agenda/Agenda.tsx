@@ -540,11 +540,14 @@ function DepartPanel({ b, busy, onGo }: { b: ProBooking; busy: boolean; onGo: ()
     );
   };
 
+  // Calcula solo al abrir (si el navegador ya tiene permiso de ubicación, no pregunta).
+  useEffect(() => { if (b.location) locate(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="stack gap-8" style={{ width: '100%' }}>
       {trip && (
         <div style={{ padding: 12, borderRadius: 12, background: plan.lateBy > 0 ? '#F6E7E9' : 'var(--success-soft)', fontSize: 14.5 }}>
-          Estás a <strong>{trip.km} km</strong>, unos <strong>{durationLabel(trip.minutes * 60_000)}</strong> de viaje.{' '}
+          Estás a <strong>{trip.km} km</strong>, unos <strong>{durationLabel(trip.minutes * 60_000)}</strong> con tráfico. Si sales ahora llegas a las <strong>{hhmmEcuador(new Date(now.getTime() + trip.minutes * 60_000))}</strong>.{' '}
           {plan.lateBy > 0
             ? <>Si sales ahora llegarías <strong>{plan.lateBy} min tarde</strong>. Propón otra hora al cliente o, si no alcanzas, marca &ldquo;No puedo ir&rdquo;.</>
             : plan.latest && <>Para llegar a las {b.slot}, sal a más tardar a las <strong>{hhmmEcuador(plan.latest)}</strong>.</>}

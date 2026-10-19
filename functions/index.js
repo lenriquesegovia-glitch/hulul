@@ -871,9 +871,9 @@ export const reprogramarReserva = onCall(
       if (action === 'proponer') {
         const date = String(req.data?.date ?? '');
         const slot = String(req.data?.slot ?? '');
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(0[7-9]|1[0-9]):00$/.test(slot)) throw new HttpsError('invalid-argument', 'Elige una fecha y una hora entre 07:00 y 19:00.');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(0[6-9]|1[0-9]|2[0-1]):(00|15|30|45)$/.test(slot)) throw new HttpsError('invalid-argument', 'Elige una fecha y una hora entre 06:00 y 21:45 (cada 15 minutos).');
         const at = appointmentMs(date, slot);
-        if (at < Date.now() + 60 * 60_000) throw new HttpsError('invalid-argument', 'La nueva hora debe ser al menos dentro de 1 hora.');
+        if (at < Date.now() + 15 * 60_000) throw new HttpsError('invalid-argument', 'La nueva hora debe ser al menos dentro de 15 minutos.');
         if (at > Date.now() + 31 * 86_400_000) throw new HttpsError('invalid-argument', 'La nueva fecha debe ser dentro de los próximos 30 días.');
         if (date === b.date && slot === b.slot) throw new HttpsError('invalid-argument', 'Es la misma hora de la reserva.');
         tx.update(ref, { proposal: { date, slot, by: who, at: FieldValue.serverTimestamp() } });
@@ -887,7 +887,7 @@ export const reprogramarReserva = onCall(
       }
       if (p.by === who) throw new HttpsError('failed-precondition', 'Espera la respuesta de la otra parte.');
       if (action === 'aceptar') {
-        if (appointmentMs(p.date, p.slot) < Date.now() + 30 * 60_000) throw new HttpsError('failed-precondition', 'Esa hora ya pasó o está muy cerca. Propón otra.');
+        if (appointmentMs(p.date, p.slot) < Date.now() + 5 * 60_000) throw new HttpsError('failed-precondition', 'Esa hora ya pasó. Propón otra.');
         tx.update(ref, { date: p.date, slot: p.slot, proposal: FieldValue.delete(), rescheduledAt: FieldValue.serverTimestamp(), previousDate: b.date, previousSlot: b.slot });
       } else {
         tx.update(ref, { proposal: FieldValue.delete(), lastRejectedProposal: { date: p.date, slot: p.slot, by: p.by } });

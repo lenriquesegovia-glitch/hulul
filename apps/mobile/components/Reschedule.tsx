@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SLOTS } from '@hulul/shared';
+import { RESCHEDULE_HOURS, RESCHEDULE_MINUTES } from '@hulul/shared';
 import { reschedule, type Proposal, type RescheduleAction } from '@hulul/shared/firebase';
 import { Body, PrimaryButton } from '@/components/ui';
 import { c, font, radius } from '@/theme';
@@ -57,13 +57,23 @@ export function Reschedule({ id, date, slot, proposal, me, other }: {
           </Pressable>
         ))}
       </ScrollView>
+      <Text style={s.small}>Hora</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {SLOTS.map((x) => (
-          <Pressable key={x} onPress={() => setSl(x)} style={[s.chip, sl === x && s.chipOn]}>
-            <Text style={[s.chipText, sl === x && { color: '#fff' }]}>{x}</Text>
+        {RESCHEDULE_HOURS.map((h) => (
+          <Pressable key={h} onPress={() => setSl(`${h}:${sl.slice(3, 5) || '00'}`)} style={[s.chip, sl.slice(0, 2) === h && s.chipOn]}>
+            <Text style={[s.chipText, sl.slice(0, 2) === h && { color: '#fff' }]}>{h}</Text>
           </Pressable>
         ))}
       </View>
+      <Text style={s.small}>Minutos</Text>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        {RESCHEDULE_MINUTES.map((m) => (
+          <Pressable key={m} onPress={() => setSl(`${sl.slice(0, 2)}:${m}`)} style={[s.chip, { flex: 1, alignItems: 'center' }, sl.slice(3, 5) === m && s.chipOn]}>
+            <Text style={[s.chipText, sl.slice(3, 5) === m && { color: '#fff' }]}>:{m}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Body style={{ fontSize: 14 }}>Nueva hora: <Text style={{ fontFamily: font.bodyBold }}>{shortDay(d)} · {sl}</Text></Body>
       {msg ? <Text style={s.err}>{msg}</Text> : null}
       <PrimaryButton label={busy ? 'Enviando…' : 'Enviar propuesta'} onPress={() => !busy && run('proponer')} />
       <Pressable onPress={() => setOpen(false)}><Text style={[s.link, { textAlign: 'center' }]}>Volver</Text></Pressable>
@@ -79,4 +89,5 @@ const s = StyleSheet.create({
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   chipOn: { backgroundColor: c.text, borderColor: c.text },
   chipText: { fontFamily: font.bodySemi, fontSize: 13, color: c.text },
+  small: { fontFamily: font.bodyBold, fontSize: 12.5, color: c.textSecondary },
 });

@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { AFTER_VISIT_NOTE, cancelledText, clientAlert, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, OUTCOME_LABEL, SLOTS, usd } from '@hulul/shared';
-import { confirmService, EXTRA_STATUS_LABEL, extraCharge, firestore, reschedule, type ClientBooking, type ExtraAction, type ExtraCharge, type RescheduleAction } from '@hulul/shared/firebase';
+import { AFTER_VISIT_NOTE, cancelledText, clientAlert, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, OUTCOME_LABEL, usd } from '@hulul/shared';
+import { confirmService, EXTRA_STATUS_LABEL, extraCharge, firestore, type ClientBooking, type ExtraAction, type ExtraCharge } from '@hulul/shared/firebase';
 import { Icon } from '@/components/Icon';
 import { LiveMap } from '@/components/LiveMap';
 import { RatingBox } from '@/components/Rating';
 import { Chat } from '@/components/Chat';
 import { DelayClient } from '@/components/Delay';
+import { Reschedule } from '@/components/Reschedule';
 import { ArrivalCode, ProblemBox } from '@/components/ArrivalCode';
 import { useUser } from '@/lib/auth';
 import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
@@ -143,7 +144,7 @@ function Detail({ b }: { b: ClientBooking }) {
           <Chat bookingId={b.id} uid={me.uid} me="cliente" otherName={first} open={['pendiente', 'confirmada', 'en_camino', 'en_curso', 'por_aprobar'].includes(b.status)} />
         </Card>
       )}
-      {['pendiente', 'confirmada'].includes(b.status) && <Reschedule b={b} other={first} />}
+      {['pendiente', 'confirmada'].includes(b.status) && <Reschedule id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="cliente" other={first} />}
       <Card style={{ gap: 6 }}>
         {b.address ? <Body>📍 {b.address}</Body> : null}
         {b.notes ? <Body muted>{b.notes}</Body> : null}
@@ -159,61 +160,6 @@ function Detail({ b }: { b: ClientBooking }) {
   );
 }
 
-function Reschedule({ b, other }: { b: ClientBooking; other: string }) {
-  const days = useMemo(() => Array.from({ length: 14 }, (_, i) => new Date(Date.now() - 5 * 3_600_000 + i * 86_400_000).toISOString().slice(0, 10)), []);
-  const [open, setOpen] = useState(false);
-  const [d, setD] = useState(b.date);
-  const [sl, setSl] = useState(b.slot);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
-  const run = async (a: RescheduleAction) => {
-    setBusy(true); setMsg('');
-    try { await reschedule(b.id, a, a === 'proponer' ? d : undefined, a === 'proponer' ? sl : undefined); setOpen(false); }
-    catch (e) { setMsg((e as { message?: string }).message || 'No se pudo guardar.'); }
-    finally { setBusy(false); }
-  };
-  const p = b.proposal;
-  if (p) {
-    const mine = p.by === 'cliente';
-    return (
-      <View style={s.box}>
-        <Text style={s.boxTitle}>{mine ? 'Propusiste cambiar la hora' : `${other} propone cambiar la hora`}</Text>
-        <Body style={{ fontSize: 14 }}>De {shortDay(b.date)} {b.slot} → {shortDay(p.date)} {p.slot}.{mine ? ` Esperando la respuesta de ${other}.` : ''}</Body>
-        {msg ? <Text style={s.err}>{msg}</Text> : null}
-        {mine
-          ? <Pressable onPress={() => !busy && run('retirar')}><Text style={s.link}>Retirar propuesta</Text></Pressable>
-          : <>
-              <PrimaryButton label={busy ? 'Guardando…' : 'Aceptar nueva hora'} onPress={() => !busy && run('aceptar')} />
-              <Pressable onPress={() => !busy && run('rechazar')}><Text style={[s.link, { textAlign: 'center' }]}>Mantener la hora original</Text></Pressable>
-            </>}
-      </View>
-    );
-  }
-  if (!open) return <Pressable onPress={() => setOpen(true)}><Text style={s.link}>Cambiar fecha u hora</Text></Pressable>;
-  return (
-    <View style={s.box}>
-      <Text style={s.boxTitle}>Proponer otra fecha u hora</Text>
-      <Body muted style={{ fontSize: 13 }}>Puedes adelantar o atrasar. {other} debe aceptar.</Body>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-        {days.map((x, i) => (
-          <Pressable key={x} onPress={() => setD(x)} style={[s.chip, d === x && s.chipOn]}>
-            <Text style={[s.chipText, d === x && { color: '#fff' }]}>{i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : shortDay(x)}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {SLOTS.map((x) => (
-          <Pressable key={x} onPress={() => setSl(x)} style={[s.chip, sl === x && s.chipOn]}>
-            <Text style={[s.chipText, sl === x && { color: '#fff' }]}>{x}</Text>
-          </Pressable>
-        ))}
-      </View>
-      {msg ? <Text style={s.err}>{msg}</Text> : null}
-      <PrimaryButton label={busy ? 'Enviando…' : 'Enviar propuesta'} onPress={() => !busy && run('proponer')} />
-      <Pressable onPress={() => setOpen(false)}><Text style={[s.link, { textAlign: 'center' }]}>Volver</Text></Pressable>
-    </View>
-  );
-}
 
 /** Cobro adicional del profesional: el cliente lo acepta (tarjeta o efectivo) o lo rechaza. */
 function ExtraBox({ id, extra, proName }: { id: string; extra: ExtraCharge; proName: string }) {

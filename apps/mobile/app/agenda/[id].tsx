@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
 import {
-  acceptedDelay, appointmentTime, departPlan, extraQuote, formatUSD, getCategory, hhmmEcuador, JOB_OUTCOMES, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS,
+  acceptedDelay, appointmentTime, departPlan, travelEstimate, extraQuote, formatUSD, getCategory, hhmmEcuador, JOB_OUTCOMES, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS,
   MAX_EXTRA, MIN_DIAGNOSIS_CHARS, MIN_EXTRA, OUTCOME_LABEL, POLICY, type JobOutcome,
 } from '@hulul/shared';
 import { EXTRA_STATUS_LABEL, extraCharge, proAction, rateClient, shareLivePosition, type ExtraAction, type ProAction, type ProBooking } from '@hulul/shared/firebase';
@@ -168,33 +168,50 @@ function AskPhotosHint() {
   return <Body muted style={{ fontSize: 12 }}>¿Necesitas ver el problema? Pídele fotos al cliente por el chat; él las envía con la cámara.</Body>;
 }
 
-/** Cuándo puede salir y a más tardar cuándo debe salir. */
+/**
+ * Antes de salir: a cuánto está, cuánto tarda con tráfico, a qué hora llegaría
+ * si sale ahora y a qué hora debe salir a más tardar. Se actualiza cada 2 min.
+ */
 function DepartInfo({ b }: { b: ProBooking }) {
-  const [trip, setTrip] = useState<number | undefined>(undefined);
+  const [trip, setTrip] = useState<{ km: number; minutes: number } | null>(null);
+  const [note, setNote] = useState('');
+  const [now, setNow] = useState(() => new Date());
+
   useEffect(() => {
-    if (!b.location) return;
+    if (!b.location) { setNote('El cliente no marcó su ubicación en el mapa. Usa Google Maps para ver el tiempo de viaje.'); return; }
     let off = false;
-    (async () => {
-      const perm = await Location.getForegroundPermissionsAsync();
-      if (!perm.granted) return;
-      const p = await Location.getLastKnownPositionAsync();
-      if (!p || off) return;
-      const R = 6371, toR = (x: number) => (x * Math.PI) / 180;
-      const dLat = toR(b.location!.lat - p.coords.latitude), dLng = toR(b.location!.lng - p.coords.longitude);
-      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toR(p.coords.latitude)) * Math.cos(toR(b.location!.lat)) * Math.sin(dLng / 2) ** 2;
-      const km = 2 * R * Math.asin(Math.sqrt(a)) * 1.4;
-      setTrip(Math.round((km / 22) * 60 + 5));
-    })().catch(() => {});
-    return () => { off = true; };
+    const measure = async () => {
+      try {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (!perm.granted) { if (!off) setNote('Permite la ubicación de HULUL para calcular cuándo llegas.'); return; }
+        const p = (await Location.getLastKnownPositionAsync({ maxAge: 120_000 })) ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+        if (!off && p) { setTrip(travelEstimate({ lat: p.coords.latitude, lng: p.coords.longitude }, b.location!)); setNote(''); setNow(new Date()); }
+      } catch {
+        if (!off) setNote('No pudimos leer tu ubicación. Revisa que el GPS esté encendido.');
+      }
+    };
+    measure();
+    const t = setInterval(measure, 120_000);
+    return () => { off = true; clearInterval(t); };
   }, [b.location]);
-  const plan = departPlan(b, new Date(), trip);
+
+  const plan = departPlan(b, now, trip?.minutes);
+  const arrive = trip ? new Date(now.getTime() + trip.minutes * 60_000) : null;
+  const late = plan.lateBy > 0;
   return (
-    <View style={s.info}>
-      <Body style={{ fontSize: 13.5 }}>
-        {plan.canGo ? 'Ya puedes salir.' : `Podrás marcar "Voy en camino" desde las ${hhmmEcuador(plan.earliest)}.`}
-        {plan.latest ? ` Sal a más tardar a las ${hhmmEcuador(plan.latest)} (viaje aprox. ${trip} min).` : ''}
-        {plan.lateBy > 0 ? ` Si sales ahora llegarías ${plan.lateBy} min tarde: avisa al cliente por el chat.` : ''}
-      </Body>
+    <View style={[s.info, trip && { backgroundColor: late ? '#F6E7E9' : c.successSoft }]}>
+      {trip ? (
+        <>
+          <Text style={s.label}>Estás a {trip.km} km · unos {trip.minutes} min con tráfico</Text>
+          <Body style={{ fontSize: 13.5 }}>
+            Si sales ahora llegas a las <Text style={{ fontFamily: font.bodyBold }}>{hhmmEcuador(arrive!)}</Text>
+            {late ? `, ${plan.lateBy} min tarde. Avisa al cliente con "Avisar que llegaré tarde".` : ` (tu cita es a las ${b.slot}).`}
+            {!late && plan.latest ? ` Sal a más tardar a las ${hhmmEcuador(plan.latest)}.` : ''}
+          </Body>
+        </>
+      ) : <Body style={{ fontSize: 13.5 }}>{note || 'Calculando cuánto tardas en llegar…'}</Body>}
+      {!plan.canGo && <Body muted style={{ fontSize: 12.5 }}>Podrás marcar "Voy en camino" desde las {hhmmEcuador(plan.earliest)}.</Body>}
+      <Body muted style={{ fontSize: 11.5 }}>Tiempo estimado con el tráfico promedio de la ciudad. Google Maps o Waze dan el tiempo exacto.</Body>
     </View>
   );
 }
@@ -393,7 +410,7 @@ const s = StyleSheet.create({
   btnText: { fontFamily: font.bodyBold, fontSize: 14, color: c.text },
   link: { fontFamily: font.bodyBold, fontSize: 14, color: c.primary, paddingVertical: 6 },
   input: { minHeight: 46, borderWidth: 1, borderColor: c.border, borderRadius: radius.sm, paddingHorizontal: 12, fontFamily: font.body, fontSize: 14.5, color: c.text, backgroundColor: c.surface },
-  info: { padding: 12, borderRadius: 10, backgroundColor: c.copperSoft },
+  info: { padding: 12, borderRadius: 10, backgroundColor: c.copperSoft, gap: 4 },
   option: { padding: 12, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, gap: 2 },
   optionOn: { borderColor: c.primary, borderWidth: 2 },
 });

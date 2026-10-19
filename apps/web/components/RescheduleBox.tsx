@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { SLOTS } from '@hulul/shared';
+import { RESCHEDULE_HOURS, RESCHEDULE_MINUTES } from '@hulul/shared';
 import type { Proposal, RescheduleAction } from '@hulul/shared/firebase';
 
 const DAY = 86_400_000;
@@ -82,9 +82,14 @@ export function RescheduleBox({ id, date, slot, proposal, me, other }: {
         </div>
         <div className="field">
           <label htmlFor={`rs-${id}`}>Hora</label>
-          <select id={`rs-${id}`} value={s} onChange={(e) => setS(e.target.value)}>
-            {SLOTS.map((x) => <option key={x} value={x}>{x}</option>)}
-          </select>
+          <div className="row gap-8">
+            <select id={`rs-${id}`} aria-label="Hora" value={s.slice(0, 2)} onChange={(e) => setS(`${e.target.value}:${s.slice(3, 5) || '00'}`)}>
+              {RESCHEDULE_HOURS.map((h) => <option key={h} value={h}>{h}</option>)}
+            </select>
+            <select aria-label="Minutos" value={s.slice(3, 5)} onChange={(e) => setS(`${s.slice(0, 2)}:${e.target.value}`)}>
+              {RESCHEDULE_MINUTES.map((m) => <option key={m} value={m}>:{m}</option>)}
+            </select>
+          </div>
         </div>
       </div>
       {msg && <p role="alert" className="form-error">{msg}</p>}

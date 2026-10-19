@@ -159,7 +159,11 @@ export const EARLIEST_DEPART_MINUTES = 120;
 /** Margen para estacionar, subir y presentarse (minutos). */
 export const ARRIVAL_BUFFER_MINUTES = 10;
 /** Un cambio de hora debe quedar al menos a esta distancia de ahora (minutos). */
-export const RESCHEDULE_LEAD_MINUTES = 60;
+export const RESCHEDULE_LEAD_MINUTES = 15;
+
+/** Horas para proponer otra hora: cada 15 minutos de 06:00 a 21:45. */
+export const RESCHEDULE_HOURS = Array.from({ length: 16 }, (_, i) => String(6 + i).padStart(2, '0'));
+export const RESCHEDULE_MINUTES = ['00', '15', '30', '45'];
 
 /**
  * Tiempo de viaje estimado en Guayaquil, Samborondón y Daule: distancia en
