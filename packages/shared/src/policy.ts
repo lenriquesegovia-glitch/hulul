@@ -37,6 +37,12 @@ export const POLICY = {
   /** Faltas en la ventana que llevan a suspensión temporal. */
   strikesToSuspend: 3,
   strikesWindowDays: 30,
+  /** Días sin recibir reservas al llegar a las faltas del límite. */
+  strikeSuspendDays: 7,
+  /** Calificación mínima (con al menos minRatingReviews reseñas) y días de suspensión si baja. */
+  minRating: 4.5,
+  minRatingReviews: 5,
+  ratingSuspendDays: 14,
   /** Horas para calificar o reportar un problema después de terminado el servicio. */
   claimWindowHours: 48,
   /** Si el cliente no aprueba ni reclama, el trabajo se aprueba solo a las… (horas). */
@@ -89,7 +95,7 @@ export function durationLabel(ms: number): string {
  * - Profesional en camino: cargo de $3.
  * - En curso o terminada: no se cancela; se reporta un problema.
  */
-export function cancelTerms(b: { date: string; slot: string; status: string; delay?: { minutes: number; status: string } }, now: Date = new Date()): CancelTerms {
+export function cancelTerms(b: { date: string; slot: string; status: string; delay?: { minutes: number; status: string }; arrivedAt?: { toMillis(): number } | null; visit?: number; subtotal?: number }, now: Date = new Date()): CancelTerms {
   if (!(CANCELLABLE_STATUSES as readonly string[]).includes(b.status)) {
     return { allowed: false, fee: 0, reason: b.status === 'cancelada' ? 'Esta reserva ya está cancelada.' : 'El servicio ya empezó o terminó. Si algo salió mal, repórtalo desde la reserva.' };
   }
@@ -104,6 +110,12 @@ export function cancelTerms(b: { date: string; slot: string; status: string; del
   }
   const freeUntil = new Date(at.getTime() - POLICY.freeCancelHoursBefore * 3_600_000);
   const fee = POLICY.lateCancelFee;
+  // Ya está en la puerta (y llegó a tiempo): se cobra la visita completa (igual que clientCancel).
+  const arrived = b.arrivedAt?.toMillis?.() ?? 0;
+  if (b.status === 'en_camino' && arrived && arrived <= at.getTime() + (acceptedDelay(b) + POLICY.lateToleranceMinutes) * 60_000) {
+    const visit = Number(b.visit ?? b.subtotal ?? fee);
+    return { allowed: true, fee: visit, reason: `El profesional ya está en tu dirección: cancelar ahora cuesta la visita completa (${usd(visit)}), que compensa su traslado y su tiempo.` };
+  }
   if (b.status === 'en_camino') {
     return { allowed: true, fee, reason: `El profesional ya va en camino: cancelar ahora tiene un cargo de ${usd(fee)}, que compensa su traslado.` };
   }

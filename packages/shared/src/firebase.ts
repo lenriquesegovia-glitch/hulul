@@ -217,6 +217,7 @@ export interface ClientBooking {
   location?: LatLng;
   proposal?: Proposal;
   cancelledBy?: string;
+  cancelledAt?: { toMillis(): number } | null;
   /** Tarifa por visita (reservas desde el 18-oct-2026). */
   visit?: number;
   subtotal?: number;
@@ -284,13 +285,15 @@ export function activeBooking(list: ClientBooking[]): ClientBooking | null {
 /** Profesionales aprobados de una categoría (y ciudad, si se indica). */
 export async function listPros(category: CategorySlug, city?: string): Promise<Professional[]> {
   const snap = await getDocs(query(collection(firestore(), 'pros'), where('categories', 'array-contains', category)));
-  const list = snap.docs.map((d) => toProfessional({ ...(d.data() as PublicPro), uid: d.id }, category));
+  // Los suspendidos no aparecen hasta que termine la suspensión.
+  const list = snap.docs.filter((d) => !(Number(d.data().suspendedUntil ?? 0) > Date.now())).map((d) => toProfessional({ ...(d.data() as PublicPro), uid: d.id }, category));
   return sortPros(city ? list.filter((p) => p.cities.includes(city)) : list);
 }
 
 /** Un profesional aprobado; `category` elige con qué tarifa se muestra. */
 export async function loadPro(id: string, category?: CategorySlug): Promise<Professional | null> {
   const snap = await getDoc(doc(firestore(), 'pros', id));
+  if (snap.exists() && Number(snap.data().suspendedUntil ?? 0) > Date.now()) return null;
   return snap.exists() ? toProfessional({ ...(snap.data() as PublicPro), uid: snap.id }, category) : null;
 }
 
@@ -423,6 +426,12 @@ export function watchArrivalCode(bookingId: string, cb: (code: string | null) =>
 
 /* ---------------------------------- Reclamos ---------------------------------- */
 
+/** Para cuando el profesional marcó "cliente ausente" y el cliente sí estaba. */
+export const ABSENT_PROBLEM_OPTIONS: { value: 'si_estaba' | 'otro'; label: string }[] = [
+  { value: 'si_estaba', label: 'Yo sí estaba: el profesional no llegó o no tocó' },
+  { value: 'otro', label: 'Otro problema' },
+];
+
 export const PROBLEM_OPTIONS: { value: 'no_vino' | 'incompleto' | 'cobro' | 'otro'; label: string }[] = [
   { value: 'no_vino', label: 'No hizo el trabajo o se fue sin hacerlo' },
   { value: 'incompleto', label: 'Marcó como resuelto, pero no quedó resuelto' },
@@ -536,9 +545,10 @@ export interface VisitReport {
 }
 
 /** El profesional cambia el estado de una reserva suya (lo valida el servidor). */
-export async function proAction(id: string, action: ProAction, reason = '', report?: VisitReport, code?: string): Promise<{ status: string }> {
-  const fn = callable<{ id: string; action: ProAction; reason: string; code?: string } & Partial<VisitReport>, { status: string }>('gestionarReserva');
-  return (await fn({ id, action, reason, ...(report ?? {}), ...(code ? { code } : {}) })).data;
+export interface ArrivalPos { lat: number; lng: number; accuracy?: number | null }
+export async function proAction(id: string, action: ProAction, reason = '', report?: VisitReport, code?: string, pos?: ArrivalPos): Promise<{ status: string }> {
+  const fn = callable<{ id: string; action: ProAction; reason: string; code?: string; pos?: ArrivalPos } & Partial<VisitReport>, { status: string }>('gestionarReserva');
+  return (await fn({ id, action, reason, ...(report ?? {}), ...(code ? { code } : {}), ...(pos ? { pos } : {}) })).data;
 }
 
 export interface ProBooking {

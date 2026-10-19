@@ -53,7 +53,18 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
 
   const act = async (a: ProAction, report?: Parameters<typeof proAction>[3]) => {
     setBusy(a); setMsg('');
-    try { await proAction(b.id, a, reason.trim(), report, a === 'llegue' ? code.trim() : undefined); setAsking(''); setFinishing(false); setReason(''); }
+    try {
+      // "Estoy en la dirección" se comprueba con el GPS del celular.
+      let pos: { lat: number; lng: number; accuracy: number | null } | undefined;
+      if (a === 'en_puerta' && b.location) {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (!perm.granted) throw new Error('Permite el acceso a tu ubicación para marcar que llegaste.');
+        const p = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        pos = { lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy ?? null };
+      }
+      await proAction(b.id, a, reason.trim(), report, a === 'llegue' ? code.trim() : undefined, pos);
+      setAsking(''); setFinishing(false); setReason('');
+    }
     catch (e) { setMsg(errText(e)); }
     finally { setBusy(''); }
   };

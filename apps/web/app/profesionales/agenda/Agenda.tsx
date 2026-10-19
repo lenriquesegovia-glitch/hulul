@@ -245,7 +245,9 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
     setBusy(a); setMsg('');
     try {
       const { proAction } = await import('@hulul/shared/firebase');
-      await proAction(b.id, a, reason.trim(), report, a === 'llegue' ? code.trim() : undefined);
+      // "Estoy en la dirección" se comprueba con el GPS del celular.
+      const pos = a === 'en_puerta' && b.location ? await currentPos() : undefined;
+      await proAction(b.id, a, reason.trim(), report, a === 'llegue' ? code.trim() : undefined, pos);
       setAsking('');
       setFinishing(false);
     } catch (e) {
@@ -360,6 +362,18 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
       )}
     </article>
   );
+}
+
+/** Ubicación actual del celular (para marcar la llegada). */
+function currentPos(): Promise<{ lat: number; lng: number; accuracy: number }> {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) { reject(new Error('Tu navegador no permite ver tu ubicación. Usa la app de HULUL.')); return; }
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
+      () => reject(new Error('Permite el acceso a tu ubicación para marcar que llegaste (candado junto a la dirección de la página).')),
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 20_000 },
+    );
+  });
 }
 
 /**

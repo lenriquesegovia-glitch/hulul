@@ -10,7 +10,7 @@ import { CATEGORY_PRICING, RATE_BAND, rateRange } from './provider';
  * Los montos y plazos salen de `policy.ts` y `provider.ts`.
  */
 
-export const TERMS_VERSION = '2026-10-18';
+export const TERMS_VERSION = '2026-10-19';
 export const TERMS_UPDATED = '18 de octubre de 2026';
 
 const suggestedList = categories.map((c) => { const r = rateRange(c.slug); return `${c.name}: sugerida ${usd(CATEGORY_PRICING[c.slug].suggested)} (de ${usd(r.min)} a ${usd(r.max)})`; });
@@ -72,9 +72,9 @@ export const termsOfService: LegalSection[] = [
         'Sin costo: antes de que un profesional acepte la reserva. Si el profesional no la acepta, el cliente recibe avisos 2 horas y 1 hora antes, y a la hora de la cita la reserva se cancela sola, sin costo.',
         `Sin costo: hasta ${P.freeCancelMinutes} minutos después de que el profesional aceptó, en reservas para lo antes posible.`,
         `Sin costo: hasta ${P.freeCancelHoursBefore} horas antes de la hora reservada, en reservas programadas.`,
-        `Con menos de ${P.freeCancelHoursBefore} horas de anticipación y la reserva ya confirmada por el profesional, o con el profesional en camino: cargo de ${usd(P.lateCancelFee)}. La app o la web muestran el cargo antes de confirmar la cancelación.`,
+        `Con menos de ${P.freeCancelHoursBefore} horas de anticipación y la reserva ya confirmada por el profesional, o con el profesional en camino: cargo de ${usd(P.lateCancelFee)}. Si el profesional ya marcó que está en la dirección (y llegó a tiempo), cancelar cuesta la tarifa por visita completa. La app o la web muestran el cargo antes de confirmar la cancelación.`,
         'Con tarjeta, el cargo se descuenta del monto retenido. Con efectivo o transferencia, queda como saldo pendiente y se suma a la próxima reserva.',
-        `Si el profesional llega y el cliente no está, no responde en el chat o no permite el ingreso, después de ${P.clientNoShowWaitMinutes} minutos de espera el profesional puede cancelar la reserva: se cobra la tarifa por visita y el profesional califica al cliente. La espera se cuenta desde la hora de la cita: si el profesional llega antes, debe esperar a esa hora.`,
+        `Si el profesional llega y el cliente no está, no responde en el chat o no permite el ingreso, después de ${P.clientNoShowWaitMinutes} minutos de espera el profesional puede cancelar la reserva: se cobra la tarifa por visita y el profesional califica al cliente. La espera se cuenta desde la hora de la cita: si el profesional llega antes, debe esperar a esa hora. Si el cliente sí estaba, puede reportarlo en la app dentro de ${P.claimWindowHours} horas: el cobro queda retenido hasta que HULUL revise la ubicación, el chat y las marcas de llegada.`,
         `De los cargos de esta sección, el ${pct(P.proShareOfClientFees)} es para el profesional que se trasladó.`,
       ] },
     ],
@@ -91,8 +91,9 @@ export const termsOfService: LegalSection[] = [
         `Si a los ${P.lateToleranceMinutes} minutos de la hora el profesional no ha salido, el cliente puede cancelar sin costo y recibe ${usd(P.lateCredit)} de crédito. Si no se presenta ni avisa, la reserva se cancela sola a las 3 horas. En ambos casos el profesional paga una multa de ${usd(P.proNoShowFine)}, suma una falta y el cliente puede calificarlo.`,
         'Si el profesional va a llegar tarde, debe avisarlo en la app indicando cuántos minutos. Si el cliente acepta, la cita se corre a la nueva hora: desde ese momento las tolerancias se cuentan desde ella y, si el cliente cancela después, aplica el cargo normal de cancelación. Si el cliente no acepta el retraso, la reserva se cancela sin costo para él y es una falta del profesional.',
         `Si el profesional llega más de ${P.lateToleranceMinutes} minutos después de la hora acordada (contando el retraso aceptado) y el cliente ya no está, no se cobra nada al cliente y es una falta del profesional.`,
-        `${P.strikesToSuspend} faltas o cancelaciones tardías en ${P.strikesWindowDays} días: suspensión temporal.`,
-        'La hora de llegada se mide con la ubicación que comparte el profesional en camino y con su marca de "Llegué".',
+        `${P.strikesToSuspend} faltas en ${P.strikesWindowDays} días: el profesional queda suspendido ${P.strikeSuspendDays} días y no recibe reservas nuevas. Las faltas anteriores a la suspensión no se vuelven a contar.`,
+        'Un profesional no puede aceptar dos trabajos que se crucen el mismo día: entre uno y otro debe quedar al menos 30 minutos de traslado.',
+        'La llegada se comprueba con el GPS del celular: "Estoy en la dirección" solo se puede marcar cerca de la dirección del cliente. La hora de llegada se mide con esa marca y con la ubicación que comparte el profesional en camino.',
       ] },
     ],
   },
@@ -105,7 +106,8 @@ export const termsOfService: LegalSection[] = [
         'Para empezar el trabajo, el profesional debe ingresar en la app el código de llegada de 4 dígitos que solo ve el cliente. Sin ese código no puede empezar ni terminar la visita, y por lo tanto no puede cobrarla.',
         `Si el cliente reporta en la app, dentro de ${P.claimWindowHours} horas, que el trabajo no se realizó o que el profesional se fue sin hacerlo, el pago queda retenido y HULUL revisa la evidencia (código de llegada, ubicación, fotos, diagnóstico y chat). Si se comprueba, se devuelve lo pagado y es una falta del profesional.`,
         'Fuera de esos casos, la calidad del trabajo y lo acordado después de la visita son responsabilidad del profesional y se resuelven entre el cliente y el profesional. HULUL no garantiza el resultado del trabajo.',
-        'Las calificaciones son públicas. Una calificación baja sostenida o reportes repetidos llevan a un aviso y luego a la suspensión del profesional.',
+        `Las calificaciones son públicas. Si el promedio de un profesional baja de ${P.minRating} estrellas con ${P.minRatingReviews} o más reseñas, queda suspendido ${P.ratingSuspendDays} días. Reportes repetidos también pueden llevar a la suspensión.`,
+        'El precio de cada reserva lo verifica el servidor de HULUL con la tarifa del profesional. Si no coincide, la reserva se anula sin costo y el cliente debe volver a reservar.',
         'Si el servicio no se realiza por causa del profesional (no llega o cancela), el cliente no paga la visita y aplican las reglas de la sección 6.',
       ] },
       { p: 'Esto no limita los derechos que la Ley Orgánica de Defensa del Consumidor reconoce al cliente.' },

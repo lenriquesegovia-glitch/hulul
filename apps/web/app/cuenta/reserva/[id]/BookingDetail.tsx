@@ -115,6 +115,7 @@ export function BookingDetail({ id }: { id: string }) {
       {b.rating ? <p className="muted">Calificaste a {first} con {'★'.repeat(b.rating)}. ¡Gracias!</p> : null}
       {b.status === 'por_aprobar' && !b.rating && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
       {['por_aprobar', 'completada'].includes(b.status) && !b.dispute && <ProblemBox id={b.id} />}
+      {b.status === 'cancelada' && b.cancelledBy === 'cliente_ausente' && !b.dispute && Date.now() - (b.cancelledAt?.toMillis?.() ?? 0) < 48 * 3_600_000 && <ProblemBox id={b.id} absent />}
 
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && <SafetyNotice title={HOME_SAFETY_TITLE} items={HOME_SAFETY_NOTICE} />}
 

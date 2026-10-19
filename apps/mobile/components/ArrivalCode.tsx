@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { PROBLEM_OPTIONS, reportProblem, watchArrivalCode } from '@hulul/shared/firebase';
+import { ABSENT_PROBLEM_OPTIONS, PROBLEM_OPTIONS, reportProblem, watchArrivalCode } from '@hulul/shared/firebase';
 import { Body, Button, Card, PrimaryButton } from '@/components/ui';
 import { c, font, radius } from '@/theme';
 
@@ -19,7 +19,8 @@ export function ArrivalCode({ id, pro }: { id: string; pro: string }) {
 }
 
 /** Reportar un problema (hasta 48 h): el pago queda retenido y HULUL revisa. */
-export function ProblemBox({ id }: { id: string }) {
+export function ProblemBox({ id, absent = false }: { id: string; absent?: boolean }) {
+  const options: { value: string; label: string }[] = absent ? ABSENT_PROBLEM_OPTIONS : PROBLEM_OPTIONS;
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState('');
   const [text, setText] = useState('');
@@ -37,8 +38,8 @@ export function ProblemBox({ id }: { id: string }) {
   return (
     <Card style={{ gap: 10 }}>
       <Text style={s.label}>Reportar un problema</Text>
-      <Body muted style={{ fontSize: 12.5 }}>El pago queda retenido y HULUL revisa el código de llegada, la ubicación, las fotos y el chat. Si el trabajo no se hizo, te devolvemos lo pagado.</Body>
-      {PROBLEM_OPTIONS.map((o) => (
+      <Body muted style={{ fontSize: 12.5 }}>{absent ? 'El cobro por "cliente ausente" queda retenido y HULUL revisa la ubicación del profesional al marcar su llegada, el chat y las horas. Si estabas, no pagas nada.' : 'El pago queda retenido y HULUL revisa el código de llegada, la ubicación, las fotos y el chat. Si el trabajo no se hizo, te devolvemos lo pagado.'}</Body>
+      {options.map((o) => (
         <Pressable key={o.value} accessibilityRole="radio" accessibilityState={{ checked: kind === o.value }} onPress={() => setKind(o.value)} style={[s.opt, kind === o.value && s.optOn]}>
           <Text style={s.optText}>{o.label}</Text>
         </Pressable>

@@ -81,6 +81,9 @@ service cloud.firestore {
         && num(request.resource.data.total, 0, 12000)
         && request.resource.data.demo is bool
         && request.resource.data.status == 'pendiente'
+        // No se reserva a un profesional suspendido.
+        && (!exists(/databases/$(database)/documents/pros/$(request.resource.data.professionalId))
+            || get(/databases/$(database)/documents/pros/$(request.resource.data.professionalId)).data.get('suspendedUntil', 0) < request.time.toMillis())
         && consent(request.resource.data);
       // Cada cliente ve sus reservas.
       // Las ve el cliente que reservó y el profesional asignado. Los cambios de
@@ -161,6 +164,7 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == uid
         && providerOk(uid, request.resource.data)
         && !('catStatus' in request.resource.data) && !('strikes' in request.resource.data) && !('tester' in request.resource.data) && !('cashDebt' in request.resource.data) && !('fines' in request.resource.data)
+        && !('strikeLog' in request.resource.data) && !('suspendedUntil' in request.resource.data) && !('strikesResetAt' in request.resource.data) && !('ratingCheckAt' in request.resource.data)
         && request.resource.data.status == 'borrador'
         && request.resource.data.createdAt == request.time;
       // catStatus (lo pone el servidor) puede existir pero no se cambia desde aquí.
@@ -172,6 +176,11 @@ service cloud.firestore {
         && request.resource.data.get('tester', null) == resource.data.get('tester', null)
         && request.resource.data.get('cashDebt', null) == resource.data.get('cashDebt', null)
         && request.resource.data.get('fines', null) == resource.data.get('fines', null)
+        // Faltas y suspensiones: solo el servidor.
+        && request.resource.data.get('strikeLog', null) == resource.data.get('strikeLog', null)
+        && request.resource.data.get('suspendedUntil', null) == resource.data.get('suspendedUntil', null)
+        && request.resource.data.get('strikesResetAt', null) == resource.data.get('strikesResetAt', null)
+        && request.resource.data.get('ratingCheckAt', null) == resource.data.get('ratingCheckAt', null)
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if false;
 

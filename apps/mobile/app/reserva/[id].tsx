@@ -132,6 +132,7 @@ function Detail({ b }: { b: ClientBooking }) {
       {b.rating ? <Body muted>Calificaste a {first} con {'★'.repeat(b.rating)}. ¡Gracias!</Body> : null}
       {b.status === 'por_aprobar' && !b.rating && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
       {['por_aprobar', 'completada'].includes(b.status) && !b.dispute && <ProblemBox id={b.id} />}
+      {b.status === 'cancelada' && b.cancelledBy === 'cliente_ausente' && !b.dispute && Date.now() - (b.cancelledAt?.toMillis?.() ?? 0) < 48 * 3_600_000 && <ProblemBox id={b.id} absent />}
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && (
         <View style={s.box}>
           <Text style={s.boxTitle}>{HOME_SAFETY_TITLE}</Text>
