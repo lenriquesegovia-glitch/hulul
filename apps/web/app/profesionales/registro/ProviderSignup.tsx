@@ -653,12 +653,12 @@ function bioTemplates(d: Draft): { label: string; text: string }[] {
   const cityText = d.cities.length ? d.cities.map((x) => cities.find((y) => y.slug === x)?.name).join(', ') : 'Guayaquil, Samborondón y Daule';
   if (d.kind === 'empresa') {
     return [
-      { label: 'Empresa con experiencia', text: `Somos ${name}, un equipo dedicado a ${areas} con ${years} de experiencia. Hacemos ${jobsText}. Trabajamos con personal propio, herramientas profesionales y un diagnóstico claro en cada visita.` },
-      { label: 'Rápidos y garantizados', text: `En ${name} atendemos ${areas} en ${cityText}. Llegamos a la hora acordada, explicamos el trabajo antes de empezar y dejamos todo limpio. ${years} resolviendo ${jobsText}.` },
+      { label: 'Empresa con experiencia', text: `Somos ${name}, un equipo dedicado a ${areas} con ${years} de experiencia. Hacemos ${jobsText}. Trabajamos con personal propio y herramientas profesionales.` },
+      { label: 'Puntuales y ordenados', text: `En ${name} atendemos ${areas} en ${cityText}. Llegamos a la hora acordada, explicamos el trabajo antes de empezar y dejamos todo limpio. ${years} resolviendo ${jobsText}.` },
     ];
   }
   return [
-    { label: 'Con experiencia', text: `Soy ${name}, ${oficio} con ${years} de experiencia. Me especializo en ${jobsText}. Llevo mis propias herramientas, soy puntual y dejo el área limpia. Te explico qué encontré antes de cobrar.` },
+    { label: 'Con experiencia', text: `Soy ${name}, ${oficio} con ${years} de experiencia. Me especializo en ${jobsText}. Llevo mis propias herramientas, soy puntual y dejo el área limpia.` },
     { label: 'Cercano y confiable', text: `Hola, soy ${name}. Me dedico a ${areas} hace ${years}. Te explico qué voy a hacer y cuánto toma antes de empezar, y te digo el precio antes de empezar cualquier trabajo extra. Atiendo en ${cityText}.` },
     { label: 'Corto y directo', text: `${oficio.charAt(0).toUpperCase() + oficio.slice(1)} con ${years} de experiencia: ${jobsText}. Puntual y ordenado.` },
   ];

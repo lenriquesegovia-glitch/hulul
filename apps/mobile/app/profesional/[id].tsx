@@ -2,7 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator } from 'react-native';
-import { AFTER_VISIT_NOTE, serviceCopy, formatPrice, formatRating, getCategory } from '@hulul/shared';
+import { formatPrice, formatRating, getCategory } from '@hulul/shared';
 import { usePro } from '@/lib/pros';
 import { Icon } from '@/components/Icon';
 import { Avatar, BackButton, Body, Card, H1, H2, PrimaryButton } from '@/components/ui';
@@ -64,24 +64,11 @@ export default function ProfessionalScreen() {
               <View key={sv} style={s.chip}><Text style={s.chipText}>{sv}</Text></View>
             ))}
           </View>
-          <Body muted style={{ fontSize: 13 }}>¿Otro trabajo de {cat.name.toLowerCase()}? Elige &quot;Otro&quot; al reservar.</Body>
         </View>
 
         <View style={{ gap: 6 }}>
-          <H2>Cómo se cobra</H2>
-          <Body>• Visita: {formatPrice(pro.visitRate)}. Incluye {serviceCopy(cat?.slug).priceCovers}.</Body>
-          <Body>• Al terminar, {pro.name.split(' ')[0]} te deja un {serviceCopy(cat?.slug).reportTitle.toLowerCase()} con fotos.</Body>
-          <Body>• {AFTER_VISIT_NOTE}</Body>
-        </View>
-
-        <View style={{ gap: 10 }}>
-          <H2>Siempre incluido</H2>
-          {cat.incluye.map((i) => (
-            <View key={i} style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-              <Icon name="check" size={18} color={c.success} strokeWidth={2.2} />
-              <Body style={{ flex: 1 }}>{i}</Body>
-            </View>
-          ))}
+          <H2>Precio</H2>
+          <Body>{formatPrice(pro.visitRate)} por visita, con el traslado incluido. Si quieres algo más, te lo propone en la app y tú decides.</Body>
         </View>
 
         <View style={{ gap: 10 }}>
