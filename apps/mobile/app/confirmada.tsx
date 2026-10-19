@@ -30,7 +30,7 @@ export default function ConfirmedScreen() {
     );
   }
 
-  const when = `${pro.name} llegará ${nextDays()[last.dayIndex].long} a las ${SLOTS[last.slotIndex]}`;
+  const when = `${pro.name} llegará ${nextDays()[last.dayIndex].long} a las ${last.slotTime ?? SLOTS[last.slotIndex]}`;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top', 'bottom']}>

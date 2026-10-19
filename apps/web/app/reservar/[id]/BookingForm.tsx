@@ -23,6 +23,9 @@ import {
   quote,
   SLOTS,
   slotAvailable,
+  TEST_SLOTS,
+  testPeriodOpen,
+  timeAvailable,
   type LatLng,
   type PaymentMethod,
 } from '@hulul/shared';
@@ -131,6 +134,10 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 }
 
 function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string; profile: ClientProfile }) {
+  // Modo prueba: cualquier hora, sin reglas de horario (clients/{uid}.tester = true).
+  // También todas las cuentas mientras dure el periodo de prueba (TEST_PERIOD_UNTIL).
+  const tester = !!profile.tester || testPeriodOpen();
+  const slots = tester ? TEST_SLOTS : SLOTS;
   const cat = getCategory(pro.category)!;
   // La hora real se toma en el navegador, no al publicar la página.
   const [now, setNow] = useState<Date | null>(null);
@@ -143,9 +150,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
     const n = new Date();
     setNow(n);
     // Primer día y hora que cumplan el horario del servicio y del profesional.
-    const first = firstAvailable(n, leadMinutes(pro.category));
+    const first = tester ? { day: 0, slot: 0 } : firstAvailable(n, leadMinutes(pro.category));
     for (let d = first.day; d < BOOKING_DAYS; d++) {
-      const sIdx = SLOTS.findIndex((_, i) => okWith(n, d, i, minH));
+      const sIdx = slots.findIndex((_, i) => okWith(n, d, i, minH));
       if (sIdx >= 0) { setDay(d); setSlot(sIdx); return; }
     }
     setDay(first.day);
@@ -154,7 +161,8 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
 
   /** ¿Se puede ese día y hora? Anticipación + horario de la categoría + horario del profesional. */
   function okWith(n: Date, d: number, sIdx: number, h: number): boolean {
-    return slotAvailable(d, sIdx, n, leadMinutes(pro.category)) && checkSlot({ category: pro.category, date: isoDay(n, d), slot: SLOTS[sIdx], hours: h, pro }).ok;
+    if (tester) return timeAvailable(d, slots[sIdx], n, 5);
+    return slotAvailable(d, sIdx, n, leadMinutes(pro.category)) && checkSlot({ category: pro.category, date: isoDay(n, d), slot: slots[sIdx], hours: h, pro }).ok;
   }
 
   const dayRow = useRef<HTMLDivElement>(null);
@@ -163,7 +171,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
     // Si se eligió en el calendario, lleva ese día a la vista.
     (dayRow.current?.children[i] as HTMLElement | undefined)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
     if (now && (slot < 0 || !okWith(now, i, slot, hours))) {
-      setSlot(SLOTS.findIndex((_, s) => okWith(now, i, s, hours)));
+      setSlot(slots.findIndex((_, s) => okWith(now, i, s, hours)));
     }
   };
   // Se paga por visita. La duración estimada solo sirve para validar el horario.
@@ -188,8 +196,8 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
   const [error, setError] = useState('');
 
   const q = quote(pro.visitRate);
-  const dayOk = (i: number) => !!now && SLOTS.some((_, sIdx) => okWith(now, i, sIdx, hours));
-  const check = now && slot >= 0 ? checkSlot({ category: pro.category, date: isoDay(now, day), slot: SLOTS[slot], hours, pro }) : null;
+  const dayOk = (i: number) => !!now && slots.some((_, sIdx) => okWith(now, i, sIdx, hours));
+  const check = !tester && now && slot >= 0 ? checkSlot({ category: pro.category, date: isoDay(now, day), slot: slots[slot], hours, pro }) : null;
   const [ack, setAck] = useState(false);
   const warnKey = check?.warnings.join('|') ?? '';
   useEffect(() => { setAck(false); }, [warnKey]);
@@ -208,7 +216,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
       setError('Describe el trabajo que necesitas (al menos 10 caracteres).');
       return;
     }
-    if (slot < 0 || !slotAvailable(day, slot, new Date(), leadMinutes(pro.category))) {
+    if (slot < 0 || !okWith(new Date(), day, slot, hours)) {
       setError('Esa hora ya no está disponible. Elige otra hora de llegada.');
       return;
     }
@@ -234,7 +242,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         professionalName: pro.name,
         category: pro.category,
         date: dateInDays(day),
-        slot: SLOTS[slot],
+        slot: slots[slot],
         hours,
         pricing: 'visita',
         visit: q.visit,
@@ -242,7 +250,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         address: get('direccion'),
         location: location ?? undefined,
         // El trabajo elegido va delante de la descripción: "Mantenimiento de split. 2 equipos…"
-        notes: [service === OTHER ? '' : service, get('descripcion')].filter(Boolean).join('. ').slice(0, NOTES_MAX),
+        notes: [tester ? '[PRUEBA]' : '', service === OTHER ? '' : service, get('descripcion')].filter(Boolean).join('. ').slice(0, NOTES_MAX),
         clientId: uid,
         contactName: profile.name,
         contactPhone: profile.phone,
@@ -273,7 +281,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
           </span>
           <h2 style={{ fontSize: 26 }}>Reserva confirmada{done.name ? `, ${done.name}` : ''}</h2>
           <p style={{ color: 'var(--text-2)' }}>
-            {pro.name} llegará {days[day].long} a las {SLOTS[slot]}. {cat.name} · visita · {formatUSD(q.total)}
+            {pro.name} llegará {days[day].long} a las {slots[slot]}. {cat.name} · visita · {formatUSD(q.total)}
           </p>
           <p className="muted" style={{ fontSize: 13.5 }}>Código de reserva: {done.id.slice(0, 8).toUpperCase()}</p>
           {DEMO_MODE && (
@@ -319,7 +327,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         <div className="chip-row" role="radiogroup" aria-label="Día" ref={dayRow}>
           {days.map((d, i) => (
             <button key={i} type="button" role="radio" aria-checked={i === day} aria-label={d.long}
-              disabled={!now || !dayAvailable(i, now, leadMinutes(pro.category)) || !dayOk(i)}
+              disabled={!now || (!tester && !dayAvailable(i, now, leadMinutes(pro.category))) || !dayOk(i)}
               className={`chip-day ${i === day ? 'on' : ''}`} onClick={() => pickDay(i)}>
               <span className="chip-month">{d.month}</span>
               <span style={{ fontSize: 12, fontWeight: 700 }}>{d.top}</span>
@@ -328,8 +336,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
           ))}
         </div>
         <span className="muted" style={{ fontSize: 14, fontWeight: 700 }}>Hora de llegada</span>
+        {tester && <p className="pill pill-warm" style={{ alignSelf: 'flex-start' }}>Modo prueba: cualquier hora, sin reglas de horario</p>}
         <div className="slot-grid" role="radiogroup" aria-label="Hora de llegada">
-          {SLOTS.map((t, i) => slotInWindow(pro.category, t) && (
+          {slots.map((t, i) => (tester || slotInWindow(pro.category, t)) && (
             <button key={t} type="button" role="radio" aria-checked={i === slot}
               disabled={!now || !okWith(now, day, i, hours)}
               className={`chip-slot ${i === slot ? 'on' : ''}`} onClick={() => setSlot(i)}>{t}</button>
@@ -337,7 +346,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         </div>
         {check && (
           <span className="muted" style={{ fontSize: 14 }}>
-            {check.ok ? <>Llega a las <strong>{SLOTS[slot]}</strong>. Una visita de {cat.name.toLowerCase()} suele tomar unas {minH} h.</> : check.reason}
+            {check.ok ? <>Llega a las <strong>{slots[slot]}</strong>. Una visita de {cat.name.toLowerCase()} suele tomar unas {minH} h.</> : check.reason}
           </span>
         )}
         {slot < 0 && now && <p className="form-error">No quedan horas disponibles ese día. Elige otro día.</p>}

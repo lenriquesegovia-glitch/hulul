@@ -6,6 +6,25 @@ import type { PaymentMethod } from './models';
  */
 export const SLOTS = Array.from({ length: 13 }, (_, i) => `${String(7 + i).padStart(2, '0')}:00`);
 
+/**
+ * Modo prueba (cuentas con `tester: true` en `clients/{uid}`, puesto a mano en
+ * la consola de Firebase): cualquier hora, cada 30 minutos de 06:00 a 23:30,
+ * sin reglas de horario. Sirve para probar el ciclo completo de una reserva.
+ */
+export const TEST_SLOTS = Array.from({ length: 36 }, (_, i) => `${String(6 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
+
+/**
+ * Periodo de prueba: hasta esta fecha (incluida, hora de Ecuador) TODAS las
+ * cuentas reservan en modo prueba. Para cerrarlo antes, pon una fecha pasada.
+ */
+export const TEST_PERIOD_UNTIL = '2026-10-31';
+
+/** ¿Sigue abierto el periodo de prueba? */
+export function testPeriodOpen(now: Date = new Date()): boolean {
+  const ec = new Date(now.getTime() - 5 * 3_600_000).toISOString().slice(0, 10);
+  return ec <= TEST_PERIOD_UNTIL;
+}
+
 /** Cuántos días hacia adelante se puede reservar. */
 export const BOOKING_DAYS = 30;
 
@@ -50,8 +69,13 @@ export const LEAD_TIME_HOURS = 2;
 
 /** ¿Se puede reservar esa hora? Las de hoy deben empezar al menos `leadMin` minutos después de ahora. */
 export function slotAvailable(dayIndex: number, slotIndex: number, now: Date = new Date(), leadMin = LEAD_TIME_HOURS * 60): boolean {
+  return timeAvailable(dayIndex, SLOTS[slotIndex], now, leadMin);
+}
+
+/** Igual que slotAvailable, con la hora "HH:MM". */
+export function timeAvailable(dayIndex: number, hhmm: string, now: Date = new Date(), leadMin = LEAD_TIME_HOURS * 60): boolean {
   if (dayIndex > 0) return true;
-  const [h, m] = SLOTS[slotIndex].split(':').map(Number);
+  const [h, m] = hhmm.split(':').map(Number);
   const start = new Date(now);
   start.setHours(h, m, 0, 0);
   return start.getTime() - now.getTime() >= leadMin * 60_000;

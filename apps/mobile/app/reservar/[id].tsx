@@ -7,7 +7,7 @@ import { ClientGate } from '@/components/ClientGate';
 import { Icon } from '@/components/Icon';
 import { MapPicker } from '@/components/MapPicker';
 import type { ClientProfile } from '@hulul/shared/firebase';
-import { AFTER_VISIT_NOTE, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, type PaymentMethod } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, TEST_SLOTS, testPeriodOpen, timeAvailable, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
@@ -59,6 +59,9 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   const { confirm } = useBooking();
 
   const now = useMemo(() => new Date(), []);
+  // Modo prueba (cuenta de pruebas o periodo de prueba): cualquier hora, sin reglas de horario.
+  const tester = !!profile.tester || testPeriodOpen();
+  const slots = tester ? TEST_SLOTS : SLOTS;
   const days = useMemo(() => nextDays(BOOKING_DAYS, now), [now]);
   // Se paga por visita. La duración estimada solo sirve para validar el horario.
   const minH = visitHours(pro.category);
@@ -67,11 +70,11 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   const isoAt = (d: number) => { const x = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
   /** Anticipación + horario de la categoría + horario del profesional. */
   const lead = leadMinutes(pro.category);
-  const okWith = (d: number, k: number, h: number) => slotAvailable(d, k, now, lead) && checkSlot({ category: pro.category, date: isoAt(d), slot: SLOTS[k], hours: h, pro }).ok;
+  const okWith = (d: number, k: number, h: number) => tester ? timeAvailable(d, slots[k], now, 5) : slotAvailable(d, k, now, lead) && checkSlot({ category: pro.category, date: isoAt(d), slot: slots[k], hours: h, pro }).ok;
   const first = useMemo(() => {
-    const f = firstAvailable(now, lead);
+    const f = tester ? { day: 0, slot: 0 } : firstAvailable(now, lead);
     for (let d = f.day; d < BOOKING_DAYS; d++) {
-      const k = SLOTS.findIndex((_, i) => okWith(d, i, minH));
+      const k = slots.findIndex((_, i) => okWith(d, i, minH));
       if (k >= 0) return { day: d, slot: k };
     }
     return { day: f.day, slot: -1 };
@@ -103,7 +106,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
     return () => { clearTimeout(tm); ctrl.abort(); };
   }, [address]);
 
-  const check = slot >= 0 ? checkSlot({ category: pro.category, date: isoAt(day), slot: SLOTS[slot], hours, pro }) : null;
+  const check = !tester && slot >= 0 ? checkSlot({ category: pro.category, date: isoAt(day), slot: slots[slot], hours, pro }) : null;
   const [ack, setAck] = useState(false);
   const warnKey = check?.warnings.join('|') ?? '';
   useEffect(() => { setAck(false); }, [warnKey]);
@@ -121,7 +124,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
   const pickDay = (i: number) => {
     setDay(i);
-    if (slot < 0 || !okWith(i, slot, hours)) setSlot(SLOTS.findIndex((_, k) => okWith(i, k, hours)));
+    if (slot < 0 || !okWith(i, slot, hours)) setSlot(slots.findIndex((_, k) => okWith(i, k, hours)));
   };
 
 
@@ -129,7 +132,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
     if (sending) return;
     if (check && !check.ok) { setError(check.reason ?? 'Ese horario no está disponible.'); return; }
     if (check && check.warnings.length && !ack) { setError('Lee el aviso sobre el horario y marca que lo entiendes.'); return; }
-    if (slot < 0 || !slotAvailable(day, slot, new Date(), lead)) {
+    if (slot < 0 || (tester ? !timeAvailable(day, slots[slot], new Date(), 5) : !slotAvailable(day, slot, new Date(), lead))) {
       setError('Esa hora ya no está disponible. Elige otra hora de llegada.');
       return;
     }
@@ -164,14 +167,14 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
         professionalName: pro.name,
         category: pro.category,
         date: dateInDays(day),
-        slot: SLOTS[slot],
+        slot: slots[slot],
         hours,
         pricing: 'visita',
         visit: q.visit,
         safetyAccepted: true,
         address: address.trim(),
         location: location ?? undefined,
-        notes: [job === OTHER ? '' : job, notes.trim()].filter(Boolean).join('. ').slice(0, 1000),
+        notes: [tester ? '[PRUEBA]' : '', job === OTHER ? '' : job, notes.trim()].filter(Boolean).join('. ').slice(0, 1000),
         contactName: profile.name,
         contactPhone: profile.phone,
         contactEmail: profile.email,
@@ -183,7 +186,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
         consentMarketing: profile.consentMarketing,
         demo: true,
       });
-      confirm({ professionalId: pro.id, professionalName: pro.name, category: pro.category, dayIndex: day, slotIndex: slot, hours, address, notes: job, payment, total: q.total, bookingId });
+      confirm({ professionalId: pro.id, professionalName: pro.name, category: pro.category, dayIndex: day, slotIndex: slot, slotTime: slots[slot], hours, address, notes: job, payment, total: q.total, bookingId });
       router.replace('/confirmada');
     } catch {
       setSaveError('No pudimos registrar tu reserva. Revisa tu conexión e inténtalo de nuevo.');
@@ -209,7 +212,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {days.map((d, i) => {
                 const on = i === day;
-                const off = !dayAvailable(i, now, lead) || !SLOTS.some((_, k) => okWith(i, k, hours));
+                const off = (!tester && !dayAvailable(i, now, lead)) || !slots.some((_, k) => okWith(i, k, hours));
                 return (
                   <Pressable key={i} disabled={off} accessibilityRole="button" accessibilityState={{ selected: on, disabled: off }} accessibilityLabel={d.long} onPress={() => pickDay(i)} style={[s.day, on && s.on, off && s.off]}>
                     <Text style={[s.dayMonth, on && s.onText]}>{d.month}</Text>
@@ -223,9 +226,10 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
           <View style={{ gap: 10 }}>
             <Text style={s.label}>Hora de llegada</Text>
+            {tester && <Body style={{ fontSize: 12.5, color: c.copper }}>Modo prueba: cualquier hora, sin reglas de horario.</Body>}
             <View style={s.slots}>
-              {SLOTS.map((t, i) => {
-                if (!slotInWindow(pro.category, t)) return null;
+              {slots.map((t, i) => {
+                if (!tester && !slotInWindow(pro.category, t)) return null;
                 const on = i === slot;
                 const off = !okWith(day, i, hours);
                 return (
@@ -239,7 +243,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
           {check ? (
             <Body muted style={{ fontSize: 13 }}>
-              {check.ok ? `Llega a las ${SLOTS[slot]}. Una visita de ${cat.name.toLowerCase()} suele tomar unas ${minH} h.` : check.reason}
+              {check.ok ? `Llega a las ${slots[slot]}. Una visita de ${cat.name.toLowerCase()} suele tomar unas ${minH} h.` : check.reason}
             </Body>
           ) : <Body style={{ fontSize: 13, color: c.primary }}>No quedan horas disponibles ese día. Elige otro día.</Body>}
           {check?.ok && check.warnings.length > 0 && (

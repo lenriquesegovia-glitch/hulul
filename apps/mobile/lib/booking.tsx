@@ -15,6 +15,8 @@ export interface DraftBooking {
   category: string;
   dayIndex: number;
   slotIndex: number;
+  /** Hora elegida "HH:MM" (en modo prueba no sale de SLOTS). */
+  slotTime?: string;
   hours: number;
   address: string;
   notes: string;
