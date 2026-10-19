@@ -30,6 +30,14 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
       allow update, delete: if false;
     }
+    // Fotos del chat de una reserva (las ven las dos partes por el enlace del mensaje).
+    match /chat/{bookingId}/{uid}/{file} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
     match /{allPaths=**} {
       allow read, write: if false;
     }

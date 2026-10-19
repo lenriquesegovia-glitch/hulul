@@ -211,6 +211,29 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Chat de la reserva: solo el cliente y el profesional de esa reserva leen y
+    // escriben; los mensajes no se editan ni se borran (respaldo para ambos).
+    match /bookings/{bookingId}/messages/{msgId} {
+      function chatBooking() {
+        return get(/databases/$(database)/documents/bookings/$(bookingId)).data;
+      }
+      function chatMember() {
+        return request.auth != null
+          && (chatBooking().clientId == request.auth.uid || chatBooking().professionalId == request.auth.uid);
+      }
+      allow read: if chatMember();
+      allow create: if chatMember()
+        && chatBooking().status in ['pendiente', 'confirmada', 'en_camino', 'en_curso', 'por_aprobar']
+        && request.resource.data.keys().hasOnly(['from', 'uid', 'kind', 'text', 'photo', 'at'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.from == (chatBooking().clientId == request.auth.uid ? 'cliente' : 'profesional')
+        && request.resource.data.kind in ['texto', 'foto', 'pedir_fotos']
+        && (!('text' in request.resource.data) || str(request.resource.data.text, 1, 1000))
+        && (!('photo' in request.resource.data) || (request.resource.data.photo is string && request.resource.data.photo.matches('https://firebasestorage[.]googleapis[.]com/.*')))
+        && request.resource.data.at == request.time;
+      allow update, delete: if false;
+    }
+
     // Reseñas públicas de los profesionales (las escribe el servidor al calificar).
     match /reviews/{reviewId} {
       allow read: if true;

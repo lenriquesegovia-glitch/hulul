@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { COMMISSION_RATE, formatUSD, getCategory } from '@hulul/shared';
 import { firestore, type ProBooking } from '@hulul/shared/firebase';
@@ -76,6 +76,7 @@ export function ProHome({ uid, name }: { uid: string; name: string }) {
           <Body style={{ color: '#fff', fontSize: 13.5 }}>
             {getCategory(data.pending[0].category)?.name} · {dayLabel(data.pending[0].date)} {data.pending[0].slot}. Acéptala o recházala en tu agenda.
           </Body>
+          {!!data.pending[0].photos?.length && <Body style={{ color: '#fff', fontSize: 13 }}>📷 El cliente adjuntó {data.pending[0].photos.length} foto(s).</Body>}
           <View style={s.alertBtn}><Text style={s.alertBtnText}>Revisar ahora</Text></View>
         </Pressable>
       )}
@@ -86,6 +87,13 @@ export function ProHome({ uid, name }: { uid: string; name: string }) {
           <Text style={s.nextTitle}>{dayLabel(data.next.date)} · {data.next.slot} · {getCategory(data.next.category)?.name}</Text>
           <Body muted style={{ fontSize: 13.5 }}>{String(data.next.contactName ?? '').split(' ')[0]} · {data.next.address}</Body>
           {data.next.notes ? <Body style={{ fontSize: 13.5 }} numberOfLines={2}>{data.next.notes}</Body> : null}
+          {!!data.next.photos?.length && (
+            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+              {data.next.photos.map((u) => (
+                <Pressable key={u} onPress={() => Linking.openURL(u)}><Image source={{ uri: u }} style={{ width: 64, height: 64, borderRadius: 8 }} accessibilityLabel="Foto del cliente" /></Pressable>
+              ))}
+            </View>
+          )}
           <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
             <Pressable accessibilityRole="button" onPress={open} style={s.primary}><Text style={s.primaryText}>Abrir en mi agenda</Text></Pressable>
             {data.next.location && (

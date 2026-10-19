@@ -1069,3 +1069,18 @@ export const calificarCliente = onCall({ region: REGION }, async (req) => {
   });
   return { ok: true };
 });
+
+/* ------------------------------------ Chat ------------------------------------ */
+
+/** Mensaje nuevo en el chat de una reserva: notificación al otro. */
+export const avisoChat = onDocumentCreated({ document: 'bookings/{id}/messages/{mid}', region: REGION }, async (event) => {
+  const m = event.data?.data();
+  if (!m) return;
+  const id = event.params.id;
+  const b = (await db().doc(`bookings/${id}`).get()).data();
+  if (!b) return;
+  const toPro = m.from === 'cliente';
+  const name = toPro ? String(b.contactName ?? 'El cliente').split(' ')[0] : String(b.professionalName ?? 'Tu profesional').split(' ')[0];
+  const body = m.kind === 'foto' ? '📷 Te envió una foto' : m.kind === 'pedir_fotos' ? `📷 Te pide fotos: ${String(m.text ?? '').slice(0, 120)}` : String(m.text ?? '').slice(0, 160);
+  await pushTo(toPro ? b.professionalId : b.clientId, `💬 ${name}`, body, toPro ? { url: AGENDA, bookingId: id, to: 'pro', chat: true } : { bookingId: id, to: 'cliente', chat: true });
+});

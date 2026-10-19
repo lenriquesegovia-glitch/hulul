@@ -10,6 +10,7 @@ import { SafetyNotice, VisitReport } from '@/components/VisitReport';
 import { LiveMap } from '@/components/LiveMap';
 import { ExtraForClient } from '@/components/ExtraCharge';
 import { RatingBox } from '@/components/Rating';
+import { Chat } from '@/components/Chat';
 import { useUser } from '@/lib/auth';
 import { CancelBox } from '../../Account';
 
@@ -103,6 +104,13 @@ export function BookingDetail({ id }: { id: string }) {
       {b.status === 'por_aprobar' && !b.rating && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
 
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && <SafetyNotice title={HOME_SAFETY_TITLE} items={HOME_SAFETY_NOTICE} />}
+
+      {b.status !== 'cancelada' && user && (
+        <div className="card stack gap-8">
+          <strong style={{ fontSize: 17 }}>💬 Chat con {first}</strong>
+          <Chat bookingId={b.id} uid={user.uid} me="cliente" otherName={first} open={['pendiente', 'confirmada', 'en_camino', 'en_curso', 'por_aprobar'].includes(b.status)} />
+        </div>
+      )}
 
       {changeable && (
         <RescheduleBox id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="cliente" other={first} />

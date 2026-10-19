@@ -5,9 +5,13 @@ import Link from 'next/link';
 import { COMMISSION_RATE, departPlan, durationLabel, formatUSD, getCategory, hhmmEcuador, JOB_OUTCOMES, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS, MIN_DIAGNOSIS_CHARS, MIN_DIAGNOSIS_PHOTOS, travelEstimate, type JobOutcome, type ProviderStatus } from '@hulul/shared';
 import { RescheduleBox } from '@/components/RescheduleBox';
 import type { ProAction, ProBooking, VisitReport as Report } from '@hulul/shared/firebase';
+
+/** Mismos estados que CHAT_OPEN_STATUSES (firebase.ts): en ellos se puede escribir en el chat. */
+const CHAT_OPEN_STATUSES = ['pendiente', 'confirmada', 'en_camino', 'en_curso', 'por_aprobar'];
 import { VisitReport } from '@/components/VisitReport';
 import { ExtraForPro } from '@/components/ExtraCharge';
 import { RateClientBox } from '@/components/Rating';
+import { Chat } from '@/components/Chat';
 import { SignIn } from '@/components/SignIn';
 import { logout, useUser } from '@/lib/auth';
 import { AgendaMap } from './AgendaMap';
@@ -222,11 +226,6 @@ function directions(b: ProBooking) {
   };
 }
 
-function waLink(phone: string, text: string) {
-  const d = phone.replace(/\D/g, '');
-  const n = d.startsWith('0') ? `593${d.slice(1)}` : d;
-  return `https://wa.me/${n}?text=${encodeURIComponent(text)}`;
-}
 
 function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking; highlight?: boolean; compact?: boolean }) {
   const cat = getCategory(b.category);
@@ -237,6 +236,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
   const [msg, setMsg] = useState('');
   const [asking, setAsking] = useState<'' | 'rechazar' | 'no_puedo'>('');
   const [finishing, setFinishing] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [reason, setReason] = useState('');
 
   const act = async (a: ProAction, report?: Report) => {
@@ -282,10 +282,15 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
             <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
               <a className="btn btn-ghost" href={nav.google} target="_blank" rel="noreferrer">Cómo llegar (Google Maps)</a>
               <a className="btn btn-ghost" href={nav.waze} target="_blank" rel="noreferrer">Waze</a>
-              {accepted && b.contactPhone && (
-                <a className="btn btn-ghost" href={waLink(b.contactPhone, `Hola ${first}, soy tu profesional de HULUL para ${cat?.name ?? 'el servicio'} del ${dayTitle(b.date).toLowerCase()} a las ${b.slot}.`)} target="_blank" rel="noreferrer">WhatsApp al cliente</a>
+              {b.professionalId && (
+                <button type="button" className="btn btn-ghost" onClick={() => setChatOpen((v) => !v)} aria-expanded={chatOpen}>
+                  💬 {chatOpen ? 'Ocultar chat' : `Chat con ${first || 'el cliente'}`}
+                </button>
               )}
             </div>
+          )}
+          {chatOpen && b.professionalId && (
+            <Chat bookingId={b.id} uid={b.professionalId} me="profesional" otherName={first || 'el cliente'} open={CHAT_OPEN_STATUSES.includes(b.status)} />
           )}
         </div>
       )}

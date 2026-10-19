@@ -8,6 +8,8 @@ import { confirmService, EXTRA_STATUS_LABEL, extraCharge, firestore, reschedule,
 import { Icon } from '@/components/Icon';
 import { LiveMap } from '@/components/LiveMap';
 import { RatingBox } from '@/components/Rating';
+import { Chat } from '@/components/Chat';
+import { useUser } from '@/lib/auth';
 import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
 import { CancelBox } from '../cuenta';
 import { c, font, radius } from '@/theme';
@@ -51,6 +53,7 @@ export default function BookingDetailScreen() {
 }
 
 function Detail({ b }: { b: ClientBooking }) {
+  const me = useUser();
   const cat = getCategory(b.category);
   const first = b.professionalName.split(' ')[0];
   const idx = STEPS.findIndex((x) => x.status === b.status);
@@ -120,6 +123,12 @@ function Detail({ b }: { b: ClientBooking }) {
           <Text style={s.boxTitle}>{HOME_SAFETY_TITLE}</Text>
           {HOME_SAFETY_NOTICE.map((t) => <Body key={t} style={{ fontSize: 13.5 }}>• {t}</Body>)}
         </View>
+      )}
+      {b.status !== 'cancelada' && me && (
+        <Card style={{ gap: 10 }}>
+          <Text style={s.boxTitle}>💬 Chat con {first}</Text>
+          <Chat bookingId={b.id} uid={me.uid} me="cliente" otherName={first} open={['pendiente', 'confirmada', 'en_camino', 'en_curso', 'por_aprobar'].includes(b.status)} />
+        </Card>
       )}
       {['pendiente', 'confirmada'].includes(b.status) && <Reschedule b={b} other={first} />}
       <Card style={{ gap: 6 }}>

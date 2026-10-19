@@ -9,7 +9,7 @@
  * no guardan datos no carguen Firebase.
  */
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
-import { addDoc, collection, doc, getDoc, getDocs, getFirestore, limit, onSnapshot, query, serverTimestamp, setDoc, where, type Firestore, type Timestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, getFirestore, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, where, type Firestore, type Timestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { PRIVACY_VERSION } from './legal';
 import type { CategorySlug } from './categories';
@@ -333,6 +333,44 @@ export async function extraCharge(data: ExtraAction): Promise<void> {
   await fn(data);
 }
 
+/* ----------------------------------- Chat ----------------------------------- */
+
+/**
+ * Chat dentro de la reserva (como Uber o Pedidos Ya): cliente y profesional
+ * hablan sin compartir su número. `bookings/{id}/messages/{mensaje}`.
+ */
+export type ChatKind = 'texto' | 'foto' | 'pedir_fotos';
+export interface ChatMessage {
+  id: string;
+  from: 'cliente' | 'profesional';
+  uid: string;
+  kind: ChatKind;
+  text?: string;
+  photo?: string;
+  at?: Date;
+}
+
+/** Estados en los que se puede escribir (después solo se lee). */
+export const CHAT_OPEN_STATUSES = ['pendiente', 'confirmada', 'en_camino', 'en_curso', 'por_aprobar'];
+
+export async function sendChat(bookingId: string, m: { from: 'cliente' | 'profesional'; uid: string; kind: ChatKind; text?: string; photo?: string }): Promise<void> {
+  await addDoc(collection(firestore(), 'bookings', bookingId, 'messages'), {
+    from: m.from, uid: m.uid, kind: m.kind,
+    ...(m.text ? { text: m.text.slice(0, 1000) } : {}),
+    ...(m.photo ? { photo: m.photo } : {}),
+    at: serverTimestamp(),
+  });
+}
+
+export function watchChat(bookingId: string, cb: (list: ChatMessage[]) => void): () => void {
+  return onSnapshot(query(collection(firestore(), 'bookings', bookingId, 'messages'), orderBy('at', 'asc'), limit(300)), (snap) => {
+    cb(snap.docs.map((d) => {
+      const x = d.data() as Omit<ChatMessage, 'id' | 'at'> & { at?: Timestamp };
+      return { id: d.id, from: x.from, uid: x.uid, kind: x.kind, text: x.text, photo: x.photo, at: x.at?.toDate?.() };
+    }));
+  }, () => cb([]));
+}
+
 /* ------------------------------ Calificaciones ------------------------------ */
 
 /** El cliente califica al profesional (obligatorio) y a la app (opcional). También cierra el servicio. */
@@ -440,6 +478,8 @@ export async function proAction(id: string, action: ProAction, reason = '', repo
 
 export interface ProBooking {
   id: string;
+  professionalId?: string;
+  clientId?: string;
   category: CategorySlug;
   date: string;
   slot: string;
