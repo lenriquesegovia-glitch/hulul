@@ -180,6 +180,8 @@ export const OUTCOME_LABEL: Record<JobOutcome, string> = {
 
 /** Fotos del diagnóstico. */
 export const MAX_DIAGNOSIS_PHOTOS = 6;
+/** Siempre hace falta al menos una foto, se haya resuelto o no (respaldo para ambos). */
+export const MIN_DIAGNOSIS_PHOTOS = 1;
 export const MAX_DIAGNOSIS_CHARS = 1500;
 
 /** Mínimo de caracteres del diagnóstico cuando no quedó resuelto. */

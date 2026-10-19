@@ -72,8 +72,8 @@ function Detail({ b }: { b: ClientBooking }) {
       <Card style={{ gap: 14 }}>
         <Body>{message[b.status] ?? ''}</Body>
         {b.status !== 'cancelada' && STEPS.map((st, i) => {
-          const done = idx > i || b.status === 'completada';
-          const now = idx === i;
+          const done = idx > i || ['por_aprobar', 'completada'].includes(b.status);
+          const now = idx === i && !done;
           return (
             <View key={st.status} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={[s.dot, done && { backgroundColor: c.success, borderColor: c.success }, now && { borderColor: c.copper }]}>

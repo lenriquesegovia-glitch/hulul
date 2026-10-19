@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { COMMISSION_RATE, departPlan, durationLabel, formatUSD, getCategory, hhmmEcuador, JOB_OUTCOMES, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS, MIN_DIAGNOSIS_CHARS, travelEstimate, type JobOutcome, type ProviderStatus } from '@hulul/shared';
+import { COMMISSION_RATE, departPlan, durationLabel, formatUSD, getCategory, hhmmEcuador, JOB_OUTCOMES, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS, MIN_DIAGNOSIS_CHARS, MIN_DIAGNOSIS_PHOTOS, travelEstimate, type JobOutcome, type ProviderStatus } from '@hulul/shared';
 import { RescheduleBox } from '@/components/RescheduleBox';
 import type { ProAction, ProBooking, VisitReport as Report } from '@hulul/shared/firebase';
 import { VisitReport } from '@/components/VisitReport';
@@ -366,6 +366,7 @@ function FinishPanel({ bookingId, busy, onCancel, onSend }: { bookingId: string;
     setErr('');
     if (!outcome) { setErr('Elige cómo quedó el trabajo.'); return; }
     if (outcome !== 'resuelto' && diagnosis.trim().length < MIN_DIAGNOSIS_CHARS) { setErr('Explica qué encontraste y qué hace falta, para que el cliente lo entienda.'); return; }
+    if (photos.length < MIN_DIAGNOSIS_PHOTOS) { setErr('Sube al menos una foto del trabajo, haya quedado resuelto o no. Es tu respaldo.'); return; }
     onSend({ outcome, diagnosis: diagnosis.trim(), photos });
   };
 
@@ -389,7 +390,7 @@ function FinishPanel({ bookingId, busy, onCancel, onSend }: { bookingId: string;
       </div>
       <div className="doc-row" style={{ alignItems: 'center' }}>
         <div className="stack gap-4" style={{ flex: 1, minWidth: 0 }}>
-          <strong style={{ fontSize: 14.5 }}>Fotos del trabajo (hasta {MAX_DIAGNOSIS_PHOTOS})</strong>
+          <strong style={{ fontSize: 14.5 }}>Fotos del trabajo (mínimo 1, hasta {MAX_DIAGNOSIS_PHOTOS})</strong>
           <span className="muted" style={{ fontSize: 13 }}>{photos.length ? `✓ ${photos.length} foto(s)` : 'Antes y después, la falla, la pieza dañada…'}</span>
         </div>
         <label className="btn btn-ghost doc-btn" aria-busy={uploading}>

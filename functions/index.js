@@ -518,6 +518,7 @@ export const gestionarReserva = onCall(
       const photos = Array.isArray(req.data?.photos) ? req.data.photos.map(String) : [];
       if (!OUTCOMES[outcome]) throw new HttpsError('invalid-argument', 'Elige cómo quedó el trabajo.');
       if (outcome !== 'resuelto' && diagnosis.length < 20) throw new HttpsError('invalid-argument', 'Explica en el diagnóstico qué encontraste y qué hace falta (mínimo 20 caracteres).');
+      if (photos.length < 1) throw new HttpsError('invalid-argument', 'Sube al menos una foto del trabajo, haya quedado resuelto o no.');
       if (photos.length > 6) throw new HttpsError('invalid-argument', 'Máximo 6 fotos.');
       const prefix = `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(`diagnosticos/${uid}/${id}/`)}`;
       if (photos.some((u) => !u.startsWith(prefix))) throw new HttpsError('invalid-argument', 'Fotos no válidas.');

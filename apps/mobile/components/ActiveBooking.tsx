@@ -18,7 +18,8 @@ export function ActiveBooking() {
   }, [user]));
 
   if (!b) return null;
-  const idx = Math.max(0, TRACK_STEPS.findIndex((s) => s.status === b.status));
+  // Al terminar (por aprobar), todos los pasos quedan en verde.
+  const idx = b.status === 'por_aprobar' ? TRACK_STEPS.length : Math.max(0, TRACK_STEPS.findIndex((s) => s.status === b.status));
   return (
     <Pressable accessibilityRole="button" accessibilityLabel="Ver mi reserva" onPress={() => router.push({ pathname: '/reserva/[id]', params: { id: b.id } })} style={s.card}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>

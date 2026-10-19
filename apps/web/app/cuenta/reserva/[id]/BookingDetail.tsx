@@ -73,7 +73,7 @@ export function BookingDetail({ id }: { id: string }) {
         {b.status !== 'cancelada' && (
           <ol className="timeline">
             {STEPS.map((s, i) => {
-              const state = idx > i || b.status === 'completada' ? 'done' : idx === i ? 'now' : '';
+              const state = idx > i || ['por_aprobar', 'completada'].includes(b.status) ? 'done' : idx === i ? 'now' : '';
               return (
                 <li key={s.status} className={state}>
                   <span className="tl-dot">{state === 'done' && <Icon name="check" size={14} color="#fff" strokeWidth={3} />}</span>

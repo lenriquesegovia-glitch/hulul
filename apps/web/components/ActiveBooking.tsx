@@ -22,7 +22,8 @@ export function ActiveBooking() {
   }, [user]);
 
   if (!b) return null;
-  const idx = Math.max(0, steps.findIndex((s) => s.status === b.status));
+  // Al terminar (por aprobar), todos los pasos quedan en verde.
+  const idx = b.status === 'por_aprobar' ? steps.length : Math.max(0, steps.findIndex((s) => s.status === b.status));
   return (
     <Link href={`/cuenta/reserva/${b.id}`} className="active-booking container" aria-label="Ver mi reserva">
       <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
