@@ -17,6 +17,12 @@ const BAD_WORDS = [
   'ctm', 'ctmr', 'csm', 'cdsm', 'conchesumadre', 'chuchesumadre', 'ptm', 'ptmr', 'hpta', 'hpt', 'hptas', 'hijueputas', 'hueputa', 'jueputa', 'hdpt',
   'mrd', 'mrda', 'mierd', 'pndj', 'pndjo', 'pndja', 'cbrn', 'hvn', 'hvon', 'gvn',
   'cachudo', 'cachuda', 'plomazo', 'malnacido', 'malnacida', 'pelotudo', 'pelotuda', 'boludo', 'boluda', 'caremonda', 'monda',
+  // Jerga ecuatoriana
+  'cdtm', 'chdtm', 'ctmre', 'chuchamadre', 'chuchadetumadre', 'chuchesu', 'chuchas', 'mamaguevo', 'mamaguevos', 'mamaverguear', 'verguear', 'verguero',
+  'huevas', 'huevadas', 'webon', 'webona', 'webada', 'wevon', 'wevona', 'wevada', 'wvn', 'gueva', 'guevas', 'careculo', 'carechucha', 'caretuca',
+  'conchudo', 'conchuda', 'carishina', 'cholo', 'longuito', 'longuita', 'cagon', 'cagona', 'mierdoso', 'mierdosa', 'mierdero',
+  'malparidos', 'mal parido', 'mal parida', 'hijo de perra', 'hija de perra', 'mariposon', 'mamarracho', 'sinverguenza', 'desgraciado', 'desgraciada',
+  'lambon', 'lambona', 'ladilla', 'gil', 'gila', 'gilazo', 'cojudazo', 'pendejazo', 'huevonazo',
   // Inglés básico
   'fuck', 'fucking', 'fck', 'shit', 'bitch', 'asshole', 'motherfucker', 'dick',
 ];
