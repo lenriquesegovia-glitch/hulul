@@ -10,6 +10,7 @@ import { LiveMap } from '@/components/LiveMap';
 import { RatingBox } from '@/components/Rating';
 import { Chat } from '@/components/Chat';
 import { DelayClient } from '@/components/Delay';
+import { ArrivalCode, ProblemBox } from '@/components/ArrivalCode';
 import { useUser } from '@/lib/auth';
 import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
 import { CancelBox } from '../cuenta';
@@ -63,10 +64,11 @@ function Detail({ b }: { b: ClientBooking }) {
   const message: Record<string, string> = {
     pendiente: `Esperando que ${first} acepte tu reserva. Te avisamos apenas lo haga.`,
     confirmada: `${first} confirmó. Saldrá con el tiempo justo para llegar a las ${b.slot} (puede salir desde las ${hhmmEcuador(new Date(at.getTime() - 120 * 60_000))}).`,
-    en_camino: `${first} va en camino. Míralo en el mapa en vivo.`,
+    en_camino: b.arrivedAt ? `${first} está en tu dirección. Recíbelo y dale tu código de llegada.` : `${first} va en camino. Míralo en el mapa en vivo.`,
     en_curso: `${first} está trabajando. Al terminar te deja el resultado y un diagnóstico con fotos.`,
     por_aprobar: `${first} terminó la visita. Revisa su diagnóstico; tienes 48 horas para calificarlo o reportar un problema.`,
     completada: 'Servicio completado.',
+    en_disputa: 'Reportaste un problema. HULUL lo está revisando y el pago queda retenido mientras tanto.',
     cancelada: cancelledText(b, first),
   };
 
@@ -76,6 +78,7 @@ function Detail({ b }: { b: ClientBooking }) {
         <H1 style={{ fontSize: 24 }}>{cat?.name ?? b.category} con {b.professionalName}</H1>
         <Text style={s.when}>{shortDay(b.date)} · {b.slot}</Text>
       </View>
+      {['confirmada', 'en_camino'].includes(b.status) && <ArrivalCode id={b.id} pro={first} />}
       {['confirmada', 'en_camino'].includes(b.status) && <DelayClient id={b.id} slot={b.slot} delay={b.delay} pro={first} />}
       {alert && (
         <View style={[s.box, { backgroundColor: c.copperSoft, borderLeftWidth: 4, borderLeftColor: alert.tone === 'bad' ? c.primary : c.copper }]} accessibilityRole="alert">
@@ -127,6 +130,7 @@ function Detail({ b }: { b: ClientBooking }) {
       {['por_aprobar', 'completada'].includes(b.status) && !b.rating && b.extra?.status !== 'propuesto' && <RatingBox id={b.id} proName={first} />}
       {b.rating ? <Body muted>Calificaste a {first} con {'★'.repeat(b.rating)}. ¡Gracias!</Body> : null}
       {b.status === 'por_aprobar' && !b.rating && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
+      {['por_aprobar', 'completada'].includes(b.status) && !b.dispute && <ProblemBox id={b.id} />}
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && (
         <View style={s.box}>
           <Text style={s.boxTitle}>{HOME_SAFETY_TITLE}</Text>

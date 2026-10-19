@@ -214,6 +214,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Código de llegada: solo lo lee el cliente (el profesional se lo pide para
+    // empezar el trabajo). Lo escribe el servidor.
+    match /bookings/{bookingId}/private/{docId} {
+      allow read: if request.auth != null
+        && get(/databases/$(database)/documents/bookings/$(bookingId)).data.clientId == request.auth.uid;
+      allow write: if false;
+    }
+
     // Chat de la reserva: solo el cliente y el profesional de esa reserva leen y
     // escriben; los mensajes no se editan ni se borran (respaldo para ambos).
     match /bookings/{bookingId}/messages/{msgId} {

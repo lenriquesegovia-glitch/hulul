@@ -12,6 +12,7 @@ import { ExtraForClient } from '@/components/ExtraCharge';
 import { RatingBox } from '@/components/Rating';
 import { Chat } from '@/components/Chat';
 import { DelayClient } from '@/components/Delay';
+import { ArrivalCode, ProblemBox } from '@/components/ArrivalCode';
 import { useUser } from '@/lib/auth';
 import { CancelBox } from '../../Account';
 
@@ -55,10 +56,11 @@ export function BookingDetail({ id }: { id: string }) {
   const message: Record<string, string> = {
     pendiente: `Esperando que ${first} acepte tu reserva. Te avisamos por correo apenas lo haga.`,
     confirmada: `${first} confirmó. Saldrá hacia tu dirección con el tiempo justo para llegar a las ${b.slot} (puede salir desde las ${hhmmEcuador(new Date(at.getTime() - 120 * 60_000))}). Te avisamos cuando vaya en camino.`,
-    en_camino: `${first} va en camino a tu dirección. Míralo en el mapa en vivo.`,
+    en_camino: b.arrivedAt ? `${first} está en tu dirección. Recíbelo y dale tu código de llegada.` : `${first} va en camino a tu dirección. Míralo en el mapa en vivo.`,
     en_curso: `${first} está trabajando. Al terminar te deja el resultado y un diagnóstico con fotos.`,
     por_aprobar: `${first} terminó la visita. Revisa su diagnóstico; tienes 48 horas para calificarlo o reportar un problema.`,
     completada: 'Servicio completado. ¡Gracias por usar HULUL!',
+    en_disputa: 'Reportaste un problema. HULUL lo está revisando y el pago queda retenido mientras tanto. Te escribimos con la respuesta.',
     cancelada: cancelledText(b, first),
   };
   const changeable = ['pendiente', 'confirmada'].includes(b.status);
@@ -74,6 +76,7 @@ export function BookingDetail({ id }: { id: string }) {
         <p style={{ fontSize: 17 }}><strong>{shortDay(b.date)} · {b.slot}</strong></p>
       </div>
 
+      {['confirmada', 'en_camino'].includes(b.status) && <ArrivalCode id={b.id} pro={first} />}
       {['confirmada', 'en_camino'].includes(b.status) && <DelayClient id={b.id} slot={b.slot} delay={b.delay} pro={first} />}
 
       {alert && (
@@ -111,6 +114,7 @@ export function BookingDetail({ id }: { id: string }) {
       {['por_aprobar', 'completada'].includes(b.status) && !b.rating && b.extra?.status !== 'propuesto' && <RatingBox id={b.id} proName={first} />}
       {b.rating ? <p className="muted">Calificaste a {first} con {'★'.repeat(b.rating)}. ¡Gracias!</p> : null}
       {b.status === 'por_aprobar' && !b.rating && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
+      {['por_aprobar', 'completada'].includes(b.status) && !b.dispute && <ProblemBox id={b.id} />}
 
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && <SafetyNotice title={HOME_SAFETY_TITLE} items={HOME_SAFETY_NOTICE} />}
 

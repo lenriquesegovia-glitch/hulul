@@ -187,14 +187,14 @@ export interface DepartPlan {
 }
 
 /**
- * Cuándo debe salir el profesional. Sin ubicación: puede salir desde 2 horas
- * antes. Con ubicación: desde el viaje + 30 min antes (máx. 2 h), y debe salir
- * a más tardar con el viaje + 10 min de margen.
+ * Cuándo debe salir el profesional: puede salir desde 2 horas antes y, si se
+ * conoce el viaje, debe salir a más tardar con el viaje + 10 min de margen.
  */
 export function departPlan(b: { date: string; slot: string }, now: Date = new Date(), tripMinutes?: number): DepartPlan {
   const at = appointmentTime(b.date, b.slot).getTime();
-  const lead = tripMinutes != null ? Math.min(EARLIEST_DEPART_MINUTES, tripMinutes + 30) : EARLIEST_DEPART_MINUTES;
-  const earliest = new Date(at - lead * 60_000);
+  // Puede salir desde 2 horas antes (la misma regla del servidor). Calcular el
+  // viaje solo informa a qué hora salir a más tardar; nunca bloquea la salida.
+  const earliest = new Date(at - EARLIEST_DEPART_MINUTES * 60_000);
   const latest = tripMinutes != null ? new Date(at - (tripMinutes + ARRIVAL_BUFFER_MINUTES) * 60_000) : undefined;
   const lateBy = tripMinutes != null ? Math.max(0, Math.round((now.getTime() + tripMinutes * 60_000 - at) / 60_000)) : 0;
   return { earliest, latest, canGo: now >= earliest, lateBy };

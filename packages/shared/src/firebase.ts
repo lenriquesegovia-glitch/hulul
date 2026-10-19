@@ -33,6 +33,30 @@ export function firebaseApp(): FirebaseApp {
 }
 
 let db: Firestore | null = null;
+/**
+ * Función del servidor con mensajes claros: si el servidor no responde o la
+ * función aún no está publicada, explica qué hacer en vez de "internal".
+ */
+export function friendlyError(e: unknown): Error {
+  const code = String((e as { code?: string })?.code ?? '');
+  const msg = String((e as { message?: string })?.message ?? '');
+  if (['functions/internal', 'functions/not-found', 'functions/unavailable', 'functions/deadline-exceeded'].includes(code) || /^internal$/i.test(msg)) {
+    return Object.assign(new Error('No pudimos conectar con el servidor de HULUL. Revisa tu internet e inténtalo de nuevo. (Si acabas de actualizar, falta publicar el servidor.)'), { code });
+  }
+  return e instanceof Error ? e : new Error(msg || 'Algo salió mal. Inténtalo de nuevo.');
+}
+
+function callable<I, O>(name: string) {
+  const fn = httpsCallable<I, O>(getFunctions(firebaseApp(), 'southamerica-east1'), name);
+  return async (data: I) => {
+    try {
+      return await fn(data);
+    } catch (e) {
+      throw friendlyError(e);
+    }
+  };
+}
+
 export function firestore(): Firestore {
   if (!db) db = getFirestore(firebaseApp());
   return db;
@@ -171,6 +195,8 @@ export async function createClientProfile(uid: string, p: ClientProfile): Promis
 
 export interface ClientBooking {
   id: string;
+  arrivedAt?: { toMillis: () => number };
+  dispute?: { kind: string; text: string; status: string };
   delay?: Delay;
   /** Falta del profesional que causó la cancelación (no salió, muy tarde, no se presentó). */
   proFault?: string;
@@ -214,7 +240,7 @@ export const DELAY_OPTIONS = [10, 15, 20, 30, 45, 60, 90];
 
 /** El profesional avisa un retraso; el cliente lo acepta o lo rechaza (cancela sin costo). */
 export async function delayAction(data: { id: string; action: 'proponer'; minutes: number; reason?: string } | { id: string; action: 'aceptar' | 'rechazar' }): Promise<void> {
-  const fn = httpsCallable<typeof data, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'avisarRetraso');
+  const fn = callable<typeof data, { ok: boolean }>('avisarRetraso');
   await fn(data);
 }
 
@@ -345,7 +371,7 @@ export type ExtraAction =
 
 /** Proponer, aceptar, rechazar o confirmar el pago de un cobro adicional (lo valida el servidor). */
 export async function extraCharge(data: ExtraAction): Promise<void> {
-  const fn = httpsCallable<ExtraAction, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'cobroAdicional');
+  const fn = callable<ExtraAction, { ok: boolean }>('cobroAdicional');
   await fn(data);
 }
 
@@ -387,6 +413,29 @@ export function watchChat(bookingId: string, cb: (list: ChatMessage[]) => void):
   }, () => cb([]));
 }
 
+/* ---------------------------- Código de llegada ---------------------------- */
+
+/** Código de 4 dígitos que el cliente le da al profesional para empezar (solo lo lee el cliente). */
+export function watchArrivalCode(bookingId: string, cb: (code: string | null) => void): () => void {
+  return onSnapshot(doc(firestore(), 'bookings', bookingId, 'private', 'llegada'),
+    (snap) => cb(snap.exists() ? String((snap.data() as { code?: string }).code ?? '') || null : null), () => cb(null));
+}
+
+/* ---------------------------------- Reclamos ---------------------------------- */
+
+export const PROBLEM_OPTIONS: { value: 'no_vino' | 'incompleto' | 'cobro' | 'otro'; label: string }[] = [
+  { value: 'no_vino', label: 'No hizo el trabajo o se fue sin hacerlo' },
+  { value: 'incompleto', label: 'Marcó como resuelto, pero no quedó resuelto' },
+  { value: 'cobro', label: 'Me cobró algo distinto a lo acordado' },
+  { value: 'otro', label: 'Otro problema' },
+];
+
+/** El cliente reporta un problema (hasta 48 h después): el pago queda retenido y HULUL revisa. */
+export async function reportProblem(data: { id: string; kind: string; text: string }): Promise<void> {
+  const fn = callable<typeof data, { ok: boolean }>('reportarProblema');
+  await fn(data);
+}
+
 /* ------------------------------ Calificaciones ------------------------------ */
 
 /** El cliente califica al profesional (obligatorio) y a la app (opcional). También cierra el servicio. */
@@ -399,13 +448,13 @@ export interface RatingInput {
 }
 
 export async function rateService(data: RatingInput): Promise<void> {
-  const fn = httpsCallable<RatingInput, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'calificar');
+  const fn = callable<RatingInput, { ok: boolean }>('calificar');
   await fn(data);
 }
 
 /** El profesional califica al cliente (solo lo ve HULUL; ayuda a cuidar a los profesionales). */
 export async function rateClient(data: { id: string; stars: number; comment?: string }): Promise<void> {
-  const fn = httpsCallable<{ id: string; stars: number; comment?: string }, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'calificarCliente');
+  const fn = callable<{ id: string; stars: number; comment?: string }, { ok: boolean }>('calificarCliente');
   await fn(data);
 }
 
@@ -433,7 +482,7 @@ export async function proReviews(uid: string, max = 10): Promise<PublicReview[]>
 
 /** El cliente confirma que el servicio terminó (si no, se cierra solo a las 24 horas). */
 export async function confirmService(id: string): Promise<void> {
-  const fn = httpsCallable<{ id: string }, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'confirmarServicio');
+  const fn = callable<{ id: string }, { ok: boolean }>('confirmarServicio');
   await fn({ id });
 }
 
@@ -441,7 +490,7 @@ export async function confirmService(id: string): Promise<void> {
 
 /** Registra este celular para recibir los avisos (push) de la cuenta con sesión abierta. */
 export async function registerPushToken(token: string, platform: string): Promise<void> {
-  const fn = httpsCallable<{ token: string; platform: string }, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'registrarAviso');
+  const fn = callable<{ token: string; platform: string }, { ok: boolean }>('registrarAviso');
   await fn({ token, platform });
 }
 
@@ -453,7 +502,7 @@ export type ServicesUpdate =
 
 /** Un profesional aprobado cambia sus tarifas o suma una categoría (queda en revisión). */
 export async function updateServices(data: ServicesUpdate): Promise<void> {
-  const fn = httpsCallable<ServicesUpdate, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'actualizarServicios');
+  const fn = callable<ServicesUpdate, { ok: boolean }>('actualizarServicios');
   await fn(data);
 }
 
@@ -461,7 +510,7 @@ export async function updateServices(data: ServicesUpdate): Promise<void> {
 
 /** Cancela una reserva del cliente. El servidor calcula y devuelve el cargo. */
 export async function cancelBooking(id: string, reason = ''): Promise<{ fee: number }> {
-  const fn = httpsCallable<{ id: string; reason: string }, { fee: number }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'cancelarReserva');
+  const fn = callable<{ id: string; reason: string }, { fee: number }>('cancelarReserva');
   const res = await fn({ id, reason });
   return res.data;
 }
@@ -476,7 +525,7 @@ export function cancelErrorMessage(e: unknown): string {
 
 /* --------------------------- Agenda del profesional --------------------------- */
 
-export type ProAction = 'aceptar' | 'rechazar' | 'en_camino' | 'llegue' | 'terminar' | 'no_puedo' | 'cliente_ausente';
+export type ProAction = 'aceptar' | 'rechazar' | 'en_camino' | 'en_puerta' | 'llegue' | 'terminar' | 'no_puedo' | 'cliente_ausente';
 
 /** Resultado de la visita: lo envía el profesional al terminar. */
 export interface VisitReport {
@@ -487,13 +536,16 @@ export interface VisitReport {
 }
 
 /** El profesional cambia el estado de una reserva suya (lo valida el servidor). */
-export async function proAction(id: string, action: ProAction, reason = '', report?: VisitReport): Promise<{ status: string }> {
-  const fn = httpsCallable<{ id: string; action: ProAction; reason: string } & Partial<VisitReport>, { status: string }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'gestionarReserva');
-  return (await fn({ id, action, reason, ...(report ?? {}) })).data;
+export async function proAction(id: string, action: ProAction, reason = '', report?: VisitReport, code?: string): Promise<{ status: string }> {
+  const fn = callable<{ id: string; action: ProAction; reason: string; code?: string } & Partial<VisitReport>, { status: string }>('gestionarReserva');
+  return (await fn({ id, action, reason, ...(report ?? {}), ...(code ? { code } : {}) })).data;
 }
 
 export interface ProBooking {
   id: string;
+  /** Cuándo marcó "Estoy en la dirección". */
+  arrivedAt?: { toMillis: () => number };
+  dispute?: { kind: string; text: string; status: string };
   delay?: Delay;
   /** Cuándo marcó "Llegué" (para esperar al cliente 10 minutos). */
   startedAt?: { toMillis: () => number };
@@ -532,6 +584,6 @@ export type RescheduleAction = 'proponer' | 'aceptar' | 'rechazar' | 'retirar';
 
 /** Proponer, aceptar, rechazar o retirar un cambio de fecha u hora. */
 export async function reschedule(id: string, action: RescheduleAction, date?: string, slot?: string): Promise<void> {
-  const fn = httpsCallable<{ id: string; action: RescheduleAction; date?: string; slot?: string }, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'reprogramarReserva');
+  const fn = callable<{ id: string; action: RescheduleAction; date?: string; slot?: string }, { ok: boolean }>('reprogramarReserva');
   await fn({ id, action, date, slot });
 }

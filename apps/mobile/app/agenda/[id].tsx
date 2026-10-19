@@ -49,10 +49,11 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
   const [asking, setAsking] = useState<'' | 'rechazar' | 'no_puedo' | 'cliente_ausente'>('');
   const [reason, setReason] = useState('');
   const [finishing, setFinishing] = useState(false);
+  const [code, setCode] = useState('');
 
   const act = async (a: ProAction, report?: Parameters<typeof proAction>[3]) => {
     setBusy(a); setMsg('');
-    try { await proAction(b.id, a, reason.trim(), report); setAsking(''); setFinishing(false); setReason(''); }
+    try { await proAction(b.id, a, reason.trim(), report, a === 'llegue' ? code.trim() : undefined); setAsking(''); setFinishing(false); setReason(''); }
     catch (e) { setMsg(errText(e)); }
     finally { setBusy(''); }
   };
@@ -127,9 +128,17 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
           {['confirmada', 'en_camino'].includes(b.status) && <DelayPro id={b.id} slot={b.slot} delay={b.delay} client={first} />}
           {b.status === 'confirmada' && <PrimaryButton label={busy === 'en_camino' ? 'Guardando…' : 'Voy en camino'} onPress={() => !busy && act('en_camino')} />}
           {b.status === 'en_camino' && <LiveShare bookingId={b.id} />}
-          {b.status === 'en_camino' && <PrimaryButton label={busy === 'llegue' ? 'Guardando…' : 'Llegué, empiezo'} onPress={() => !busy && act('llegue')} />}
+          {b.status === 'en_camino' && !b.arrivedAt && <PrimaryButton label={busy === 'en_puerta' ? 'Guardando…' : 'Estoy en la dirección'} onPress={() => !busy && act('en_puerta')} />}
+          {b.status === 'en_camino' && b.arrivedAt && (
+            <Card style={{ gap: 10 }}>
+              <Text style={s.label}>Código del cliente</Text>
+              <TextInput value={code} onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 4))} keyboardType="number-pad" maxLength={4} placeholder="0000" placeholderTextColor={c.textMuted} style={[s.input, { fontSize: 24, letterSpacing: 8, textAlign: 'center' }]} />
+              <Body muted style={{ fontSize: 12.5 }}>Pídele al cliente el código de 4 dígitos que ve en su reserva. Sin código no puedes empezar ni terminar.</Body>
+              <PrimaryButton label={busy === 'llegue' ? 'Verificando…' : 'Empezar el trabajo'} onPress={() => !busy && code.length === 4 && act('llegue')} />
+            </Card>
+          )}
           {b.status === 'en_curso' && <PrimaryButton label="Terminar la visita" onPress={() => setFinishing(true)} />}
-          {b.status === 'en_curso' && !b.outcome && <AbsentButton startedAt={b.startedAt?.toMillis?.()} late={arrivedLate(b)} onPress={() => setAsking('cliente_ausente')} />}
+          {b.status === 'en_camino' && b.arrivedAt && <AbsentButton startedAt={Math.max(b.arrivedAt.toMillis(), appointmentTime(b.date, b.slot).getTime() + acceptedDelay(b) * 60_000)} late={arrivedLate(b)} onPress={() => setAsking('cliente_ausente')} />}
           {(b.status === 'confirmada' || b.status === 'en_camino') && (
             <Pressable onPress={() => setAsking('no_puedo')}><Text style={[s.link, { textAlign: 'center' }]}>No puedo ir</Text></Pressable>
           )}
@@ -223,7 +232,7 @@ function LiveShare({ bookingId }: { bookingId: string }) {
 /** ¿Llegó más de 15 min después de la hora (contando el retraso aceptado)? Entonces no se cobra al cliente. */
 function arrivedLate(b: ProBooking): boolean {
   const at = appointmentTime(b.date, b.slot).getTime() + acceptedDelay(b) * 60_000;
-  return (b.startedAt?.toMillis?.() ?? 0) > at + POLICY.lateToleranceMinutes * 60_000;
+  return (b.arrivedAt?.toMillis?.() ?? 0) > at + POLICY.lateToleranceMinutes * 60_000;
 }
 
 function AbsentButton({ startedAt, late, onPress }: { startedAt?: number; late: boolean; onPress: () => void }) {

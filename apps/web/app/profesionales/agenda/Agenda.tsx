@@ -240,11 +240,12 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
   const [chatOpen, setChatOpen] = useState(false);
   const [reason, setReason] = useState('');
 
+  const [code, setCode] = useState('');
   const act = async (a: ProAction, report?: Report) => {
     setBusy(a); setMsg('');
     try {
       const { proAction } = await import('@hulul/shared/firebase');
-      await proAction(b.id, a, reason.trim(), report);
+      await proAction(b.id, a, reason.trim(), report, a === 'llegue' ? code.trim() : undefined);
       setAsking('');
       setFinishing(false);
     } catch (e) {
@@ -339,9 +340,19 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
           {b.status === 'confirmada' && <DepartPanel b={b} busy={!!busy} onGo={() => act('en_camino')} />}
           {['confirmada', 'en_camino'].includes(b.status) && <DelayPro id={b.id} slot={b.slot} delay={b.delay} client={first || 'El cliente'} />}
           {b.status === 'en_camino' && <LiveShare bookingId={b.id} />}
-          {b.status === 'en_camino' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act('llegue')}>{busy ? 'Guardando…' : 'Llegué, empiezo'}</button>}
+          {b.status === 'en_camino' && !b.arrivedAt && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act('en_puerta')}>{busy ? 'Guardando…' : 'Estoy en la dirección'}</button>}
+          {b.status === 'en_camino' && b.arrivedAt && (
+            <div className="row gap-8" style={{ width: '100%', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor={`code-${b.id}`}>Código del cliente</label>
+                <input id={`code-${b.id}`} inputMode="numeric" maxLength={4} value={code} placeholder="0000" style={{ width: 110, letterSpacing: 4, fontSize: 20 }} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
+              </div>
+              <button type="button" className="btn btn-primary" disabled={!!busy || code.length !== 4} onClick={() => act('llegue')}>{busy === 'llegue' ? 'Verificando…' : 'Empezar el trabajo'}</button>
+              <span className="muted" style={{ fontSize: 13, width: '100%' }}>Pídele al cliente el código de 4 dígitos que ve en su reserva. Sin código no puedes empezar ni terminar.</span>
+            </div>
+          )}
           {b.status === 'en_curso' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => setFinishing(true)}>Terminar la visita</button>}
-          {b.status === 'en_curso' && !b.outcome && <AbsentButton startedAt={b.startedAt?.toMillis?.()} late={arrivedLate(b)} disabled={!!busy} onClick={() => setAsking('cliente_ausente')} />}
+          {b.status === 'en_camino' && b.arrivedAt && <AbsentButton from={absentFrom(b)} late={arrivedLate(b)} disabled={!!busy} onClick={() => setAsking('cliente_ausente')} />}
           {(b.status === 'confirmada' || b.status === 'en_camino') && (
             <button type="button" className="link-btn" disabled={!!busy} onClick={() => setAsking('no_puedo')}>No puedo ir</button>
           )}
@@ -397,14 +408,20 @@ function LiveShare({ bookingId }: { bookingId: string }) {
  * (el tiempo de espera de las reglas). Muestra cuánto falta.
  */
 /** ¿Llegó más de 15 min después de la hora (contando el retraso aceptado)? Entonces no se cobra al cliente. */
-function arrivedLate(b: ProBooking): boolean {
+function effectiveAt(b: ProBooking): number {
   const [y, m, d] = b.date.split('-').map(Number);
   const [h, mi] = b.slot.split(':').map(Number);
-  const at = Date.UTC(y, m - 1, d, h + 5, mi) + (b.delay?.status === 'aceptado' ? b.delay.minutes * 60_000 : 0);
-  return (b.startedAt?.toMillis?.() ?? 0) > at + 15 * 60_000;
+  return Date.UTC(y, m - 1, d, h + 5, mi) + (b.delay?.status === 'aceptado' ? b.delay.minutes * 60_000 : 0);
+}
+function arrivedLate(b: ProBooking): boolean {
+  return (b.arrivedAt?.toMillis?.() ?? 0) > effectiveAt(b) + 15 * 60_000;
+}
+/** La espera de 10 min cuenta desde la hora de la cita o desde que llegó, lo que sea más tarde. */
+function absentFrom(b: ProBooking): number {
+  return Math.max(b.arrivedAt?.toMillis?.() ?? 0, effectiveAt(b));
 }
 
-function AbsentButton({ startedAt, late, disabled, onClick }: { startedAt?: number; late: boolean; disabled: boolean; onClick: () => void }) {
+function AbsentButton({ from: startedAt, late, disabled, onClick }: { from?: number; late: boolean; disabled: boolean; onClick: () => void }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15_000); return () => clearInterval(t); }, []);
   const left = startedAt ? Math.ceil((startedAt + 10 * 60_000 - now) / 60_000) : 0;

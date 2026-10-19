@@ -18,6 +18,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import nodemailer from 'nodemailer';
+import { randomInt } from 'node:crypto';
 
 /** Debe coincidir con la ubicación de la base de datos Firestore. */
 const REGION = 'southamerica-east1';
@@ -284,6 +285,8 @@ export const avisoReserva = onDocumentCreated(
     const b = event.data?.data();
     if (!b) return;
     const mail = transport();
+    // Código de llegada: solo lo ve el cliente; el profesional lo pide para empezar.
+    await db().doc(`bookings/${event.params.id}/private/llegada`).set({ code: String(randomInt(1000, 10000)), createdAt: FieldValue.serverTimestamp() });
     // Aviso al profesional real (si es uno registrado y aprobado): primero la
     // notificación al celular, para que no dependa del correo.
     try {
@@ -588,11 +591,14 @@ const PRO_ACTIONS = {
   aceptar: { from: ['pendiente'], to: 'confirmada', stamp: 'acceptedAt' },
   rechazar: { from: ['pendiente'], to: 'cancelada', stamp: 'cancelledAt' },
   en_camino: { from: ['confirmada'], to: 'en_camino', stamp: 'enRouteAt' },
+  // "Estoy en la dirección": marca la llegada (el cliente recibe aviso) sin empezar.
+  en_puerta: { from: ['en_camino'], to: 'en_camino', stamp: 'arrivedAt' },
+  // Empezar: con el código de 4 dígitos que le da el cliente.
   llegue: { from: ['en_camino'], to: 'en_curso', stamp: 'startedAt' },
   terminar: { from: ['en_curso'], to: 'por_aprobar', stamp: 'finishedAt' },
   no_puedo: { from: ['confirmada', 'en_camino'], to: 'cancelada', stamp: 'cancelledAt' },
   // Llegó, esperó 10 minutos y el cliente no está ni responde.
-  cliente_ausente: { from: ['en_curso'], to: 'cancelada', stamp: 'cancelledAt' },
+  cliente_ausente: { from: ['en_camino'], to: 'cancelada', stamp: 'cancelledAt' },
 };
 
 /**
@@ -643,14 +649,26 @@ export const gestionarReserva = onCall(
         }
       }
       const patch = { status: rule.to, [rule.stamp]: FieldValue.serverTimestamp(), previousStatus: cur.status, ...(report ?? {}) };
+      if (action === 'en_puerta' && cur.arrivedAt) throw new HttpsError('failed-precondition', 'Ya marcaste que estás en la dirección.');
+      if (action === 'llegue') {
+        // Solo se empieza con el cliente presente: pide su código de llegada.
+        const priv = await tx.get(db().doc(`bookings/${id}/private/llegada`));
+        if (priv.exists && String(req.data?.code ?? '').trim() !== String(priv.data().code)) {
+          throw new HttpsError('permission-denied', 'El código no coincide. Pídele al cliente el código de 4 dígitos que ve en su reserva.');
+        }
+        if (!cur.arrivedAt) patch.arrivedAt = FieldValue.serverTimestamp();
+      }
       if (action === 'cliente_ausente') {
-        if (cur.outcome) throw new HttpsError('failed-precondition', 'Esta visita ya tiene un resultado registrado.');
-        const started = cur.startedAt?.toMillis?.() ?? 0;
-        const wait = CLIENT_WAIT_MIN * 60_000 - (Date.now() - started);
-        if (wait > 0) throw new HttpsError('failed-precondition', `Espera ${Math.ceil(wait / 60_000)} min más: el cliente tiene ${CLIENT_WAIT_MIN} minutos desde que marcaste "Llegué".`);
+        const arrived = cur.arrivedAt?.toMillis?.() ?? 0;
+        if (!arrived) throw new HttpsError('failed-precondition', 'Primero marca "Estoy en la dirección" para que el cliente reciba el aviso.');
+        // La espera cuenta desde la llegada o desde la hora de la cita, lo que sea
+        // más tarde: llegar antes no acorta la espera del cliente.
+        const from = Math.max(arrived, effectiveMs(cur));
+        const wait = CLIENT_WAIT_MIN * 60_000 - (Date.now() - from);
+        if (wait > 0) throw new HttpsError('failed-precondition', `Espera ${Math.ceil(wait / 60_000)} min más: el cliente tiene ${CLIENT_WAIT_MIN} minutos desde la hora de la cita (o desde que llegaste, si llegaste tarde).`);
         // Si llegó tarde (más de 15 min después de la hora, contando el retraso
         // aceptado), no es culpa del cliente: no se le cobra y es falta del profesional.
-        const arrivedLate = started > effectiveMs(cur) + LATE_TOLERANCE_MIN * 60_000;
+        const arrivedLate = arrived > effectiveMs(cur) + LATE_TOLERANCE_MIN * 60_000;
         const fee = arrivedLate ? 0 : Number(cur.visit ?? cur.subtotal ?? 0);
         patch.cancelledBy = 'cliente_ausente';
         patch.cancelReason = reason || 'El cliente no estaba en la dirección ni respondió.';
@@ -685,11 +703,12 @@ export const gestionarReserva = onCall(
       const cat = CATEGORIES[b.category] ?? b.category;
       const when = `${longDate(b.date)} a las ${b.slot}`;
       const first = String(b.contactName ?? '').split(' ')[0];
-      const arrivedLate = action === 'cliente_ausente' && (b.startedAt?.toMillis?.() ?? 0) > effectiveMs(b) + LATE_TOLERANCE_MIN * 60_000;
+      const arrivedLate = action === 'cliente_ausente' && (b.arrivedAt?.toMillis?.() ?? 0) > effectiveMs(b) + LATE_TOLERANCE_MIN * 60_000;
       const msgs = {
         aceptar: [`${b.professionalName} confirmó tu reserva`, `Hola ${esc(first)}, ${esc(b.professionalName)} confirmó tu servicio de ${esc(cat)} para el ${esc(when)}. Te avisaremos cuando salga hacia tu dirección.`],
         en_camino: [`${b.professionalName} va en camino`, `Hola ${esc(first)}, ${esc(b.professionalName)} ya salió hacia ${esc(b.address)}. Míralo en <a href="https://hululec.com/cuenta">Mi cuenta</a>.`],
-        llegue: [`${b.professionalName} llegó`, `Hola ${esc(first)}, ${esc(b.professionalName)} marcó que llegó a tu dirección y va a empezar el trabajo.${safetyHtml()}`],
+        en_puerta: [`${b.professionalName} llegó a tu dirección`, `Hola ${esc(first)}, ${esc(b.professionalName)} está en ${esc(b.address)}. Recíbelo y dale tu <strong>código de llegada</strong> (lo ves en tu reserva) para que empiece.${safetyHtml()}`],
+        llegue: [`${b.professionalName} empezó el trabajo`, `Hola ${esc(first)}, ${esc(b.professionalName)} empezó tu servicio con tu código de llegada.${safetyHtml()}`],
         terminar: ['Tu servicio terminó: revisa el diagnóstico', `Hola ${esc(first)}, ${esc(b.professionalName)} terminó la visita.` +
           (report ? rows([['Resultado', `<strong>${esc(OUTCOMES[report.outcome])}</strong>`], ['Diagnóstico', esc(report.diagnosis) || '—'], ['Fotos', report.diagnosisPhotos.length ? report.diagnosisPhotos.map((u, i) => `<a href="${esc(u)}" style="color:#7A1E2C">Foto ${i + 1}</a>`).join(' · ') : '—']]) : '') +
           `<p style="font-size:14px;color:#3F3A37">${esc(AFTER_VISIT_NOTE)} Tienes 48 horas para calificarlo o reportar un problema en <a href="https://hululec.com/cuenta">Mi cuenta</a>.</p>`],
@@ -702,7 +721,8 @@ export const gestionarReserva = onCall(
       const pushText = {
         aceptar: `Confirmó tu servicio de ${cat} para el ${when}.`,
         en_camino: `Va en camino a tu dirección.`,
-        llegue: 'Llegó a tu dirección. Ten a una persona de tu confianza en casa durante el trabajo.',
+        en_puerta: 'Está en tu dirección. Recíbelo y dale tu código de llegada (lo ves en tu reserva).',
+        llegue: 'Empezó el trabajo. Ten a una persona de tu confianza en casa.',
         terminar: 'Terminó la visita. Revisa el diagnóstico y las fotos, y califícalo.',
         rechazar: `No puede atender tu reserva del ${when}. No se te cobra nada.`,
         no_puedo: `Canceló tu reserva del ${when}. No se te cobra nada.`,
@@ -1065,7 +1085,7 @@ export const calificar = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, as
     const bk = snap.data();
     if (bk.clientId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
     const faultCancel = bk.status === 'cancelada' && !!bk.proFault;
-    if (!['por_aprobar', 'completada'].includes(bk.status) && !faultCancel) throw new HttpsError('failed-precondition', 'Podrás calificar cuando el profesional termine la visita.');
+    if (!['por_aprobar', 'completada', 'en_disputa'].includes(bk.status) && !faultCancel) throw new HttpsError('failed-precondition', 'Podrás calificar cuando el profesional termine la visita.');
     if (bk.rating) throw new HttpsError('already-exists', 'Ya calificaste este servicio. ¡Gracias!');
     if (bk.extra?.status === 'propuesto') throw new HttpsError('failed-precondition', 'Primero acepta o rechaza el cobro adicional.');
     const proRef = db().doc(`pros/${bk.professionalId}`);
@@ -1289,6 +1309,59 @@ export const avisarRetraso = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }
     else await pushTo(b.professionalId, `${client} no aceptó tu retraso`, 'La reserva se canceló sin costo para el cliente y se te aplicó una falta.', { url: AGENDA, bookingId: id, to: 'pro' });
   } catch (e) {
     logger.warn('No se pudo avisar el retraso', { id, e: String(e) });
+  }
+  return { ok: true };
+});
+
+/* --------------------------------- Reclamos --------------------------------- */
+
+const PROBLEMS = {
+  no_vino: 'El profesional no hizo el trabajo o se fue sin hacerlo',
+  incompleto: 'Marcó como resuelto, pero no quedó resuelto',
+  cobro: 'Me cobró algo distinto a lo acordado',
+  otro: 'Otro problema',
+};
+
+/**
+ * El cliente reporta un problema con una visita terminada (hasta 48 h). La
+ * reserva pasa a "en revisión": el pago queda retenido (no se libera al
+ * profesional ni se cierra sola) hasta que HULUL revise la evidencia (código de
+ * llegada, ubicación, fotos, diagnóstico y chat) y decida.
+ */
+export const reportarProblema = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const id = String(req.data?.id ?? '');
+  const kind = String(req.data?.kind ?? '');
+  const text = String(req.data?.text ?? '').trim().slice(0, 1000);
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id) || !PROBLEMS[kind]) throw new HttpsError('invalid-argument', 'Elige qué pasó.');
+  if (text.length < 15) throw new HttpsError('invalid-argument', 'Cuéntanos qué pasó (al menos 15 caracteres).');
+  const ref = db().doc(`bookings/${id}`);
+  const b = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
+    const bk = snap.data();
+    if (bk.clientId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
+    const finished = bk.finishedAt?.toMillis?.() ?? 0;
+    const inWindow = bk.status === 'por_aprobar' || (bk.status === 'completada' && Date.now() - finished < 48 * 3_600_000);
+    if (!inWindow) throw new HttpsError('failed-precondition', 'Los problemas se reportan hasta 48 horas después de terminada la visita.');
+    if (bk.dispute) throw new HttpsError('already-exists', 'Ya reportaste un problema en esta reserva. Lo estamos revisando.');
+    tx.update(ref, { status: 'en_disputa', previousStatus: bk.status, dispute: { kind, text, at: FieldValue.serverTimestamp(), status: 'abierta' } });
+    return bk;
+  });
+  try {
+    const { from, notifyTo } = senders();
+    await transport().sendMail({ from, to: notifyTo, replyTo: b.contactEmail || undefined, subject: `RECLAMO ${code(id)} · ${PROBLEMS[kind]}`,
+      html: layout('Reclamo por revisar', rows([
+        ['Código', code(id)], ['Motivo', esc(PROBLEMS[kind])], ['Detalle', esc(text)],
+        ['Cliente', `${esc(b.contactName)} · ${esc(b.contactPhone)}`], ['Profesional', esc(b.professionalName)],
+        ['Resultado marcado', esc(OUTCOMES[b.outcome] ?? '—')], ['Diagnóstico', esc(b.diagnosis ?? '—')],
+        ['Empezó con código', b.startedAt ? 'Sí' : 'No'],
+      ]) + `<p style="font-size:13px;color:#6B6560">Revisa en Firestore la reserva, sus fotos y el chat (bookings/${esc(id)}/messages). Para cerrar: cambia <b>status</b> a <b>completada</b> (procede el pago) o <b>cancelada</b> con <b>cancelFee</b> 0 (se devuelve al cliente).</p>` +
+        button(`https://console.firebase.google.com/project/${PROJECT}/firestore/databases/-default-/data/~2Fbookings~2F${id}`, 'Revisar en Firebase')) });
+    await pushTo(b.professionalId, 'El cliente reportó un problema', `${PROBLEMS[kind]}. HULUL lo revisa; el pago queda retenido mientras tanto. Puedes responder por el chat.`, { url: AGENDA, bookingId: id, to: 'pro' });
+  } catch (e) {
+    logger.warn('No se pudo avisar el reclamo', { id, e: String(e) });
   }
   return { ok: true };
 });

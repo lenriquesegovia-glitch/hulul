@@ -74,7 +74,7 @@ export const termsOfService: LegalSection[] = [
         `Sin costo: hasta ${P.freeCancelHoursBefore} horas antes de la hora reservada, en reservas programadas.`,
         `Con menos de ${P.freeCancelHoursBefore} horas de anticipación y la reserva ya confirmada por el profesional, o con el profesional en camino: cargo de ${usd(P.lateCancelFee)}. La app o la web muestran el cargo antes de confirmar la cancelación.`,
         'Con tarjeta, el cargo se descuenta del monto retenido. Con efectivo o transferencia, queda como saldo pendiente y se suma a la próxima reserva.',
-        `Si el profesional llega y el cliente no está, no responde en el chat o no permite el ingreso, después de ${P.clientNoShowWaitMinutes} minutos de espera el profesional puede cancelar la reserva: se cobra la tarifa por visita y el profesional califica al cliente.`,
+        `Si el profesional llega y el cliente no está, no responde en el chat o no permite el ingreso, después de ${P.clientNoShowWaitMinutes} minutos de espera el profesional puede cancelar la reserva: se cobra la tarifa por visita y el profesional califica al cliente. La espera se cuenta desde la hora de la cita: si el profesional llega antes, debe esperar a esa hora.`,
         `De los cargos de esta sección, el ${pct(P.proShareOfClientFees)} es para el profesional que se trasladó.`,
       ] },
     ],
@@ -102,7 +102,9 @@ export const termsOfService: LegalSection[] = [
     body: [
       { ul: [
         `Después de cada servicio el cliente califica al profesional. Tiene ${P.claimWindowHours} horas para hacerlo o para reportar un problema, con fotos y descripción.`,
-        'La calidad del trabajo y lo acordado después de la visita son responsabilidad del profesional y se resuelven entre el cliente y el profesional. HULUL no garantiza el resultado del trabajo.',
+        'Para empezar el trabajo, el profesional debe ingresar en la app el código de llegada de 4 dígitos que solo ve el cliente. Sin ese código no puede empezar ni terminar la visita, y por lo tanto no puede cobrarla.',
+        `Si el cliente reporta en la app, dentro de ${P.claimWindowHours} horas, que el trabajo no se realizó o que el profesional se fue sin hacerlo, el pago queda retenido y HULUL revisa la evidencia (código de llegada, ubicación, fotos, diagnóstico y chat). Si se comprueba, se devuelve lo pagado y es una falta del profesional.`,
+        'Fuera de esos casos, la calidad del trabajo y lo acordado después de la visita son responsabilidad del profesional y se resuelven entre el cliente y el profesional. HULUL no garantiza el resultado del trabajo.',
         'Las calificaciones son públicas. Una calificación baja sostenida o reportes repetidos llevan a un aviso y luego a la suspensión del profesional.',
         'Si el servicio no se realiza por causa del profesional (no llega o cancela), el cliente no paga la visita y aplican las reglas de la sección 6.',
       ] },
@@ -119,7 +121,7 @@ export const termsOfService: LegalSection[] = [
         `HULUL retiene una comisión del ${pct(P.commission)} de la tarifa por visita.`,
         'Los pagos con tarjeta se transfieren cada semana a la cuenta registrada, menos comisión, multas y saldos pendientes.',
         `Servicios en efectivo: el cargo de plataforma y la comisión quedan como saldo a cargo del profesional y se descuentan de sus próximos pagos. Si ese saldo supera ${usd(P.cashDebtLimit)}, el efectivo se desactiva hasta que se pague.`,
-        'Debe aceptar solo trabajos que sabe hacer, marcar en la app la llegada y el fin de cada visita, y al terminar registrar el resultado, un diagnóstico escrito y al menos una foto, se haya resuelto o no.',
+        'Debe aceptar solo trabajos que sabe hacer, marcar en la app cuando está en la dirección, empezar con el código de llegada del cliente y, al terminar, registrar el resultado, un diagnóstico escrito y al menos una foto, se haya resuelto o no.',
         'No puede cobrar la visita por fuera de HULUL ni ofrecer al cliente saltarse la plataforma en reservas futuras. Hacerlo es causa de suspensión o cierre de la cuenta.',
         'Debe contar con los permisos, títulos y registros que su oficio exija (en Salud, título registrado en la SENESCYT y lo que disponga la ACESS) y emitir los comprobantes que correspondan ante el SRI.',
       ] },
