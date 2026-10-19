@@ -2,7 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator } from 'react-native';
-import { AFTER_VISIT_NOTE, formatPrice, formatRating, getCategory } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, serviceCopy, formatPrice, formatRating, getCategory } from '@hulul/shared';
 import { usePro } from '@/lib/pros';
 import { Icon } from '@/components/Icon';
 import { Avatar, BackButton, Body, Card, H1, H2, PrimaryButton } from '@/components/ui';
@@ -64,13 +64,13 @@ export default function ProfessionalScreen() {
               <View key={sv} style={s.chip}><Text style={s.chipText}>{sv}</Text></View>
             ))}
           </View>
-          <Body muted style={{ fontSize: 13 }}>¿Otro trabajo de {cat.name.toLowerCase()}? Elige &quot;Otro trabajo&quot; al reservar.</Body>
+          <Body muted style={{ fontSize: 13 }}>¿Otro trabajo de {cat.name.toLowerCase()}? Elige &quot;Otro&quot; al reservar.</Body>
         </View>
 
         <View style={{ gap: 6 }}>
           <H2>Cómo se cobra</H2>
-          <Body>• Visita: {formatPrice(pro.visitRate)}. Cubre el traslado, el diagnóstico y el arreglo si se resuelve en esa visita.</Body>
-          <Body>• La visita se paga aunque no se resuelva el problema. Al terminar, {pro.name.split(' ')[0]} te deja el resultado y un diagnóstico con fotos.</Body>
+          <Body>• Visita: {formatPrice(pro.visitRate)}. Incluye {serviceCopy(cat?.slug).priceCovers}.</Body>
+          <Body>• Al terminar, {pro.name.split(' ')[0]} te deja un {serviceCopy(cat?.slug).reportTitle.toLowerCase()} con fotos.</Body>
           <Body>• {AFTER_VISIT_NOTE}</Body>
         </View>
 
@@ -93,7 +93,7 @@ export default function ProfessionalScreen() {
       <View style={s.footer}>
         <View>
           <Text style={s.price}>{formatPrice(pro.visitRate)}<Text style={s.perHour}> por visita</Text></Text>
-          <Body muted style={{ fontSize: 12.5 }}>Traslado y diagnóstico incluidos</Body>
+          <Body muted style={{ fontSize: 12.5 }}>Incluye el traslado</Body>
         </View>
         <PrimaryButton label="Reservar ahora" onPress={() => router.push({ pathname: '/reservar/[id]', params: { id: pro.id, c: pro.category, trabajo: trabajo || undefined } })} />
       </View>

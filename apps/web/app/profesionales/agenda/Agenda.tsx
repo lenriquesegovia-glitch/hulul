@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { COMMISSION_RATE, departPlan, durationLabel, formatUSD, getCategory, hhmmEcuador, JOB_OUTCOMES, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS, MIN_DIAGNOSIS_CHARS, MIN_DIAGNOSIS_PHOTOS, travelEstimate, type JobOutcome, type ProviderStatus } from '@hulul/shared';
+import { COMMISSION_RATE, departPlan, durationLabel, formatUSD, getCategory, hhmmEcuador, serviceCopy, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS, MIN_DIAGNOSIS_CHARS, MIN_DIAGNOSIS_PHOTOS, travelEstimate, type JobOutcome, type ProviderStatus } from '@hulul/shared';
 import { RescheduleBox } from '@/components/RescheduleBox';
 import type { ProAction, ProBooking, VisitReport as Report } from '@hulul/shared/firebase';
 
@@ -304,7 +304,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
         <span>{b.extra && b.extra.status !== 'propuesto' && b.extra.status !== 'rechazado' ? 'Visita + adicional' : 'Visita'}: te queda <strong>{formatUSD(earnings(b))}</strong></span>
       </div>
 
-      {b.outcome && <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} title="Tu diagnóstico" />}
+      {b.outcome && <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} category={b.category} title={`Tu ${serviceCopy(b.category).reportTitle.toLowerCase()}`} />}
       {!compact && <ExtraForPro id={b.id} status={b.status} extra={b.extra} />}
       {b.rating ? <span className="muted" style={{ fontSize: 13.5 }}>El cliente te calificó {'★'.repeat(b.rating)}</span> : null}
       {(!compact || b.cancelledBy === 'cliente_ausente') && (['por_aprobar', 'completada'].includes(b.status) || b.cancelledBy === 'cliente_ausente') && !b.clientRating && <RateClientBox id={b.id} clientName={first} />}
@@ -317,7 +317,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
       )}
 
       {finishing ? (
-        <FinishPanel bookingId={b.id} busy={!!busy} onCancel={() => setFinishing(false)} onSend={(r) => act('terminar', r)} />
+        <FinishPanel bookingId={b.id} category={b.category} busy={!!busy} onCancel={() => setFinishing(false)} onSend={(r) => act('terminar', r)} />
       ) : asking ? (
         <div className="stack gap-8">
           <div className="field">
@@ -450,7 +450,8 @@ function AbsentButton({ from: startedAt, late, disabled, onClick }: { from?: num
  * Al terminar la visita: cómo quedó, diagnóstico escrito y fotos. Queda como
  * respaldo para el cliente y el profesional; HULUL cobra solo la visita.
  */
-function FinishPanel({ bookingId, busy, onCancel, onSend }: { bookingId: string; busy: boolean; onCancel: () => void; onSend: (r: Report) => void }) {
+function FinishPanel({ bookingId, category, busy, onCancel, onSend }: { bookingId: string; category: string; busy: boolean; onCancel: () => void; onSend: (r: Report) => void }) {
+  const copy = serviceCopy(category);
   const [outcome, setOutcome] = useState<JobOutcome | ''>('');
   const [diagnosis, setDiagnosis] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
@@ -479,9 +480,9 @@ function FinishPanel({ bookingId, busy, onCancel, onSend }: { bookingId: string;
 
   const send = () => {
     setErr('');
-    if (!outcome) { setErr('Elige cómo quedó el trabajo.'); return; }
-    if (outcome !== 'resuelto' && diagnosis.trim().length < MIN_DIAGNOSIS_CHARS) { setErr('Explica qué encontraste y qué hace falta, para que el cliente lo entienda.'); return; }
-    if (photos.length < MIN_DIAGNOSIS_PHOTOS) { setErr('Sube al menos una foto del trabajo, haya quedado resuelto o no. Es tu respaldo.'); return; }
+    if (!outcome) { setErr('Elige cómo quedó el servicio.'); return; }
+    if (outcome !== 'resuelto' && diagnosis.trim().length < MIN_DIAGNOSIS_CHARS) { setErr('Cuéntale al cliente qué pasó y qué recomiendas.'); return; }
+    if (photos.length < MIN_DIAGNOSIS_PHOTOS) { setErr('Sube al menos una foto. Es tu respaldo.'); return; }
     onSend({ outcome, diagnosis: diagnosis.trim(), photos });
   };
 
@@ -489,7 +490,7 @@ function FinishPanel({ bookingId, busy, onCancel, onSend }: { bookingId: string;
     <div className="stack gap-12" style={{ width: '100%', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
       <strong>¿Cómo quedó?</strong>
       <div className="stack gap-8">
-        {JOB_OUTCOMES.map((o) => (
+        {(Object.keys(copy.outcomes) as JobOutcome[]).map((v) => ({ value: v, ...copy.outcomes[v] })).map((o) => (
           <label key={o.value} className="check">
             <input type="radio" name={`out-${bookingId}`} checked={outcome === o.value} onChange={() => setOutcome(o.value)} />
             <span><strong>{o.label}.</strong> {o.help}</span>
@@ -497,16 +498,16 @@ function FinishPanel({ bookingId, busy, onCancel, onSend }: { bookingId: string;
         ))}
       </div>
       <div className="field">
-        <label htmlFor={`dx-${bookingId}`}>Diagnóstico {outcome === 'resuelto' ? '(opcional)' : ''}</label>
+        <label htmlFor={`dx-${bookingId}`}>{copy.reportTitle} {outcome === 'resuelto' ? '(opcional)' : ''}</label>
         <textarea id={`dx-${bookingId}`} rows={4} maxLength={MAX_DIAGNOSIS_CHARS} value={diagnosis}
-          placeholder="Qué encontraste, qué hiciste y qué recomiendas. Ej.: La bomba tiene el capacitor dañado. Se cambió el sello. Falta un capacitor de 35 µF."
+          placeholder={copy.reportPlaceholder}
           onChange={(e) => setDiagnosis(e.target.value)} />
-        <span className="muted" style={{ fontSize: 12.5 }}>El cliente lo ve en su reserva. Es tu respaldo de lo que encontraste.</span>
+        <span className="muted" style={{ fontSize: 12.5 }}>El cliente lo ve en su reserva. Es tu respaldo.</span>
       </div>
       <div className="doc-row" style={{ alignItems: 'center' }}>
         <div className="stack gap-4" style={{ flex: 1, minWidth: 0 }}>
-          <strong style={{ fontSize: 14.5 }}>Fotos del trabajo (mínimo 1, hasta {MAX_DIAGNOSIS_PHOTOS})</strong>
-          <span className="muted" style={{ fontSize: 13 }}>{photos.length ? `✓ ${photos.length} foto(s)` : 'Antes y después, la falla, la pieza dañada…'}</span>
+          <strong style={{ fontSize: 14.5 }}>{copy.photosAtEnd} (mínimo 1, hasta {MAX_DIAGNOSIS_PHOTOS})</strong>
+          <span className="muted" style={{ fontSize: 13 }}>{photos.length ? `✓ ${photos.length} foto(s)` : copy.style === 'tecnico' ? 'Antes y después, la pieza o el equipo…' : 'Una foto del resultado o del momento del servicio.'}</span>
         </div>
         <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
           {/* capture abre la cámara directamente en el celular */}

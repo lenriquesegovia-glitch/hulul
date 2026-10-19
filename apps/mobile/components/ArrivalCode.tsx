@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ABSENT_PROBLEM_OPTIONS, PROBLEM_OPTIONS, reportProblem, watchArrivalCode } from '@hulul/shared/firebase';
+import { ABSENT_PROBLEM_OPTIONS, reportProblem, watchArrivalCode } from '@hulul/shared/firebase';
+import { serviceCopy } from '@hulul/shared';
 import { Body, Button, Card, PrimaryButton } from '@/components/ui';
 import { c, font, radius } from '@/theme';
 
@@ -18,35 +19,36 @@ export function ArrivalCode({ id, pro }: { id: string; pro: string }) {
   );
 }
 
-/** Reportar un problema (hasta 48 h): el pago queda retenido y HULUL revisa. */
-export function ProblemBox({ id, absent = false }: { id: string; absent?: boolean }) {
-  const options: { value: string; label: string }[] = absent ? ABSENT_PROBLEM_OPTIONS : PROBLEM_OPTIONS;
+/** Pedir ayuda con el servicio (hasta 48 h): el pago queda en espera y HULUL revisa. */
+export function ProblemBox({ id, category, absent = false }: { id: string; category?: string; absent?: boolean }) {
+  const copy = serviceCopy(category);
+  const options: { value: string; label: string }[] = absent ? ABSENT_PROBLEM_OPTIONS : copy.helpOptions;
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  if (!open) return <Button variant="danger" label="Reportar un problema" onPress={() => setOpen(true)} />;
+  if (!open) return <Button variant="secondary" label={absent ? 'Yo sí estaba en casa' : copy.helpButton} onPress={() => setOpen(true)} />;
   const send = async () => {
     if (busy) return;
     setMsg('');
-    if (!kind) { setMsg('Elige qué pasó.'); return; }
+    if (!kind) { setMsg('Elige una opción.'); return; }
     if (text.trim().length < 15) { setMsg('Cuéntanos qué pasó (al menos 15 caracteres).'); return; }
     setBusy(true);
     try { await reportProblem({ id, kind, text: text.trim() }); } catch (e) { setMsg((e as { message?: string }).message || 'No se pudo enviar.'); } finally { setBusy(false); }
   };
   return (
     <Card style={{ gap: 10 }}>
-      <Text style={s.label}>Reportar un problema</Text>
-      <Body muted style={{ fontSize: 12.5 }}>{absent ? 'El cobro por "cliente ausente" queda retenido y HULUL revisa la ubicación del profesional al marcar su llegada, el chat y las horas. Si estabas, no pagas nada.' : 'El pago queda retenido y HULUL revisa el código de llegada, la ubicación, las fotos y el chat. Si el trabajo no se hizo, te devolvemos lo pagado.'}</Body>
+      <Text style={s.label}>{absent ? '¿Estabas en casa?' : copy.helpTitle}</Text>
+      <Body muted style={{ fontSize: 12.5 }}>{absent ? 'El cobro queda en espera y HULUL revisa la llegada del profesional, el chat y las horas. Si estabas, no pagas nada.' : 'Cuéntanos y lo revisamos contigo. Mientras tanto el pago queda en espera; si el servicio no se realizó, te devolvemos lo pagado.'}</Body>
       {options.map((o) => (
         <Pressable key={o.value} accessibilityRole="radio" accessibilityState={{ checked: kind === o.value }} onPress={() => setKind(o.value)} style={[s.opt, kind === o.value && s.optOn]}>
           <Text style={s.optText}>{o.label}</Text>
         </Pressable>
       ))}
-      <TextInput value={text} onChangeText={setText} maxLength={1000} multiline placeholder="Qué pasó, a qué hora, qué te dijo…" placeholderTextColor={c.textMuted} style={s.input} />
+      <TextInput value={text} onChangeText={setText} maxLength={1000} multiline placeholder="Cuéntanos qué pasó" placeholderTextColor={c.textMuted} style={s.input} />
       {msg ? <Body style={{ color: c.primary, fontSize: 13 }}>{msg}</Body> : null}
-      <PrimaryButton label={busy ? 'Enviando…' : 'Enviar reporte'} onPress={send} />
+      <PrimaryButton label={busy ? 'Enviando…' : 'Enviar a HULUL'} onPress={send} />
       <Button variant="secondary" label="Volver" onPress={() => setOpen(false)} />
     </Card>
   );

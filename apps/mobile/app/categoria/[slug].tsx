@@ -9,7 +9,7 @@ import { Icon } from '@/components/Icon';
 import { Avatar, BackButton, Body, Card, H1, Pill } from '@/components/ui';
 import { c, font, radius } from '@/theme';
 
-const OTHER = 'Otro trabajo';
+const OTHER = 'Otro';
 
 type Sort = 'rating' | 'today' | 'price';
 const SORTS: { value: Sort; label: string }[] = [
@@ -128,7 +128,7 @@ export default function CategoryScreen() {
                 </View>
                 <Body numberOfLines={2} style={{ fontSize: 13.5 }}>{p.bio}</Body>
                 <View style={s.proFoot}>
-                  <Body muted style={{ fontSize: 13 }}>Traslado y diagnóstico incluidos</Body>
+                  <Body muted style={{ fontSize: 13 }}>Incluye el traslado</Body>
                   <Text style={s.price}>{formatPrice(p.visitRate)}<Text style={s.perHour}> por visita</Text></Text>
                 </View>
                 {p.availableToday && <Pill label="Disponible hoy" />}

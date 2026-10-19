@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { sendChat, watchChat, type ChatMessage } from '@hulul/shared/firebase';
+import { hasProfanity, PROFANITY_MESSAGE } from '@hulul/shared';
 import { Body, Button } from '@/components/ui';
 import { photosAvailable, pickPhotos, uploadLocalPhotos } from '@/lib/photos';
 import { c, font, radius } from '@/theme';
@@ -22,6 +23,7 @@ export function Chat({ bookingId, uid, me, otherName, open }: { bookingId: strin
   const sendText = async () => {
     const t = text.trim();
     if (!t || busy) return;
+    if (hasProfanity(t)) { setErr(PROFANITY_MESSAGE); return; }
     setBusy(true); setErr('');
     try { await send({ kind: 'texto', text: t }); setText(''); } catch { setErr('No se pudo enviar. Revisa tu conexión.'); } finally { setBusy(false); }
   };

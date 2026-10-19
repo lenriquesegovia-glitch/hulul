@@ -27,7 +27,7 @@ export function ProCard({ pro, job }: { pro: Professional; job?: string }) {
       <div className="row gap-12" style={{ justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
         <div className="stack">
           <span className="price">{formatPrice(pro.visitRate)}<span className="muted" style={{ fontSize: 13, fontFamily: 'var(--font-body)' }}> por visita</span></span>
-          <span className="muted" style={{ fontSize: 13 }}>Incluye traslado y diagnóstico</span>
+          <span className="muted" style={{ fontSize: 13 }}>Incluye el traslado</span>
         </div>
         <Link href={bookHref} className="btn btn-primary" aria-label={`Reservar a ${pro.name}`}>Reservar</Link>
       </div>

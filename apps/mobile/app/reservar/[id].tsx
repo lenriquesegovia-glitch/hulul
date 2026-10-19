@@ -9,20 +9,20 @@ import { ClientGate } from '@/components/ClientGate';
 import { Icon } from '@/components/Icon';
 import { MapPicker } from '@/components/MapPicker';
 import type { ClientProfile } from '@hulul/shared/firebase';
-import { AFTER_VISIT_NOTE, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, TEST_SLOTS, testPeriodOpen, timeAvailable, MAX_REQUEST_PHOTOS, type PaymentMethod } from '@hulul/shared';
+import { serviceCopy, HOME_SAFETY_ACCEPT, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, TEST_SLOTS, testPeriodOpen, timeAvailable, MAX_REQUEST_PHOTOS, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
 import { ActivityIndicator } from 'react-native';
 import { usePro } from '@/lib/pros';
 
-const OTHER = 'Otro trabajo';
+const OTHER = 'Otro';
 const NOTES_MAX = 940;
 
 /** Para reservar hay que tener cuenta (como Uber). */
 export default function BookingScreen() {
   return (
-    <ClientGate screen title="Crea tu cuenta para reservar" lead="Así sigues tu servicio, recibes la confirmación y el diagnóstico de cada visita.">
+    <ClientGate screen title="Crea tu cuenta para reservar" lead="Así sigues tu servicio, recibes la confirmación y el resumen de cada servicio.">
       {({ user, profile }) => <BookingForm uid={user.uid} profile={profile} />}
     </ClientGate>
   );
@@ -54,6 +54,7 @@ function BookingForm({ uid, profile }: { uid: string; profile: ClientProfile }) 
 function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: string; profile: ClientProfile }) {
   const { trabajo } = useLocalSearchParams<{ trabajo?: string }>();
   const cat = getCategory(pro.category);
+  const copy = serviceCopy(pro.category);
   const jobs = useMemo(() => {
     const own = pro.services ?? [];
     return cat ? [...own, ...cat.servicios.filter((x) => !own.includes(x))] : own;
@@ -91,6 +92,8 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   const [calOpen, setCalOpen] = useState(false);
   const dayRow = useRef<ScrollView>(null);
   const [job, setJob] = useState(trabajo && cat && (jobs.includes(trabajo) || trabajo === OTHER) ? trabajo : '');
+  // Si ya lo eligió en la categoría, no se vuelve a preguntar (se puede cambiar).
+  const [pickJob, setPickJob] = useState(!job);
   const [notes, setNotes] = useState('');
   // Fotos opcionales del problema (rutas locales; se suben al confirmar).
   const [photos, setPhotos] = useState<string[]>([]);
@@ -157,11 +160,11 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
       return;
     }
     if (!job) {
-      setError('Elige qué trabajo necesitas (o "Otro trabajo").');
+      setError('Elige qué necesitas.');
       return;
     }
     if (job === OTHER && notes.trim().length < 10) {
-      setError('Describe el trabajo que necesitas (al menos 10 caracteres).');
+      setError('Cuéntanos qué necesitas (al menos 10 caracteres).');
       return;
     }
     if (address.trim().length < 8) {
@@ -283,8 +286,17 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             </View>
           )}
 
+          {!pickJob && job ? (
+            <View style={s.chosen}>
+              <View style={{ flex: 1 }}>
+                <Body muted style={{ fontSize: 12.5 }}>{copy.jobQuestion}</Body>
+                <Text style={s.chosenText}>{job}</Text>
+              </View>
+              <Pressable accessibilityRole="button" onPress={() => setPickJob(true)} hitSlop={8}><Text style={s.chosenLink}>Cambiar</Text></Pressable>
+            </View>
+          ) : (
           <View style={{ gap: 10 }}>
-            <Text style={s.label}>¿Qué trabajo necesitas?</Text>
+            <Text style={s.label}>{copy.jobQuestion}</Text>
             <View style={s.tags}>
               {[...jobs, OTHER].map((t) => {
                 const on = job === t;
@@ -296,6 +308,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
               })}
             </View>
           </View>
+          )}
 
           <View style={{ gap: 8 }}>
             <Text style={s.label} nativeID="dir-label">Dirección y referencia</Text>
@@ -339,11 +352,11 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
           </View>
 
           <View style={{ gap: 8 }}>
-            <Text style={s.label} nativeID="notes-label">{job === OTHER ? 'Describe el trabajo' : 'Detalles (opcional)'}</Text>
+            <Text style={s.label} nativeID="notes-label">{job === OTHER ? 'Cuéntanos qué necesitas' : 'Detalles (opcional)'}</Text>
             <TextInput
               value={notes}
               onChangeText={setNotes}
-              placeholder={job === OTHER ? 'Cuéntanos qué necesitas' : 'Ej.: 2 splits de 12.000 BTU, uno gotea agua'}
+              placeholder={copy.detailsPlaceholder}
               placeholderTextColor={c.textMuted}
               accessibilityLabelledBy="notes-label"
               multiline
@@ -356,8 +369,8 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
           {photosAvailable() && (
             <View style={{ gap: 8 }}>
-              <Text style={s.label}>Fotos del problema (opcional)</Text>
-              <Body muted style={{ fontSize: 12.5 }}>Una foto del equipo, la fuga o el lugar ayuda al profesional a saber qué llevar.</Body>
+              <Text style={s.label}>{copy.photosLabel}</Text>
+              <Body muted style={{ fontSize: 12.5 }}>{copy.photosHelp}</Body>
               {photos.length > 0 && (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                   {photos.map((u, i) => (
@@ -403,30 +416,30 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
           <MapPicker visible={mapOpen} initial={location} onClose={() => setMapOpen(false)} onConfirm={(p) => { setLocation(p); setMapOpen(false); }} />
 
           <View style={s.summary}>
-            <Row label={`Visita de ${pro.name.split(' ')[0]} (traslado, diagnóstico y arreglo si se resuelve en la visita)`} value={formatUSD(q.visit)} />
+            <Row label={`${pro.name.split(' ')[0]} (${copy.priceCovers})`} value={formatUSD(q.visit)} />
             <Row label="Cargo de plataforma HULUL" value={formatUSD(q.fee)} />
             <Row label="IVA 15%" value={formatUSD(q.iva)} />
             <View style={s.totalRow}>
               <Text style={s.totalText}>Total</Text>
               <Text style={s.totalText}>{formatUSD(q.total)}</Text>
             </View>
-            <Body muted style={{ fontSize: 12.5 }}>La visita se paga aunque no se resuelva el problema, porque cubre el traslado y el diagnóstico. {AFTER_VISIT_NOTE}</Body>
+            <Body muted style={{ fontSize: 12.5 }}>{copy.priceNote}</Body>
             <Body style={{ fontSize: 12.5, color: c.copper }}>Versión de prueba: no se pide la tarjeta ni se cobra nada.</Body>
           </View>
 
-          <View style={[s.warn, { gap: 6 }]}>
+          <View style={s.calm}>
             <Text style={s.mapTitle}>{HOME_SAFETY_TITLE}</Text>
             {HOME_SAFETY_NOTICE.map((t) => <Body key={t} style={{ fontSize: 13 }}>• {t}</Body>)}
             <Checkbox checked={safety} onChange={(v) => { setSafety(v); setSafetyError(false); }}>
-              <Body style={{ fontSize: 13.5 }}>Entiendo y acepto: habrá una persona de mi confianza en casa durante el servicio.</Body>
+              <Body style={{ fontSize: 13.5 }}>{HOME_SAFETY_ACCEPT}</Body>
             </Checkbox>
-            {safetyError && <Text style={s.error}>Marca la casilla del aviso de seguridad.</Text>}
+            {safetyError && <Text style={s.error}>Marca la casilla para continuar.</Text>}
           </View>
 
           <View style={{ gap: 6 }}>
             <Checkbox checked={agreed} onChange={(v) => { setAgreed(v); setAgreeError(false); }}>
               <Body style={{ fontSize: 13.5 }}>
-                Acepto que HULUL comparta mi nombre, la dirección y la descripción del trabajo con {pro.name} para realizar este servicio, según la{' '}
+                Acepto que HULUL comparta mi nombre, la dirección y la descripción del servicio con {pro.name} para realizar este servicio, según la{' '}
                 <Link href="/privacidad" style={s.link}>Política de privacidad</Link>.
               </Body>
             </Checkbox>
@@ -453,6 +466,10 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const s = StyleSheet.create({
+  calm: { gap: 6, padding: 14, borderRadius: radius.md, backgroundColor: c.surfaceWarm },
+  chosen: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
+  chosenText: { fontFamily: font.bodyBold, fontSize: 16, color: c.text },
+  chosenLink: { fontFamily: font.bodyBold, fontSize: 14, color: c.primary },
   photoBtn: { flex: 1, height: 46, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center' },
   photoBtnText: { fontFamily: font.bodyBold, fontSize: 14, color: c.text },
   warn: { gap: 8, padding: 12, borderRadius: 10, backgroundColor: c.copperSoft, borderLeftWidth: 4, borderLeftColor: c.primary },

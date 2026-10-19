@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChatMessage } from '@hulul/shared/firebase';
 import { uploadPhotos } from '@/components/PhotoPicker';
+import { hasProfanity, PROFANITY_MESSAGE } from '@hulul/shared';
 
 const hhmm = (d?: Date) => (d ? d.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }) : '');
 
@@ -38,6 +39,7 @@ export function Chat({ bookingId, uid, me, otherName, open }: {
   const sendText = async () => {
     const t = text.trim();
     if (!t) return;
+    if (hasProfanity(t)) { setErr(PROFANITY_MESSAGE); return; }
     setBusy(true);
     try { await send({ kind: 'texto', text: t }); setText(''); } catch { setErr('No se pudo enviar. Revisa tu conexión.'); } finally { setBusy(false); }
   };
@@ -57,7 +59,7 @@ export function Chat({ bookingId, uid, me, otherName, open }: {
 
   const askPhotos = async () => {
     setBusy(true);
-    try { await send({ kind: 'pedir_fotos', text: text.trim() || 'Para entender mejor el trabajo, ¿me envías fotos del problema?' }); setText(''); } catch { setErr('No se pudo enviar.'); } finally { setBusy(false); }
+    try { await send({ kind: 'pedir_fotos', text: text.trim() || 'Para preparar mejor tu servicio, ¿me envías unas fotos?' }); setText(''); } catch { setErr('No se pudo enviar.'); } finally { setBusy(false); }
   };
 
   const lastAsk = list && [...list].reverse().find((m) => m.kind === 'pedir_fotos');

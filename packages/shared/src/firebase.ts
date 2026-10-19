@@ -428,8 +428,8 @@ export function watchArrivalCode(bookingId: string, cb: (code: string | null) =>
 
 /** Para cuando el profesional marcó "cliente ausente" y el cliente sí estaba. */
 export const ABSENT_PROBLEM_OPTIONS: { value: 'si_estaba' | 'otro'; label: string }[] = [
-  { value: 'si_estaba', label: 'Yo sí estaba: el profesional no llegó o no tocó' },
-  { value: 'otro', label: 'Otro problema' },
+  { value: 'si_estaba', label: 'Yo estaba en casa y no me avisaron' },
+  { value: 'otro', label: 'Otra cosa' },
 ];
 
 export const PROBLEM_OPTIONS: { value: 'no_vino' | 'incompleto' | 'cobro' | 'otro'; label: string }[] = [

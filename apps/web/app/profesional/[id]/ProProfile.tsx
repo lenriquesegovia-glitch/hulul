@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { AFTER_VISIT_NOTE, formatPrice, formatRating, getCategory, proHref } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, serviceCopy, formatPrice, formatRating, getCategory, proHref } from '@hulul/shared';
 import { DownloadBand } from '@/components/DownloadBand';
 import { Icon } from '@/components/Icon';
 import { usePro } from '@/lib/pros';
@@ -84,14 +84,14 @@ export function ProProfile({ id }: { id: string }) {
             <div className="link-cloud">
               {jobs.map((s) => <span key={s} className="pill pill-warm">{s}</span>)}
             </div>
-            <p className="muted" style={{ fontSize: 14 }}>¿Necesitas otro trabajo de {cat.name.toLowerCase()}? Elige &ldquo;Otro trabajo&rdquo; al reservar y descríbelo.</p>
+            <p className="muted" style={{ fontSize: 14 }}>¿Necesitas otro trabajo de {cat.name.toLowerCase()}? Elige &ldquo;Otro&rdquo; al reservar y descríbelo.</p>
           </div>
 
           <div className="stack gap-8">
             <h2 style={{ fontSize: 22 }}>Cómo se cobra</h2>
             <ul className="stack gap-8" style={{ listStyle: 'none', padding: 0, margin: 0, color: 'var(--text-2)' }}>
-              <li>• Visita: <strong>{formatPrice(pro.visitRate)}</strong>. Cubre el traslado, el diagnóstico y el arreglo si se resuelve en esa visita.</li>
-              <li>• La visita se paga aunque no se resuelva el problema. Al terminar, {pro.name.split(' ')[0]} te deja el resultado y un diagnóstico con fotos.</li>
+              <li>• Visita: <strong>{formatPrice(pro.visitRate)}</strong>. Incluye {serviceCopy(cat?.slug).priceCovers}.</li>
+              <li>• Al terminar, {pro.name.split(' ')[0]} te deja un {serviceCopy(cat?.slug).reportTitle.toLowerCase()} con fotos.</li>
               <li>• {AFTER_VISIT_NOTE}</li>
             </ul>
           </div>

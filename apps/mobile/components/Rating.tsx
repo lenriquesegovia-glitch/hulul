@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { proReviews, rateService, type PublicReview } from '@hulul/shared/firebase';
+import { hasProfanity, PROFANITY_MESSAGE } from '@hulul/shared';
 import { Body, Card, PrimaryButton } from '@/components/ui';
 import { c, font, radius } from '@/theme';
 
@@ -35,7 +36,8 @@ export function RatingBox({ id, proName }: { id: string; proName: string }) {
     if (busy) return;
     setMsg('');
     if (!pro) { setMsg(`Elige cuántas estrellas le das a ${proName}.`); return; }
-    if (pro <= 2 && proText.trim().length < 10) { setMsg('Cuéntanos qué salió mal (al menos 10 caracteres). Lo revisamos.'); return; }
+    if (pro <= 2 && proText.trim().length < 10) { setMsg('Cuéntanos qué no te gustó (al menos 10 caracteres). Nos ayuda a mejorar.'); return; }
+    if (hasProfanity(proText) || hasProfanity(appText)) { setMsg(PROFANITY_MESSAGE); return; }
     setBusy(true);
     try {
       await rateService({ id, proStars: pro, proComment: proText.trim(), ...(app ? { appStars: app, appComment: appText.trim() } : {}) });
@@ -51,7 +53,7 @@ export function RatingBox({ id, proName }: { id: string; proName: string }) {
       <Text style={s.title}>¿Cómo te fue con {proName}?</Text>
       <Body muted style={{ fontSize: 13 }}>Tu calificación es pública en su perfil y ayuda a otros a elegir. Quien acumula malas calificaciones deja de recibir trabajos.</Body>
       <StarInput value={pro} onChange={setPro} label={`Calificación de ${proName}`} />
-      <TextInput value={proText} onChangeText={setProText} maxLength={600} multiline placeholder={pro && pro <= 2 ? '¿Qué salió mal?' : 'Comentario (opcional)'} placeholderTextColor={c.textMuted} style={s.input} />
+      <TextInput value={proText} onChangeText={setProText} maxLength={600} multiline placeholder={pro && pro <= 2 ? '¿Qué no te gustó?' : 'Comentario (opcional)'} placeholderTextColor={c.textMuted} style={s.input} />
       <View style={{ gap: 6, borderTopWidth: 1, borderTopColor: c.border, paddingTop: 12 }}>
         <Text style={s.sub}>¿Y la app HULUL? (opcional)</Text>
         <StarInput value={app} onChange={setApp} size={28} label="Calificación de la app" />

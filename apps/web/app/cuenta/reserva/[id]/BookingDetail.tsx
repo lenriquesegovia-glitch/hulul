@@ -57,10 +57,10 @@ export function BookingDetail({ id }: { id: string }) {
     pendiente: `Esperando que ${first} acepte tu reserva. Te avisamos por correo apenas lo haga.`,
     confirmada: `${first} confirmó. Saldrá hacia tu dirección con el tiempo justo para llegar a las ${b.slot} (puede salir desde las ${hhmmEcuador(new Date(at.getTime() - 120 * 60_000))}). Te avisamos cuando vaya en camino.`,
     en_camino: b.arrivedAt ? `${first} está en tu dirección. Recíbelo y dale tu código de llegada.` : `${first} va en camino a tu dirección. Míralo en el mapa en vivo.`,
-    en_curso: `${first} está trabajando. Al terminar te deja el resultado y un diagnóstico con fotos.`,
-    por_aprobar: `${first} terminó la visita. Revisa su diagnóstico; tienes 48 horas para calificarlo o reportar un problema.`,
+    en_curso: `${first} está en tu servicio. Al terminar te deja un resumen con fotos.`,
+    por_aprobar: `${first} terminó. Mira su resumen y califícalo; tienes 48 horas.`,
     completada: 'Servicio completado. ¡Gracias por usar HULUL!',
-    en_disputa: 'Reportaste un problema. HULUL lo está revisando y el pago queda retenido mientras tanto. Te escribimos con la respuesta.',
+    en_disputa: 'Nos pediste ayuda con este servicio. HULUL lo está revisando y el pago queda en espera mientras tanto. Te escribimos con la respuesta.',
     cancelada: cancelledText(b, first),
   };
   const changeable = ['pendiente', 'confirmada'].includes(b.status);
@@ -107,15 +107,15 @@ export function BookingDetail({ id }: { id: string }) {
         </div>
       )}
 
-      <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} />
+      <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} category={b.category} />
       {b.outcome && <p className="muted" style={{ fontSize: 14 }}>{AFTER_VISIT_NOTE}</p>}
       <ExtraForClient id={b.id} extra={b.extra} proName={first} />
       {b.status === 'cancelada' && b.proFault && !b.rating && <RatingBox id={b.id} proName={first} />}
       {['por_aprobar', 'completada'].includes(b.status) && !b.rating && b.extra?.status !== 'propuesto' && <RatingBox id={b.id} proName={first} />}
       {b.rating ? <p className="muted">Calificaste a {first} con {'★'.repeat(b.rating)}. ¡Gracias!</p> : null}
       {b.status === 'por_aprobar' && !b.rating && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
-      {['por_aprobar', 'completada'].includes(b.status) && !b.dispute && <ProblemBox id={b.id} />}
-      {b.status === 'cancelada' && b.cancelledBy === 'cliente_ausente' && !b.dispute && Date.now() - (b.cancelledAt?.toMillis?.() ?? 0) < 48 * 3_600_000 && <ProblemBox id={b.id} absent />}
+      {['por_aprobar', 'completada'].includes(b.status) && !b.dispute && <ProblemBox id={b.id} category={b.category} />}
+      {b.status === 'cancelada' && b.cancelledBy === 'cliente_ausente' && !b.dispute && Date.now() - (b.cancelledAt?.toMillis?.() ?? 0) < 48 * 3_600_000 && <ProblemBox id={b.id} category={b.category} absent />}
 
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && <SafetyNotice title={HOME_SAFETY_TITLE} items={HOME_SAFETY_NOTICE} />}
 

@@ -184,7 +184,7 @@ export const categories: Category[] = [
     seoName: 'Carpinteros a domicilio',
     sub: 'Muebles a medida, puertas, closets y reparaciones',
     icon: 'saw',
-    incluye: ['Medición y diagnóstico', 'Arreglo si se resuelve en la visita', 'Madera y herrajes: cobro adicional en la app'],
+    incluye: ['Medición y revisión', 'Arreglo si se resuelve en la visita', 'Madera y herrajes: cobro adicional en la app'],
     servicios: ['Reparación de muebles', 'Muebles a medida', 'Closets y cocinas', 'Puertas y marcos', 'Armado de muebles', 'Pisos de madera', 'Lacado y restauración'],
   },
   {

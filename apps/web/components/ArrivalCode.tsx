@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ABSENT_PROBLEM_OPTIONS, PROBLEM_OPTIONS } from '@hulul/shared/firebase';
+import { ABSENT_PROBLEM_OPTIONS } from '@hulul/shared/firebase';
+import { serviceCopy } from '@hulul/shared';
 
 /** Código de llegada del cliente: se lo da al profesional cuando llega, para que empiece. */
 export function ArrivalCode({ id, pro }: { id: string; pro: string }) {
@@ -24,18 +25,19 @@ export function ArrivalCode({ id, pro }: { id: string; pro: string }) {
   );
 }
 
-/** Reportar un problema (hasta 48 h): el pago queda retenido y HULUL revisa. */
-export function ProblemBox({ id, absent = false }: { id: string; absent?: boolean }) {
-  const options: { value: string; label: string }[] = absent ? ABSENT_PROBLEM_OPTIONS : PROBLEM_OPTIONS;
+/** Pedir ayuda con el servicio (hasta 48 h): el pago queda en espera y HULUL revisa. */
+export function ProblemBox({ id, category, absent = false }: { id: string; category?: string; absent?: boolean }) {
+  const copy = serviceCopy(category);
+  const options: { value: string; label: string }[] = absent ? ABSENT_PROBLEM_OPTIONS : copy.helpOptions;
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  if (!open) return <div className="actions"><button type="button" className="btn btn-danger" onClick={() => setOpen(true)}>Reportar un problema</button></div>;
+  if (!open) return <div className="actions"><button type="button" className="btn btn-secondary" onClick={() => setOpen(true)}>{absent ? 'Yo sí estaba en casa' : copy.helpButton}</button></div>;
   const send = async () => {
     setMsg('');
-    if (!kind) { setMsg('Elige qué pasó.'); return; }
+    if (!kind) { setMsg('Elige una opción.'); return; }
     if (text.trim().length < 15) { setMsg('Cuéntanos qué pasó (al menos 15 caracteres).'); return; }
     setBusy(true);
     try {
@@ -49,17 +51,17 @@ export function ProblemBox({ id, absent = false }: { id: string; absent?: boolea
   };
   return (
     <div className="card stack gap-12">
-      <strong>Reportar un problema</strong>
-      <span className="muted" style={{ fontSize: 14 }}>{absent ? 'El cobro por "cliente ausente" queda retenido y HULUL revisa la ubicación del profesional al marcar su llegada, el chat y las horas. Si estabas, no pagas nada.' : 'El pago queda retenido y HULUL revisa el código de llegada, la ubicación, las fotos y el chat. Si el trabajo no se hizo, te devolvemos lo pagado.'}</span>
+      <strong>{absent ? '¿Estabas en casa?' : copy.helpTitle}</strong>
+      <span className="muted" style={{ fontSize: 14 }}>{absent ? 'El cobro queda en espera y HULUL revisa la llegada del profesional, el chat y las horas. Si estabas, no pagas nada.' : 'Cuéntanos y lo revisamos contigo. Mientras tanto el pago queda en espera; si el servicio no se realizó, te devolvemos lo pagado.'}</span>
       <div className="stack gap-8">
         {options.map((o) => (
           <label key={o.value} className="check"><input type="radio" name={`pb-${id}`} checked={kind === o.value} onChange={() => setKind(o.value)} /><span>{o.label}</span></label>
         ))}
       </div>
-      <textarea rows={3} maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Qué pasó, a qué hora, qué te dijo…" aria-label="Detalle del problema" />
+      <textarea rows={3} maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Cuéntanos qué pasó" aria-label="Cuéntanos qué pasó" />
       {msg && <p role="alert" className="form-error">{msg}</p>}
       <div className="actions">
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={send}>{busy ? 'Enviando…' : 'Enviar reporte'}</button>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={send}>{busy ? 'Enviando…' : 'Enviar a HULUL'}</button>
         <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setOpen(false)}>Volver</button>
       </div>
     </div>

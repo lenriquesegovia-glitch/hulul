@@ -19,6 +19,7 @@ import { defineSecret, defineString } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import nodemailer from 'nodemailer';
 import { randomInt } from 'node:crypto';
+import { hasProfanity, maskProfanity, PROFANITY_MESSAGE } from './profanity.js';
 
 /** Debe coincidir con la ubicación de la base de datos Firestore. */
 const REGION = 'southamerica-east1';
@@ -58,15 +59,20 @@ const rateRange = (c) => {
 };
 const clampRate = (c, r) => { const { min, max } = rateRange(c); return Math.min(max, Math.max(min, r)); };
 
-// Mismos textos que packages/shared/src/policy.ts.
-const OUTCOMES = { resuelto: 'Quedó resuelto', parcial: 'Necesita más trabajo', no_resuelto: 'No se pudo resolver' };
-const AFTER_VISIT_NOTE = 'La visita cubre el traslado, el diagnóstico y lo que se resuelva en ella. Si hace falta más trabajo, repuestos u otra visita, el profesional te envía un cobro adicional en la app y tú decides si lo aceptas; págalo por la app para que quede registrado. HULUL no garantiza el trabajo adicional: califica al profesional para que otros sepan cómo trabajó.';
+// Mismos textos que packages/shared/src/policy.ts y copy.ts.
+const TECNICO = ['climatizacion', 'plomeria', 'electricidad', 'electrodomesticos', 'piscinas', 'pintura', 'cerrajeria', 'carpinteria', 'albanileria', 'fumigacion', 'tecnologia'];
+const isTech = (cat) => TECNICO.includes(cat);
+const OUTCOMES = { resuelto: 'Listo', parcial: 'Falta completar', no_resuelto: 'Requiere otra solución' };
+const OUTCOMES_SERVICE = { resuelto: 'Servicio completo', parcial: 'Completado en parte', no_resuelto: 'No se pudo realizar' };
+const outcomeText = (o, cat) => (isTech(cat) ? OUTCOMES : OUTCOMES_SERVICE)[o] ?? '—';
+const reportName = (cat) => (isTech(cat) ? 'Informe' : 'Resumen');
+const AFTER_VISIT_NOTE = 'Si hace falta algo más (más tiempo, materiales u otro servicio), el profesional te lo propone en la app y tú decides. Págalo por la app para que quede registrado, y califica al profesional para que otros sepan cómo trabajó.';
 const HOME_SAFETY_NOTICE = [
-  'Ten en casa a una persona adulta de tu confianza mientras dure el trabajo.',
-  'Guarda dinero, joyas, documentos y objetos de valor, y no dejes al profesional solo en áreas que no necesita.',
-  'HULUL verifica la identidad y los antecedentes de los profesionales, pero no se responsabiliza por robos, pérdidas ni daños de objetos durante el servicio.',
+  'Que haya alguien mayor de edad en casa para recibir al profesional y acompañar el servicio, como con cualquier visita.',
+  'Guarda dinero, joyas y objetos de valor: así todos trabajan tranquilos.',
+  'Cada profesional de HULUL pasa por una verificación de identidad y antecedentes. El cuidado de los objetos personales es de cada hogar.',
 ];
-const safetyHtml = () => `<div style="background:#FFF6E5;border:1px solid #E9C98B;border-radius:10px;padding:12px 14px;margin-top:16px;font-size:14px;color:#3F3A37"><strong>Antes de que entre a tu casa</strong><ul style="margin:8px 0 0;padding-left:18px">${HOME_SAFETY_NOTICE.map((t) => `<li style="margin:4px 0">${esc(t)}</li>`).join('')}</ul></div>`;
+const safetyHtml = () => `<div style="background:#FFF6E5;border:1px solid #E9C98B;border-radius:10px;padding:12px 14px;margin-top:16px;font-size:14px;color:#3F3A37"><strong>Para que tu servicio fluya</strong><ul style="margin:8px 0 0;padding-left:18px">${HOME_SAFETY_NOTICE.map((t) => `<li style="margin:4px 0">${esc(t)}</li>`).join('')}</ul></div>`;
 
 /** Tarifa por visita válida, o null. */
 const validRate = (n) => (typeof n === 'number' && Number.isFinite(n) && n >= MIN_VISIT_RATE && n <= MAX_VISIT_RATE ? Math.round(n * 100) / 100 : null);
@@ -306,6 +312,11 @@ export const avisoReserva = onDocumentCreated(
     const b = event.data?.data();
     if (!b) return;
     const mail = transport();
+    // Malas palabras en la descripción: se tapan antes de que la lea el profesional.
+    if (b.notes && hasProfanity(b.notes)) {
+      b.notes = maskProfanity(b.notes);
+      await event.data.ref.update({ notes: b.notes }).catch(() => {});
+    }
     // El precio lo vuelve a calcular el servidor con la tarifa real del
     // profesional: si alguien lo alteró desde el celular, la reserva se anula.
     try {
@@ -624,6 +635,7 @@ export const cancelarReserva = onCall(
     const id = String(req.data?.id ?? '');
     const reason = String(req.data?.reason ?? '').slice(0, 300);
     if (!/^[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('invalid-argument', 'Reserva no válida.');
+    if (hasProfanity(reason)) throw new HttpsError('invalid-argument', PROFANITY_MESSAGE);
     const ref = db().doc(`bookings/${id}`);
 
     const result = await db().runTransaction(async (tx) => {
@@ -717,6 +729,7 @@ export const gestionarReserva = onCall(
     const id = String(req.data?.id ?? '');
     const action = String(req.data?.action ?? '');
     const reason = String(req.data?.reason ?? '').slice(0, 300);
+    if (hasProfanity(reason)) throw new HttpsError('invalid-argument', PROFANITY_MESSAGE);
     const rule = PRO_ACTIONS[action];
     if (!rule || !/^[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('invalid-argument', 'Acción no válida.');
     // Al terminar: resultado, diagnóstico escrito y fotos (respaldo para ambos).
@@ -725,8 +738,9 @@ export const gestionarReserva = onCall(
       const outcome = String(req.data?.outcome ?? '');
       const diagnosis = String(req.data?.diagnosis ?? '').trim().slice(0, 1500);
       const photos = Array.isArray(req.data?.photos) ? req.data.photos.map(String) : [];
-      if (!OUTCOMES[outcome]) throw new HttpsError('invalid-argument', 'Elige cómo quedó el trabajo.');
-      if (outcome !== 'resuelto' && diagnosis.length < 20) throw new HttpsError('invalid-argument', 'Explica en el diagnóstico qué encontraste y qué hace falta (mínimo 20 caracteres).');
+      if (!OUTCOMES[outcome]) throw new HttpsError('invalid-argument', 'Elige cómo quedó el servicio.');
+      if (outcome !== 'resuelto' && diagnosis.length < 20) throw new HttpsError('invalid-argument', 'Cuéntale al cliente qué pasó y qué recomiendas (mínimo 20 caracteres).');
+      if (hasProfanity(diagnosis)) throw new HttpsError('invalid-argument', PROFANITY_MESSAGE);
       if (photos.length < 1) throw new HttpsError('invalid-argument', 'Sube al menos una foto del trabajo, haya quedado resuelto o no.');
       if (photos.length > 6) throw new HttpsError('invalid-argument', 'Máximo 6 fotos.');
       const prefix = `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(`diagnosticos/${uid}/${id}/`)}`;
@@ -849,10 +863,10 @@ export const gestionarReserva = onCall(
         aceptar: [`${b.professionalName} confirmó tu reserva`, `Hola ${esc(first)}, ${esc(b.professionalName)} confirmó tu servicio de ${esc(cat)} para el ${esc(when)}. Te avisaremos cuando salga hacia tu dirección.`],
         en_camino: [`${b.professionalName} va en camino`, `Hola ${esc(first)}, ${esc(b.professionalName)} ya salió hacia ${esc(b.address)}. Míralo en <a href="https://hululec.com/cuenta">Mi cuenta</a>.`],
         en_puerta: [`${b.professionalName} llegó a tu dirección`, `Hola ${esc(first)}, ${esc(b.professionalName)} está en ${esc(b.address)}. Recíbelo y dale tu <strong>código de llegada</strong> (lo ves en tu reserva) para que empiece.${safetyHtml()}`],
-        llegue: [`${b.professionalName} empezó el trabajo`, `Hola ${esc(first)}, ${esc(b.professionalName)} empezó tu servicio con tu código de llegada.${safetyHtml()}`],
-        terminar: ['Tu servicio terminó: revisa el diagnóstico', `Hola ${esc(first)}, ${esc(b.professionalName)} terminó la visita.` +
-          (report ? rows([['Resultado', `<strong>${esc(OUTCOMES[report.outcome])}</strong>`], ['Diagnóstico', esc(report.diagnosis) || '—'], ['Fotos', report.diagnosisPhotos.length ? report.diagnosisPhotos.map((u, i) => `<a href="${esc(u)}" style="color:#7A1E2C">Foto ${i + 1}</a>`).join(' · ') : '—']]) : '') +
-          `<p style="font-size:14px;color:#3F3A37">${esc(AFTER_VISIT_NOTE)} Tienes 48 horas para calificarlo o reportar un problema en <a href="https://hululec.com/cuenta">Mi cuenta</a>.</p>`],
+        llegue: [`${b.professionalName} empezó tu servicio`, `Hola ${esc(first)}, ${esc(b.professionalName)} empezó tu servicio con tu código de llegada.`],
+        terminar: ['Tu servicio terminó', `Hola ${esc(first)}, ${esc(b.professionalName)} terminó tu servicio de ${esc(cat)}.` +
+          (report ? rows([['Resultado', `<strong>${esc(outcomeText(report.outcome, b.category))}</strong>`], [reportName(b.category), esc(report.diagnosis) || '—'], ['Fotos', report.diagnosisPhotos.length ? report.diagnosisPhotos.map((u, i) => `<a href="${esc(u)}" style="color:#7A1E2C">Foto ${i + 1}</a>`).join(' · ') : '—']]) : '') +
+          `<p style="font-size:14px;color:#3F3A37">${esc(AFTER_VISIT_NOTE)} Tienes 48 horas para calificarlo o pedir ayuda con el servicio en <a href="https://hululec.com/cuenta">Mi cuenta</a>.</p>`],
         rechazar: ['Tu reserva necesita otro profesional', `Hola ${esc(first)}, ${esc(b.professionalName)} no puede atender tu reserva del ${esc(when)}. No se te cobra nada. Elige otro profesional en <a href="https://hululec.com/servicios/${esc(b.category)}">HULUL</a>.`],
         no_puedo: ['Tu profesional canceló', `Hola ${esc(first)}, ${esc(b.professionalName)} canceló tu reserva del ${esc(when)}. No se te cobra nada y te ayudamos a encontrar otro profesional.`],
         cliente_ausente: arrivedLate
@@ -863,8 +877,8 @@ export const gestionarReserva = onCall(
         aceptar: `Confirmó tu servicio de ${cat} para el ${when}.`,
         en_camino: `Va en camino a tu dirección.`,
         en_puerta: 'Está en tu dirección. Recíbelo y dale tu código de llegada (lo ves en tu reserva).',
-        llegue: 'Empezó el trabajo. Ten a una persona de tu confianza en casa.',
-        terminar: 'Terminó la visita. Revisa el diagnóstico y las fotos, y califícalo.',
+        llegue: 'Empezó tu servicio. ¡Que lo disfrutes!',
+        terminar: 'Terminó tu servicio. Mira el resumen y las fotos, y califícalo.',
         rechazar: `No puede atender tu reserva del ${when}. No se te cobra nada.`,
         no_puedo: `Canceló tu reserva del ${when}. No se te cobra nada.`,
         cliente_ausente: arrivedLate ? 'Llegó más tarde de lo acordado y no te encontró. Se canceló sin costo para ti.' : `Llegó, esperó ${CLIENT_WAIT_MIN} minutos y no te encontró. Se canceló la reserva y se cobra la visita.`,
@@ -1138,6 +1152,7 @@ export const cobroAdicional = onCall({ region: REGION, secrets: [MAIL_PASSWORD] 
       const description = String(req.data?.description ?? '').trim().slice(0, 300);
       if (!Number.isFinite(amount) || amount < 1 || amount > 2000) throw new HttpsError('invalid-argument', 'El monto debe estar entre $1 y $2000.');
       if (description.length < 10) throw new HttpsError('invalid-argument', 'Explica qué incluye el cobro (al menos 10 caracteres).');
+      if (hasProfanity(description)) throw new HttpsError('invalid-argument', PROFANITY_MESSAGE);
       const extra = { amount, description, iva: r2(amount * IVA_RATE), total: r2(amount * (1 + IVA_RATE)), commission: r2(amount * COMMISSION), status: 'propuesto', proposedAt: FieldValue.serverTimestamp() };
       tx.update(ref, { extra });
       return { b, extra, to: 'cliente' };
@@ -1217,7 +1232,8 @@ export const calificar = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, as
   const appStars = req.data?.appStars == null ? null : stars(req.data.appStars);
   const proComment = String(req.data?.proComment ?? '').trim().slice(0, 600);
   const appComment = String(req.data?.appComment ?? '').trim().slice(0, 600);
-  if (proStars <= 2 && proComment.length < 10) throw new HttpsError('invalid-argument', 'Cuéntanos qué salió mal (al menos 10 caracteres): nos ayuda a cuidar la calidad.');
+  if (proStars <= 2 && proComment.length < 10) throw new HttpsError('invalid-argument', 'Cuéntanos qué no te gustó (al menos 10 caracteres): nos ayuda a mejorar.');
+  if (hasProfanity(proComment) || hasProfanity(appComment)) throw new HttpsError('invalid-argument', PROFANITY_MESSAGE);
   const ref = db().doc(`bookings/${id}`);
 
   const b = await db().runTransaction(async (tx) => {
@@ -1291,6 +1307,7 @@ export const calificarCliente = onCall({ region: REGION }, async (req) => {
   const n = stars(req.data?.stars);
   const comment = String(req.data?.comment ?? '').trim().slice(0, 600);
   if (!/^[A-Za-z0-9]{10,40}$/.test(id) || !n) throw new HttpsError('invalid-argument', 'Elige de 1 a 5 estrellas.');
+  if (hasProfanity(comment)) throw new HttpsError('invalid-argument', PROFANITY_MESSAGE);
   const ref = db().doc(`bookings/${id}`);
   await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -1312,6 +1329,12 @@ export const avisoChat = onDocumentCreated({ document: 'bookings/{id}/messages/{
   const m = event.data?.data();
   if (!m) return;
   const id = event.params.id;
+  // Malas palabras: se tapan en el chat (queda el original solo para HULUL).
+  if (m.text && hasProfanity(m.text)) {
+    m.text = maskProfanity(m.text);
+    await event.data.ref.update({ text: m.text });
+    await db().doc(`bookings/${id}/moderacion/${event.params.mid}`).set({ original: event.data.data().text, at: FieldValue.serverTimestamp(), from: m.from }).catch(() => {});
+  }
   const b = (await db().doc(`bookings/${id}`).get()).data();
   if (!b) return;
   const toPro = m.from === 'cliente';
@@ -1387,7 +1410,7 @@ async function recordatorios() {
           avisos++;
         } else if (mins <= 60 && mins > 0 && !r.conf1h) {
           await mark('conf1h');
-          await tellClient(b, id, `Tu cita con ${pro} es a las ${b.slot}`, `${pro} confirmó, pero aún no sale hacia tu dirección. Si necesitas algo, escríbele por el chat. Ten a una persona de confianza en casa.`);
+          await tellClient(b, id, `Tu cita con ${pro} es a las ${b.slot}`, `${pro} confirmó, pero aún no sale hacia tu dirección. Si necesitas algo, escríbele por el chat. Que haya alguien en casa para recibirlo.`);
           await pushTo(b.professionalId, `Tu cita es a las ${b.slot}`, 'Sal con tiempo y toca "Voy en camino" para que el cliente te vea en el mapa.', { url: AGENDA, bookingId: id, to: 'pro' });
           avisos++;
         }
@@ -1437,6 +1460,7 @@ export const avisarRetraso = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }
       const total = (b.delay?.status === 'aceptado' ? Number(b.delay.minutes) : 0) + minutes;
       if (total > 120) throw new HttpsError('failed-precondition', 'Un retraso de más de 2 horas no se puede avisar: propón otra hora o cancela.');
       const reason = String(req.data?.reason ?? '').trim().slice(0, 200);
+      if (hasProfanity(reason)) throw new HttpsError('invalid-argument', PROFANITY_MESSAGE);
       tx.update(ref, { delay: { minutes: total, added: minutes, reason, status: 'propuesto', previous: b.delay?.status === 'aceptado' ? Number(b.delay.minutes) : 0, at: FieldValue.serverTimestamp() } });
       return { b, minutes, total, to: 'cliente' };
     }
@@ -1472,11 +1496,11 @@ export const avisarRetraso = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }
 /* --------------------------------- Reclamos --------------------------------- */
 
 const PROBLEMS = {
-  si_estaba: 'Yo sí estaba: el profesional dijo que no me encontró',
-  no_vino: 'El profesional no hizo el trabajo o se fue sin hacerlo',
-  incompleto: 'Marcó como resuelto, pero no quedó resuelto',
-  cobro: 'Me cobró algo distinto a lo acordado',
-  otro: 'Otro problema',
+  si_estaba: 'El cliente sí estaba en casa',
+  no_vino: 'No se realizó el servicio',
+  incompleto: 'Se marcó como terminado, pero no se completó',
+  cobro: 'El cobro no fue el acordado',
+  otro: 'Otra cosa',
 };
 
 /**
@@ -1514,12 +1538,12 @@ export const reportarProblema = onCall({ region: REGION, secrets: [MAIL_PASSWORD
       html: layout('Reclamo por revisar', rows([
         ['Código', code(id)], ['Motivo', esc(PROBLEMS[kind])], ['Detalle', esc(text)],
         ['Cliente', `${esc(b.contactName)} · ${esc(b.contactPhone)}`], ['Profesional', esc(b.professionalName)],
-        ['Resultado marcado', esc(OUTCOMES[b.outcome] ?? '—')], ['Diagnóstico', esc(b.diagnosis ?? '—')],
+        ['Resultado marcado', esc(outcomeText(b.outcome, b.category))], [reportName(b.category), esc(b.diagnosis ?? '—')],
         ['Empezó con código', b.startedAt ? 'Sí' : 'No'],
         ...(b.cancelledBy === 'cliente_ausente' ? [['Cliente ausente', `Cobro retenido: ${usd(b.cancelFee)}. Llegada marcada a ${b.arrivedPos?.distance ?? '¿?'} m de la dirección.`]] : []),
       ]) + `<p style="font-size:13px;color:#6B6560">Revisa en Firestore la reserva, sus fotos y el chat (bookings/${esc(id)}/messages). Para cerrar: cambia <b>status</b> a <b>completada</b> (procede el pago) o <b>cancelada</b> con <b>cancelFee</b> 0 (se devuelve al cliente). Si era "cliente ausente" y el cliente tiene razón: <b>cancelada</b>, <b>cancelFee</b> 0 y resta el monto de <b>balance</b> en clients/${esc(b.clientId)}.</p>` +
         button(`https://console.firebase.google.com/project/${PROJECT}/firestore/databases/-default-/data/~2Fbookings~2F${id}`, 'Revisar en Firebase')) });
-    await pushTo(b.professionalId, 'El cliente reportó un problema', `${PROBLEMS[kind]}. HULUL lo revisa; el pago queda retenido mientras tanto. Puedes responder por el chat.`, { url: AGENDA, bookingId: id, to: 'pro' });
+    await pushTo(b.professionalId, 'El cliente pidió ayuda con el servicio', `${PROBLEMS[kind]}. HULUL lo revisa; el pago queda retenido mientras tanto. Puedes responder por el chat.`, { url: AGENDA, bookingId: id, to: 'pro' });
   } catch (e) {
     logger.warn('No se pudo avisar el reclamo', { id, e: String(e) });
   }

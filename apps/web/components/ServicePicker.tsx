@@ -7,7 +7,7 @@ import { usePros } from '@/lib/pros';
 import { Icon } from './Icon';
 import { ProCard } from './ProCard';
 
-export const OTHER_JOB = 'Otro trabajo';
+export const OTHER_JOB = 'Otro';
 
 /**
  * Página de categoría: primero "¿Qué necesitas?" con los subservicios más

@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
 import {
-  acceptedDelay, appointmentTime, departPlan, travelEstimate, extraQuote, formatUSD, getCategory, hhmmEcuador, JOB_OUTCOMES, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS,
-  MAX_EXTRA, MIN_DIAGNOSIS_CHARS, MIN_EXTRA, OUTCOME_LABEL, POLICY, type JobOutcome,
+  acceptedDelay, appointmentTime, departPlan, travelEstimate, extraQuote, formatUSD, getCategory, hhmmEcuador, serviceCopy, outcomeLabel, hasProfanity, PROFANITY_MESSAGE, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS,
+  MAX_EXTRA, MIN_DIAGNOSIS_CHARS, MIN_EXTRA, POLICY, type JobOutcome,
 } from '@hulul/shared';
 import { EXTRA_STATUS_LABEL, extraCharge, proAction, rateClient, shareLivePosition, type ExtraAction, type ProAction, type ProBooking } from '@hulul/shared/firebase';
 import { BackButton, Body, Card, H1, Button, PrimaryButton } from '@/components/ui';
@@ -103,7 +103,7 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
 
       {b.outcome && (
         <Card style={{ gap: 8 }}>
-          <Text style={s.label}>Tu diagnóstico · {OUTCOME_LABEL[b.outcome]}</Text>
+          <Text style={s.label}>Tu {serviceCopy(b.category).reportTitle.toLowerCase()} · {outcomeLabel(b.outcome, b.category)}</Text>
           {b.diagnosis ? <Body>{b.diagnosis}</Body> : null}
           {!!b.diagnosisPhotos?.length && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -116,7 +116,7 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
       {msg ? <Body style={{ color: c.primary, fontSize: 13.5 }}>{msg}</Body> : null}
 
       {finishing ? (
-        <FinishPanel bookingId={b.id} uid={uid} busy={!!busy} onCancel={() => setFinishing(false)} onSend={(r) => act('terminar', r)} />
+        <FinishPanel bookingId={b.id} category={b.category} uid={uid} busy={!!busy} onCancel={() => setFinishing(false)} onSend={(r) => act('terminar', r)} />
       ) : asking ? (
         <Card style={{ gap: 10 }}>
           <Text style={s.label}>{asking === 'rechazar' ? '¿Por qué no puedes? (opcional)' : asking === 'cliente_ausente' ? '¿Qué pasó? (opcional)' : 'Cuéntale al cliente qué pasó'}</Text>
@@ -176,7 +176,7 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
 
 /** Pedir fotos: en la app va por el chat (el profesional escribe qué necesita). */
 function AskPhotosHint() {
-  return <Body muted style={{ fontSize: 12 }}>¿Necesitas ver el problema? Pídele fotos al cliente por el chat; él las envía con la cámara.</Body>;
+  return <Body muted style={{ fontSize: 12 }}>¿Quieres ver el lugar o algún detalle? Pídele fotos al cliente por el chat.</Body>;
 }
 
 /**
@@ -273,9 +273,9 @@ function AbsentButton({ startedAt, late, onPress }: { startedAt?: number; late: 
   );
 }
 
-/** Terminar: cómo quedó, diagnóstico y al menos una foto. */
-function FinishPanel({ bookingId, uid, busy, onCancel, onSend }: {
-  bookingId: string; uid: string; busy: boolean; onCancel: () => void; onSend: (r: { outcome: JobOutcome; diagnosis: string; photos: string[] }) => void;
+/** Terminar: cómo quedó, informe o resumen y al menos una foto. */
+function FinishPanel({ bookingId, category, uid, busy, onCancel, onSend }: {
+  bookingId: string; category: string; uid: string; busy: boolean; onCancel: () => void; onSend: (r: { outcome: JobOutcome; diagnosis: string; photos: string[] }) => void;
 }) {
   const [outcome, setOutcome] = useState<JobOutcome | ''>('');
   const [diagnosis, setDiagnosis] = useState('');
@@ -283,6 +283,7 @@ function FinishPanel({ bookingId, uid, busy, onCancel, onSend }: {
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState('');
   const canPhoto = photosAvailable();
+  const copy = serviceCopy(category);
 
   const add = async (from: 'camara' | 'galeria') => {
     setErr('');
@@ -301,24 +302,24 @@ function FinishPanel({ bookingId, uid, busy, onCancel, onSend }: {
 
   const send = () => {
     setErr('');
-    if (!outcome) { setErr('Elige cómo quedó el trabajo.'); return; }
-    if (outcome !== 'resuelto' && diagnosis.trim().length < MIN_DIAGNOSIS_CHARS) { setErr('Explica qué encontraste y qué hace falta.'); return; }
-    if (!photos.length) { setErr('Sube al menos una foto del trabajo, haya quedado resuelto o no.'); return; }
+    if (!outcome) { setErr('Elige cómo quedó el servicio.'); return; }
+    if (outcome !== 'resuelto' && diagnosis.trim().length < MIN_DIAGNOSIS_CHARS) { setErr('Cuéntale al cliente qué pasó y qué recomiendas.'); return; }
+    if (!photos.length) { setErr('Sube al menos una foto. Es tu respaldo.'); return; }
     onSend({ outcome, diagnosis: diagnosis.trim(), photos });
   };
 
   return (
     <Card style={{ gap: 12 }}>
       <Text style={s.label}>¿Cómo quedó?</Text>
-      {JOB_OUTCOMES.map((o) => (
+      {(Object.keys(copy.outcomes) as JobOutcome[]).map((v) => ({ value: v, ...copy.outcomes[v] })).map((o) => (
         <Pressable key={o.value} accessibilityRole="radio" accessibilityState={{ checked: outcome === o.value }} onPress={() => setOutcome(o.value)} style={[s.option, outcome === o.value && s.optionOn]}>
           <Text style={s.btnText}>{o.label}</Text>
           <Body muted style={{ fontSize: 12.5 }}>{o.help}</Body>
         </Pressable>
       ))}
       <TextInput value={diagnosis} onChangeText={setDiagnosis} maxLength={MAX_DIAGNOSIS_CHARS} multiline placeholderTextColor={c.textMuted}
-        placeholder={`Diagnóstico${outcome === 'resuelto' ? ' (opcional)' : ''}: qué encontraste, qué hiciste y qué recomiendas`} style={[s.input, { minHeight: 90, textAlignVertical: 'top', paddingTop: 10 }]} />
-      <Text style={s.label}>Fotos del trabajo ({photos.length}/{MAX_DIAGNOSIS_PHOTOS}, mínimo 1)</Text>
+        placeholder={`${copy.reportTitle}${outcome === 'resuelto' ? ' (opcional)' : ''}: ${copy.reportPlaceholder.toLowerCase()}`} style={[s.input, { minHeight: 90, textAlignVertical: 'top', paddingTop: 10 }]} />
+      <Text style={s.label}>{copy.photosAtEnd} ({photos.length}/{MAX_DIAGNOSIS_PHOTOS}, mínimo 1)</Text>
       {photos.length > 0 && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{photos.map((u) => <Image key={u} source={{ uri: u }} style={s.photo} />)}</View>}
       {canPhoto ? (
         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -394,13 +395,14 @@ function RateClient({ id, name }: { id: string; name: string }) {
   return (
     <Card style={{ gap: 8 }}>
       <Text style={s.label}>Califica a {name}</Text>
-      <Body muted style={{ fontSize: 12.5 }}>Solo lo ve HULUL. Nos ayuda a cuidarte de clientes problemáticos.</Body>
+      <Body muted style={{ fontSize: 12.5 }}>Solo lo ve HULUL. Nos ayuda a cuidar la comunidad.</Body>
       <StarInput value={n} onChange={setN} size={28} label="Calificación del cliente" />
       {n > 0 && <TextInput value={text} onChangeText={setText} maxLength={600} placeholder="Comentario (opcional)" placeholderTextColor={c.textMuted} style={s.input} />}
       {msg ? <Body style={{ color: c.primary, fontSize: 13 }}>{msg}</Body> : null}
       <PrimaryButton label={busy ? 'Enviando…' : 'Enviar'} onPress={async () => {
         if (busy) return;
         if (!n) { setMsg('Elige las estrellas.'); return; }
+        if (hasProfanity(text)) { setMsg(PROFANITY_MESSAGE); return; }
         setBusy(true); setMsg('');
         try { await rateClient({ id, stars: n, comment: text.trim() }); } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
       }} />

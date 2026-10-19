@@ -391,7 +391,7 @@ function StepServices({ d, setD, uid }: { d: Draft; setD: (fn: (x: Draft) => Dra
 
       {d.categories.length > 0 && (
         <div className="notice" style={{ fontSize: 13.5 }}>
-          <strong>Cobras por visita, como un taxi.</strong> Tu tarifa cubre ir a la casa, el diagnóstico y el arreglo si se resuelve en esa visita. Si hace falta más (repuestos, más tiempo u otra visita), lo acuerdas directamente con el cliente. HULUL retiene el {Math.round(POLICY.commission * 100)} % de la tarifa.
+          <strong>Cobras por visita, como un taxi.</strong> Tu tarifa cubre el traslado y el servicio (en arreglos, la revisión y lo que se resuelva en esa visita). Si hace falta más (materiales, más tiempo u otra visita), se lo propones al cliente en la app. HULUL retiene el {Math.round(POLICY.commission * 100)} % de la tarifa.
         </div>
       )}
 
@@ -582,7 +582,7 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
         <ul className="stack gap-4" style={{ margin: 0, paddingLeft: 20, color: 'var(--text-2)', fontSize: 14 }}>
           <li>Cobras por visita: tu tarifa cubre ir, diagnosticar y arreglar lo que se resuelva en esa visita. Lo que haga falta después lo acuerdas con el cliente.</li>
           <li>HULUL retiene una comisión del 15 % de tu tarifa por visita.</li>
-          <li>Acepta solo trabajos que sabes hacer. Al terminar registras el resultado y un diagnóstico con fotos.</li>
+          <li>Acepta solo trabajos que sabes hacer. Al terminar dejas un resumen con fotos.</li>
           <li>Tolerancia de llegada: 15 minutos. Entre 15 y 30 minutos tarde, el cliente recibe un 10 % de descuento que se te descuenta.</li>
           <li>Más de 30 minutos tarde o cancelar con menos de 2 horas: multa de $5. No llegar sin avisar: multa de $10.</li>
           <li>3 faltas o cancelaciones tardías en 30 días: suspensión temporal.</li>

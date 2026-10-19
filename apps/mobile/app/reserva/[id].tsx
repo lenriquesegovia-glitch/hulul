@@ -3,7 +3,7 @@ import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { AFTER_VISIT_NOTE, cancelledText, clientAlert, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, OUTCOME_LABEL, usd } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, cancelledText, clientAlert, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, outcomeLabel, serviceCopy, usd } from '@hulul/shared';
 import { confirmService, EXTRA_STATUS_LABEL, extraCharge, firestore, type ClientBooking, type ExtraAction, type ExtraCharge } from '@hulul/shared/firebase';
 import { Icon } from '@/components/Icon';
 import { LiveMap } from '@/components/LiveMap';
@@ -66,10 +66,10 @@ function Detail({ b }: { b: ClientBooking }) {
     pendiente: `Esperando que ${first} acepte tu reserva. Te avisamos apenas lo haga.`,
     confirmada: `${first} confirmó. Saldrá con el tiempo justo para llegar a las ${b.slot} (puede salir desde las ${hhmmEcuador(new Date(at.getTime() - 120 * 60_000))}).`,
     en_camino: b.arrivedAt ? `${first} está en tu dirección. Recíbelo y dale tu código de llegada.` : `${first} va en camino. Míralo en el mapa en vivo.`,
-    en_curso: `${first} está trabajando. Al terminar te deja el resultado y un diagnóstico con fotos.`,
-    por_aprobar: `${first} terminó la visita. Revisa su diagnóstico; tienes 48 horas para calificarlo o reportar un problema.`,
+    en_curso: `${first} está en tu servicio. Al terminar te deja un resumen con fotos.`,
+    por_aprobar: `${first} terminó. Mira su resumen y califícalo; tienes 48 horas.`,
     completada: 'Servicio completado.',
-    en_disputa: 'Reportaste un problema. HULUL lo está revisando y el pago queda retenido mientras tanto.',
+    en_disputa: 'Nos pediste ayuda con este servicio. HULUL lo está revisando y el pago queda en espera mientras tanto.',
     cancelada: cancelledText(b, first),
   };
 
@@ -110,15 +110,15 @@ function Detail({ b }: { b: ClientBooking }) {
       {b.outcome && (
         <Card style={{ gap: 10 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <Text style={s.boxTitle}>Diagnóstico del profesional</Text>
-            <Text style={[s.badge, b.outcome === 'resuelto' && { backgroundColor: c.successSoft, color: c.success }]}>{OUTCOME_LABEL[b.outcome]}</Text>
+            <Text style={s.boxTitle}>{serviceCopy(b.category).reportTitle}</Text>
+            <Text style={[s.badge, b.outcome === 'resuelto' && { backgroundColor: c.successSoft, color: c.success }]}>{outcomeLabel(b.outcome, b.category)}</Text>
           </View>
           {b.diagnosis ? <Body>{b.diagnosis}</Body> : null}
           {!!b.diagnosisPhotos?.length && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {b.diagnosisPhotos.map((u) => (
                 <Pressable key={u} onPress={() => Linking.openURL(u)}>
-                  <Image source={{ uri: u }} style={s.photo} accessibilityLabel="Foto del diagnóstico" />
+                  <Image source={{ uri: u }} style={s.photo} accessibilityLabel="Foto del servicio" />
                 </Pressable>
               ))}
             </View>
@@ -131,8 +131,8 @@ function Detail({ b }: { b: ClientBooking }) {
       {['por_aprobar', 'completada'].includes(b.status) && !b.rating && b.extra?.status !== 'propuesto' && <RatingBox id={b.id} proName={first} />}
       {b.rating ? <Body muted>Calificaste a {first} con {'★'.repeat(b.rating)}. ¡Gracias!</Body> : null}
       {b.status === 'por_aprobar' && !b.rating && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
-      {['por_aprobar', 'completada'].includes(b.status) && !b.dispute && <ProblemBox id={b.id} />}
-      {b.status === 'cancelada' && b.cancelledBy === 'cliente_ausente' && !b.dispute && Date.now() - (b.cancelledAt?.toMillis?.() ?? 0) < 48 * 3_600_000 && <ProblemBox id={b.id} absent />}
+      {['por_aprobar', 'completada'].includes(b.status) && !b.dispute && <ProblemBox id={b.id} category={b.category} />}
+      {b.status === 'cancelada' && b.cancelledBy === 'cliente_ausente' && !b.dispute && Date.now() - (b.cancelledAt?.toMillis?.() ?? 0) < 48 * 3_600_000 && <ProblemBox id={b.id} category={b.category} absent />}
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && (
         <View style={s.box}>
           <Text style={s.boxTitle}>{HOME_SAFETY_TITLE}</Text>

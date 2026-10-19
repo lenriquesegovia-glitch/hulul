@@ -42,8 +42,8 @@ export default function ProfessionalsPage() {
         <div className="container stack gap-12" style={{ marginTop: 32 }}>
           <h2 style={{ fontSize: 24 }}>Cuánto cobras</h2>
           <p className="muted" style={{ fontSize: 15 }}>
-            Cobras por visita: tu tarifa cubre ir a la casa, el diagnóstico y el arreglo si se resuelve en esa visita. Si hace falta más
-            (repuestos, más tiempo u otra visita), lo acuerdas directamente con el cliente. HULUL retiene una comisión del {Math.round(COMMISSION_RATE * 100)} % de tu tarifa por visita.
+            Cobras por visita: tu tarifa cubre el traslado y el servicio (en arreglos, la revisión y lo que se resuelva en esa visita). Si hace falta más
+            (materiales, más tiempo u otra visita), se lo propones al cliente en la app. HULUL retiene una comisión del {Math.round(COMMISSION_RATE * 100)} % de tu tarifa por visita.
             Estas son las tarifas que sugerimos para empezar; al registrarte ves también cuánto cobran otros profesionales.
           </p>
           <div className="card" style={{ padding: 0, overflowX: 'auto' }}>

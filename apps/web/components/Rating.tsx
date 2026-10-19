@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { PublicReview } from '@hulul/shared/firebase';
+import { hasProfanity, PROFANITY_MESSAGE } from '@hulul/shared';
 
 const LABELS = ['', 'Muy mal', 'Mal', 'Regular', 'Bien', 'Excelente'];
 
@@ -39,7 +40,8 @@ export function RatingBox({ id, proName }: { id: string; proName: string }) {
   const send = async () => {
     setMsg('');
     if (!pro) { setMsg(`Elige cuántas estrellas le das a ${proName}.`); return; }
-    if (pro <= 2 && proText.trim().length < 10) { setMsg('Cuéntanos qué salió mal (al menos 10 caracteres). Lo revisamos.'); return; }
+    if (pro <= 2 && proText.trim().length < 10) { setMsg('Cuéntanos qué no te gustó (al menos 10 caracteres). Nos ayuda a mejorar.'); return; }
+    if (hasProfanity(proText) || hasProfanity(appText)) { setMsg(PROFANITY_MESSAGE); return; }
     setBusy(true);
     try {
       const { rateService } = await import('@hulul/shared/firebase');
@@ -59,9 +61,9 @@ export function RatingBox({ id, proName }: { id: string; proName: string }) {
       </div>
       <StarInput value={pro} onChange={setPro} label={`Calificación de ${proName}`} />
       <div className="field">
-        <label htmlFor={`rp-${id}`}>{pro && pro <= 2 ? '¿Qué salió mal?' : 'Comentario (opcional)'}</label>
+        <label htmlFor={`rp-${id}`}>{pro && pro <= 2 ? '¿Qué no te gustó?' : 'Comentario (opcional)'}</label>
         <textarea id={`rp-${id}`} rows={2} maxLength={600} value={proText} onChange={(e) => setProText(e.target.value)}
-          placeholder="Puntual, ordenado, explicó bien el problema…" />
+          placeholder="Puntual, amable, muy cuidadoso…" />
       </div>
       <div className="stack gap-8" style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
         <strong>¿Y la app HULUL? (opcional)</strong>
@@ -87,6 +89,7 @@ export function RateClientBox({ id, clientName }: { id: string; clientName: stri
   const [msg, setMsg] = useState('');
   const send = async () => {
     if (!n) { setMsg('Elige las estrellas.'); return; }
+    if (hasProfanity(text)) { setMsg(PROFANITY_MESSAGE); return; }
     setBusy(true); setMsg('');
     try {
       const { rateClient } = await import('@hulul/shared/firebase');
@@ -100,7 +103,7 @@ export function RateClientBox({ id, clientName }: { id: string; clientName: stri
   return (
     <div className="stack gap-8" style={{ width: '100%', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
       <strong>Califica a {clientName || 'el cliente'}</strong>
-      <span className="muted" style={{ fontSize: 13 }}>Solo lo ve HULUL. Nos ayuda a cuidarte de clientes problemáticos.</span>
+      <span className="muted" style={{ fontSize: 13 }}>Solo lo ve HULUL. Nos ayuda a cuidar la comunidad.</span>
       <StarInput value={n} onChange={setN} label="Calificación del cliente" size={28} />
       {n > 0 && <textarea rows={2} maxLength={600} value={text} onChange={(e) => setText(e.target.value)} placeholder="Comentario (opcional)" aria-label="Comentario sobre el cliente" />}
       {msg && <p role="alert" className="form-error">{msg}</p>}

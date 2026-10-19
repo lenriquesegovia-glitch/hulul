@@ -7,7 +7,8 @@ import {
   firstAvailable,
   formatUSD,
   getCategory,
-  AFTER_VISIT_NOTE,
+  serviceCopy,
+  HOME_SAFETY_ACCEPT,
   HOME_SAFETY_NOTICE,
   HOME_SAFETY_TITLE,
   proHref,
@@ -44,7 +45,7 @@ import { usePro } from '@/lib/pros';
  * Guarda la reserva en Firestore (`bookings`) con la prueba del consentimiento.
  * Pendiente: redirigir a la pasarela de pago antes de confirmar.
  */
-const OTHER = 'Otro trabajo';
+const OTHER = 'Otro';
 
 /** Estado del servicio, estilo seguimiento de paquetes. */
 function Timeline({ steps }: { steps: { t: string; d: string; state?: 'done' | 'now' }[] }) {
@@ -179,6 +180,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
   const hours = visitHours(pro.category);
   const minH = hours;
   const [service, setService] = useState('');
+  // Si ya lo eligió en la categoría, no se vuelve a preguntar (se puede cambiar).
+  const [pickJob, setPickJob] = useState(true);
+  const copy = serviceCopy(pro.category);
   // Fotos opcionales del problema: el profesional las ve antes de aceptar.
   const [photos, setPhotos] = useState<string[]>([]);
   const draftId = useMemo(() => Math.random().toString(36).slice(2, 12), []);
@@ -190,7 +194,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
   // Si viene elegido desde la categoría (?trabajo=…), queda marcado.
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('trabajo');
-    if (t && (jobs.includes(t) || t === OTHER)) setService(t);
+    if (t && (jobs.includes(t) || t === OTHER)) { setService(t); setPickJob(false); }
   }, [jobs]);
   const [location, setLocation] = useState<LatLng | null>(null);
   const [notesLen, setNotesLen] = useState(0);
@@ -212,12 +216,12 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
     const data = new FormData(e.currentTarget);
     const get = (k: string) => String(data.get(k) ?? '').trim();
     if (!service) {
-      setError('Elige qué trabajo necesitas (o "Otro trabajo").');
+      setError('Elige qué necesitas.');
       document.getElementById('trabajo')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     if (service === OTHER && get('descripcion').length < 10) {
-      setError('Describe el trabajo que necesitas (al menos 10 caracteres).');
+      setError('Cuéntanos qué necesitas (al menos 10 caracteres).');
       return;
     }
     if (slot < 0 || !okWith(new Date(), day, slot, hours)) {
@@ -226,7 +230,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
     }
     if (check && !check.ok) { setError(check.reason ?? 'Ese horario no está disponible.'); return; }
     if (!data.get('acepta_seguridad')) {
-      setError('Lee el aviso de seguridad y marca que lo aceptas.');
+      setError('Marca la casilla "Para que tu servicio fluya" para continuar.');
       document.getElementById('aviso-seguridad')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
@@ -299,9 +303,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
             { t: 'Reserva recibida', d: `Código ${done.id.slice(0, 8).toUpperCase()}`, state: 'done' },
             { t: 'Profesional confirmado', d: DEMO_MODE ? 'Te escribimos por WhatsApp para confirmar.' : `${pro.name} acepta tu reserva.`, state: 'now' },
             { t: 'En camino', d: 'Verás en el mapa por dónde viene y cuánto falta.' },
-            { t: 'Llegó', d: 'Ten en casa a una persona de tu confianza mientras dure el trabajo.' },
-            { t: 'Trabajo en curso', d: 'Revisa el problema y lo arregla si se resuelve en la visita.' },
-            { t: 'Terminado', d: 'Te deja el resultado y un diagnóstico con fotos. Tú lo calificas.' },
+            { t: 'Llegó', d: 'Recíbelo y dale tu código de llegada para empezar.' },
+            { t: 'En curso', d: copy.inProgress },
+            { t: 'Terminado', d: copy.finished },
           ]} />
         </div>
         <Link href="/" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }}>Volver al inicio</Link>
@@ -367,8 +371,14 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         <legend className="fs-title">2. ¿Dónde y qué necesitas?</legend>
         <AddressInput onPlace={(p) => setLocation(p)} />
         <LocationPicker value={location} onChange={setLocation} />
+        {!pickJob && service ? (
+          <div className="card row gap-12" id="trabajo" style={{ padding: 14, justifyContent: 'space-between' }}>
+            <div className="stack"><span className="muted" style={{ fontSize: 13 }}>{copy.jobQuestion}</span><strong style={{ fontSize: 16 }}>{service}</strong></div>
+            <button type="button" className="link-btn" onClick={() => setPickJob(true)}>Cambiar</button>
+          </div>
+        ) : (
         <div className="field" id="trabajo">
-          <span className="field-label">¿Qué trabajo necesitas?</span>
+          <span className="field-label">{copy.jobQuestion}</span>
           <div className="tag-row" role="radiogroup" aria-label="Trabajo">
             {[...jobs, OTHER].map((s) => (
               <button key={s} type="button" role="radio" aria-checked={service === s} className={`tag ${service === s ? 'on' : ''}`} onClick={() => setService(s)}>
@@ -377,21 +387,22 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
             ))}
           </div>
         </div>
+        )}
         <div className="field">
-          <label htmlFor="descripcion">{service === OTHER ? 'Describe el trabajo' : 'Detalles (opcional)'}</label>
+          <label htmlFor="descripcion">{service === OTHER ? 'Cuéntanos qué necesitas' : 'Detalles (opcional)'}</label>
           <textarea id="descripcion" name="descripcion" rows={3} maxLength={NOTES_MAX - 60}
             aria-describedby="descripcion-ayuda"
             onChange={(e) => setNotesLen(e.target.value.length)}
-            placeholder={service === OTHER ? 'Cuéntanos qué necesitas' : 'Ej.: 2 splits de 12.000 BTU, uno gotea agua'} />
+            placeholder={copy.detailsPlaceholder} />
           <div id="descripcion-ayuda" className="row muted" style={{ justifyContent: 'space-between', fontSize: 13, gap: 12 }}>
-            <span>Qué equipo, qué falla y cualquier dato que ayude al profesional.</span>
+            <span>{copy.detailsHelp}</span>
             <span aria-live="polite" style={{ flexShrink: 0, color: notesLen >= NOTES_MAX - 60 ? 'var(--primary)' : undefined }}>
               {notesLen}/{NOTES_MAX - 60}
             </span>
           </div>
         </div>
         <PhotoPicker folder={`solicitudes/${uid}/${draftId}`} max={MAX_REQUEST_PHOTOS} value={photos} onChange={setPhotos}
-          label="Fotos del problema (opcional)" help="Una foto del equipo, la fuga o el lugar ayuda al profesional a saber qué llevar." />
+          label={copy.photosLabel} help={copy.photosHelp} />
       </fieldset>
 
       <fieldset className="stack gap-12 fs">
@@ -417,7 +428,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         </div>
         <div className="card stack gap-8" style={{ padding: 18 }}>
           <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
-            <span>Visita de {pro.name.split(' ')[0]} <span className="muted" style={{ fontSize: 13 }}>(traslado, diagnóstico y arreglo si se resuelve en la visita)</span></span>
+            <span>{pro.name.split(' ')[0]} <span className="muted" style={{ fontSize: 13 }}>({copy.priceCovers})</span></span>
             <span>{formatUSD(q.visit)}</span>
           </div>
           <div className="row" style={{ justifyContent: 'space-between' }}><span>Cargo de plataforma HULUL</span><span>{formatUSD(q.fee)}</span></div>
@@ -425,7 +436,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
           <div className="row" style={{ justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid var(--border)', fontWeight: 700, fontSize: 18 }}>
             <span>Total</span><span>{formatUSD(q.total)}</span>
           </div>
-          <p className="muted" style={{ fontSize: 13.5 }}>La visita se paga aunque no se resuelva el problema, porque cubre el traslado y el diagnóstico. {AFTER_VISIT_NOTE}</p>
+          <p className="muted" style={{ fontSize: 13.5 }}>{copy.priceNote}</p>
           {DEMO_MODE ? (
             <p className="pill pill-warm" style={{ alignSelf: 'flex-start' }}>Versión de prueba: no se pide la tarjeta ni se cobra nada.</p>
           ) : (
@@ -435,12 +446,12 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
       </fieldset>
 
       <div className="stack gap-12">
-        <div id="aviso-seguridad" className="notice stack gap-8">
+        <div id="aviso-seguridad" className="card stack gap-8" style={{ padding: 16, background: 'var(--surface-warm, #F6F1EA)' }}>
           <strong>{HOME_SAFETY_TITLE}</strong>
           <ul className="stack gap-4" style={{ margin: 0, paddingLeft: 20, fontSize: 14 }}>
             {HOME_SAFETY_NOTICE.map((t) => <li key={t}>{t}</li>)}
           </ul>
-          <label className="check"><input type="checkbox" name="acepta_seguridad" /><span>Entiendo y acepto: habrá una persona de mi confianza en casa durante el servicio.</span></label>
+          <label className="check"><input type="checkbox" name="acepta_seguridad" /><span>{HOME_SAFETY_ACCEPT}</span></label>
         </div>
         <label className="check">
           <input type="checkbox" name="acepta_privacidad" required />

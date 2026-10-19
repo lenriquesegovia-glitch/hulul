@@ -4,7 +4,7 @@ import { Faq, faqJsonLd } from '@/components/Faq';
 
 export const metadata: Metadata = {
   title: 'Preguntas frecuentes',
-  description: 'Precio, pago, verificación de profesionales, cancelaciones, retrasos, diagnóstico y calificaciones en HULUL.',
+  description: 'Precio, pago, verificación de profesionales, cancelaciones, retrasos, resumen del servicio y calificaciones en HULUL.',
   alternates: { canonical: '/preguntas-frecuentes' },
 };
 

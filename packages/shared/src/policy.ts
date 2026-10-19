@@ -255,7 +255,7 @@ export const MIN_DIAGNOSIS_CHARS = 20;
 
 /** Qué se le explica al cliente sobre lo que viene después de la visita. */
 export const AFTER_VISIT_NOTE =
-  'La visita cubre el traslado, el diagnóstico y lo que se resuelva en ella. Si hace falta más trabajo, repuestos u otra visita, el profesional te envía un cobro adicional en la app y tú decides si lo aceptas; págalo por la app para que quede registrado. HULUL no garantiza el trabajo adicional: califica al profesional para que otros sepan cómo trabajó.';
+  'Si hace falta algo más (más tiempo, materiales u otro servicio), el profesional te lo propone en la app y tú decides. Págalo por la app para que quede registrado, y califica al profesional para que otros sepan cómo trabajó.';
 
 /* ------------------------- Seguridad en el hogar ------------------------- */
 
@@ -263,9 +263,11 @@ export const AFTER_VISIT_NOTE =
  * Aviso que el cliente acepta al reservar y que se le recuerda cuando el
  * profesional llega a empezar el trabajo.
  */
-export const HOME_SAFETY_TITLE = 'Antes de que entre a tu casa';
+export const HOME_SAFETY_TITLE = 'Para que tu servicio fluya';
 export const HOME_SAFETY_NOTICE = [
-  'Ten en casa a una persona adulta de tu confianza mientras dure el trabajo.',
-  'Guarda dinero, joyas, documentos y objetos de valor, y no dejes al profesional solo en áreas que no necesita.',
-  'HULUL verifica la identidad y los antecedentes de los profesionales, pero no se responsabiliza por robos, pérdidas ni daños de objetos durante el servicio. Cualquier reclamo por esos hechos es entre el cliente y el profesional, sin perjuicio de que el cliente denuncie ante las autoridades.',
+  'Que haya alguien mayor de edad en casa para recibir al profesional y acompañar el servicio, como con cualquier visita.',
+  'Guarda dinero, joyas y objetos de valor: así todos trabajan tranquilos.',
+  'Cada profesional de HULUL pasa por una verificación de identidad y antecedentes. El cuidado de los objetos personales es de cada hogar: HULUL no responde por pérdidas ni daños de objetos durante el servicio.',
 ];
+/** Casilla que el cliente marca al reservar. */
+export const HOME_SAFETY_ACCEPT = 'Entendido: habrá alguien en casa para recibir al profesional.';

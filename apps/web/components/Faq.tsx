@@ -13,11 +13,11 @@ export const faqGroups: { title: string; items: Q[] }[] = [
     items: [
       {
         q: '¿Cómo se cobra?',
-        a: `Por visita, como un taxi. Cada profesional publica su tarifa por visita, que cubre el traslado, el diagnóstico y el arreglo si se resuelve en esa visita. Al total se suma el cargo de plataforma de ${usd(P.platformFee)} y el IVA, y lo ves antes de confirmar.`,
+        a: `Por visita, como un taxi. Cada profesional publica su tarifa por visita, que cubre el traslado y el servicio que reservas (en arreglos, la revisión y lo que se resuelva en esa visita). Al total se suma el cargo de plataforma de ${usd(P.platformFee)} y el IVA, y lo ves antes de confirmar.`,
       },
       {
-        q: '¿Qué pasa si el profesional no logra resolver el problema?',
-        a: `La visita se paga igual, porque cubre el traslado y el diagnóstico. Al terminar, el profesional marca si quedó resuelto, si necesita más trabajo o si no se pudo resolver, y te deja un diagnóstico escrito con fotos en la app. ${AFTER_VISIT_NOTE}`,
+        q: '¿Y si hace falta algo más?',
+        a: `Al terminar, el profesional te deja en la app un resumen con fotos de lo que hizo. La visita cubre el traslado y el tiempo del profesional, así que se paga aunque haga falta otra. ${AFTER_VISIT_NOTE}`,
       },
       {
         q: '¿Los materiales y repuestos están incluidos?',
@@ -45,8 +45,8 @@ export const faqGroups: { title: string; items: Q[] }[] = [
         a: 'Sí. Antes de aparecer en HULUL cada profesional pasa por una revisión: validamos su cédula y la comparamos con una foto de su rostro, revisamos su certificado de antecedentes penales vigente del Ministerio del Interior, y en cada oficio pedimos un certificado o fotos de trabajos anteriores con una referencia (en Salud, el título registrado en la SENESCYT). Luego cada servicio se califica, y quien baja de 4,5 estrellas o acumula reportes es suspendido.',
       },
       {
-        q: '¿HULUL responde si se pierde o daña algo en mi casa?',
-        a: 'No. HULUL verifica la identidad y los antecedentes de los profesionales, pero no se responsabiliza por robos, pérdidas ni daños de objetos durante el servicio. Por eso te pedimos que haya en casa una persona adulta de tu confianza mientras dure el trabajo, y que guardes dinero, joyas, documentos y objetos de valor.',
+        q: '¿Cómo recibo al profesional en casa?',
+        a: 'Como con cualquier visita: que haya alguien mayor de edad en casa para recibirlo y acompañar el servicio, y guarda dinero, joyas y objetos de valor. Cada profesional de HULUL pasa por una verificación de identidad y antecedentes. El cuidado de los objetos personales es de cada hogar: HULUL no responde por pérdidas ni daños de objetos durante el servicio.',
       },
       {
         q: '¿Puedo ver por dónde viene el profesional?',
