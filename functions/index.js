@@ -221,21 +221,75 @@ export function applicationEmail(a, { from, notifyTo }) {
 
 const senders = () => ({ from: `HULUL <${FROM_EMAIL.value()}>`, notifyTo: NOTIFY_TO.value() });
 
+/* ------------------------- Notificaciones al celular ------------------------- */
+
+// Celulares registrados: colección pushTokens/{token} = { uid, platform, updatedAt }.
+// Solo la escribe el servidor (registrarAviso); las reglas no la exponen.
+const PUSH_RE = /^Expo(nent)?PushToken\[[A-Za-z0-9_-]{10,80}\]$/;
+const tokenDocId = (t) => t.replace(/[^A-Za-z0-9_-]/g, '_');
+
+/** El celular de la cuenta con sesión abierta se registra para recibir avisos. */
+export const registrarAviso = onCall({ region: REGION }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const token = String(req.data?.token ?? '');
+  if (!PUSH_RE.test(token)) throw new HttpsError('invalid-argument', 'Aviso no válido.');
+  await db().doc(`pushTokens/${tokenDocId(token)}`).set({
+    token, uid, platform: String(req.data?.platform ?? '').slice(0, 10), updatedAt: FieldValue.serverTimestamp(),
+  });
+  return { ok: true };
+});
+
+/**
+ * Notificación con sonido a todos los celulares de una cuenta (canal "pedidos"
+ * de la app: importancia máxima y vibración larga). Nunca hace fallar la
+ * operación que la llama.
+ */
+async function pushTo(uid, title, body, data = {}) {
+  if (!uid) return;
+  try {
+    const snap = await db().collection('pushTokens').where('uid', '==', uid).get();
+    if (snap.empty) return;
+    const docs = snap.docs;
+    const res = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(docs.map((d) => ({
+        to: d.data().token, title, body, data, sound: 'default', priority: 'high', channelId: 'pedidos', ttl: 3600,
+      }))),
+    });
+    const out = await res.json().catch(() => ({}));
+    // Celulares que ya no existen (app desinstalada): se borran.
+    const tickets = Array.isArray(out?.data) ? out.data : [];
+    await Promise.all(tickets.map((t, i) => (t?.details?.error === 'DeviceNotRegistered' ? docs[i].ref.delete() : null)));
+  } catch (e) {
+    logger.warn('No se pudo enviar la notificación', { uid, e: String(e) });
+  }
+}
+
+const AGENDA = 'https://hululec.com/profesionales/agenda';
+
 export const avisoReserva = onDocumentCreated(
   { document: 'bookings/{id}', region: REGION, secrets: [MAIL_PASSWORD] },
   async (event) => {
     const b = event.data?.data();
     if (!b) return;
     const mail = transport();
-    for (const m of bookingEmails(b, event.params.id, senders())) await mail.sendMail(m);
-    // Aviso al profesional real (si es uno registrado y aprobado).
+    // Aviso al profesional real (si es uno registrado y aprobado): primero la
+    // notificación al celular, para que no dependa del correo.
     try {
       const pro = await db().doc(`providers/${b.professionalId}`).get();
       const p = pro.exists ? pro.data() : null;
+      if (p?.status === 'aprobado') {
+        await pushTo(b.professionalId, `Nueva reserva · ${CATEGORIES[b.category] ?? b.category}`,
+          `${longDate(b.date)} a las ${b.slot}. ${String(b.notes ?? '').slice(0, 80)} Acéptala o recházala en tu agenda.`,
+          { url: AGENDA, bookingId: event.params.id, to: 'pro' });
+      }
       if (p?.email && p.status === 'aprobado') await mail.sendMail(proBookingEmail(b, event.params.id, p, senders()));
     } catch (e) {
       logger.warn('No se pudo avisar al profesional', { id: event.params.id, e: String(e) });
     }
+    for (const m of bookingEmails(b, event.params.id, senders())) await mail.sendMail(m);
     logger.info('Avisos de reserva enviados', { id: event.params.id });
   },
 );
@@ -470,6 +524,7 @@ export const cancelarReserva = onCall(
       if (b.contactEmail) await mail.sendMail({ from, to: b.contactEmail, replyTo: notifyTo, subject: `Cancelaste tu reserva ${code(id)}`, html: layout('Reserva cancelada', info) });
       const pro = await db().doc(`providers/${b.professionalId}`).get();
       const p = pro.exists ? pro.data() : null;
+      await pushTo(b.professionalId, 'Reserva cancelada', `El cliente canceló ${cat} del ${when}. Ya no tienes que ir.`, { url: AGENDA, bookingId: id, to: 'pro' });
       if (p?.email && p.status === 'aprobado') {
         await mail.sendMail({ from, to: p.email, replyTo: notifyTo, subject: `Se canceló la reserva ${code(id)} del ${when}`,
           html: layout('Reserva cancelada', `<p style="font-size:15px">Hola ${esc(p.firstName)}, el cliente canceló esta reserva. Ya no tienes que ir.</p>` + rows([['Código', code(id)], ['Servicio', esc(cat)], ['Fecha', esc(when)]]) +
@@ -574,6 +629,15 @@ export const gestionarReserva = onCall(
         rechazar: ['Tu reserva necesita otro profesional', `Hola ${esc(first)}, ${esc(b.professionalName)} no puede atender tu reserva del ${esc(when)}. No se te cobra nada. Elige otro profesional en <a href="https://hululec.com/servicios/${esc(b.category)}">HULUL</a>.`],
         no_puedo: ['Tu profesional canceló', `Hola ${esc(first)}, ${esc(b.professionalName)} canceló tu reserva del ${esc(when)}. No se te cobra nada y te ayudamos a encontrar otro profesional.`],
       }[action];
+      const pushText = {
+        aceptar: `Confirmó tu servicio de ${cat} para el ${when}.`,
+        en_camino: `Va en camino a tu dirección.`,
+        llegue: 'Llegó a tu dirección. Ten a una persona de tu confianza en casa durante el trabajo.',
+        terminar: 'Terminó la visita. Revisa el resultado, el diagnóstico y las fotos.',
+        rechazar: `No puede atender tu reserva del ${when}. No se te cobra nada.`,
+        no_puedo: `Canceló tu reserva del ${when}. No se te cobra nada.`,
+      }[action];
+      if (pushText) await pushTo(b.clientId, msgs?.[0] ?? 'Tu reserva', pushText, { bookingId: id, to: 'cliente' });
       if (msgs && b.contactEmail) await mail.sendMail({ from, to: b.contactEmail, replyTo: notifyTo, subject: msgs[0], html: layout(msgs[0], `<div style="font-size:15px">${msgs[1]}</div>`) });
       if (action === 'rechazar' || action === 'no_puedo') {
         await mail.sendMail({ from, to: notifyTo, subject: `El profesional ${action === 'rechazar' ? 'rechazó' : 'canceló'} la reserva ${code(id)}`,
@@ -754,6 +818,10 @@ export const reprogramarReserva = onCall(
         rechazar: ['Cambio de hora rechazado', `${esc(otherName)} no aceptó el cambio. Se mantiene el ${esc(longDate(b.date))} a las ${esc(b.slot)}.`],
         retirar: ['Se retiró el cambio de hora', `Se mantiene el ${esc(longDate(b.date))} a las ${esc(b.slot)}.`],
       }[action];
+      if (texts) {
+        const plain = texts[1].replace(/<[^>]+>/g, '').replace(/&[a-z#0-9]+;/gi, ' ');
+        await pushTo(toClient ? b.clientId : b.professionalId, texts[0], plain.slice(0, 180), toClient ? { bookingId: id, to: 'cliente' } : { url: AGENDA, bookingId: id, to: 'pro' });
+      }
       if (to && texts) await transport().sendMail({ from, to, replyTo: notifyTo, subject: texts[0], html: layout(texts[0], `<p style="font-size:15px">${texts[1]}</p>` + button(link, 'Ver la reserva')) });
     } catch (e) {
       logger.warn('No se pudo avisar el cambio de hora', { id, e: String(e) });

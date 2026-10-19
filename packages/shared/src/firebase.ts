@@ -247,6 +247,14 @@ export async function categoryRates(category: CategorySlug, exceptUid?: string):
     .filter((n) => Number.isFinite(n) && n > 0);
 }
 
+/* ------------------------------ Notificaciones ------------------------------ */
+
+/** Registra este celular para recibir los avisos (push) de la cuenta con sesión abierta. */
+export async function registerPushToken(token: string, platform: string): Promise<void> {
+  const fn = httpsCallable<{ token: string; platform: string }, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'registrarAviso');
+  await fn({ token, platform });
+}
+
 /* ------------------------ Servicios del profesional ------------------------ */
 
 export type ServicesUpdate =

@@ -14,6 +14,7 @@ import { BookingProvider } from '@/lib/booking';
 import { PrivacyProvider, usePrivacy } from '@/lib/privacy';
 import { c } from '@/theme';
 import { useAutoUpdate } from '@/lib/updates';
+import { usePushNotifications } from '@/lib/push';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -24,6 +25,7 @@ function Navigator({ fontsLoaded }: { fontsLoaded: boolean }) {
   const { ready, consent } = usePrivacy();
   const segments = useSegments();
   const loaded = fontsLoaded && ready;
+  usePushNotifications();
 
   useEffect(() => {
     if (!loaded) return;
