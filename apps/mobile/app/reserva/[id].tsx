@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { AFTER_VISIT_NOTE, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, OUTCOME_LABEL, SLOTS, usd } from '@hulul/shared';
-import { firestore, reschedule, type ClientBooking, type RescheduleAction } from '@hulul/shared/firebase';
+import { confirmService, firestore, reschedule, type ClientBooking, type RescheduleAction } from '@hulul/shared/firebase';
 import { Icon } from '@/components/Icon';
 import { LiveMap } from '@/components/LiveMap';
 import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
@@ -110,6 +110,7 @@ function Detail({ b }: { b: ClientBooking }) {
           <Body muted style={{ fontSize: 13 }}>{AFTER_VISIT_NOTE}</Body>
         </Card>
       )}
+      {b.status === 'por_aprobar' && <ConfirmBox id={b.id} />}
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && (
         <View style={s.box}>
           <Text style={s.boxTitle}>{HOME_SAFETY_TITLE}</Text>
@@ -180,6 +181,25 @@ function Reschedule({ b, other }: { b: ClientBooking; other: string }) {
       <PrimaryButton label={busy ? 'Enviando…' : 'Enviar propuesta'} onPress={() => !busy && run('proponer')} />
       <Pressable onPress={() => setOpen(false)}><Text style={[s.link, { textAlign: 'center' }]}>Volver</Text></Pressable>
     </View>
+  );
+}
+
+/** El cliente confirma que el servicio terminó (si no, se cierra solo a las 24 horas). */
+function ConfirmBox({ id }: { id: string }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const go = async () => {
+    if (busy) return;
+    setBusy(true); setMsg('');
+    try { await confirmService(id); } catch (e) { setMsg((e as { message?: string }).message || 'No se pudo guardar. Inténtalo de nuevo.'); } finally { setBusy(false); }
+  };
+  return (
+    <Card style={{ gap: 10 }}>
+      <Text style={s.boxTitle}>¿Todo en orden?</Text>
+      <Body muted style={{ fontSize: 13 }}>Confirma para cerrar el servicio. Si no lo haces, se cierra solo 24 horas después de terminado.</Body>
+      {msg ? <Body style={{ fontSize: 13, color: c.primary }}>{msg}</Body> : null}
+      <PrimaryButton label={busy ? 'Guardando…' : 'Confirmar y cerrar el servicio'} onPress={go} />
+    </Card>
   );
 }
 

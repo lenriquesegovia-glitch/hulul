@@ -95,6 +95,7 @@ export function BookingDetail({ id }: { id: string }) {
 
       <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} />
       {b.outcome && <p className="muted" style={{ fontSize: 14 }}>{AFTER_VISIT_NOTE}</p>}
+      {b.status === 'por_aprobar' && <ConfirmBox id={b.id} />}
 
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && <SafetyNotice title={HOME_SAFETY_TITLE} items={HOME_SAFETY_NOTICE} />}
 
@@ -111,5 +112,30 @@ export function BookingDetail({ id }: { id: string }) {
 
       <CancelBox row={b} onDone={() => {}} />
     </>
+  );
+}
+
+/** El cliente confirma que el servicio terminó (si no, se cierra solo a las 24 horas). */
+function ConfirmBox({ id }: { id: string }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const go = async () => {
+    setBusy(true); setMsg('');
+    try {
+      const { confirmService } = await import('@hulul/shared/firebase');
+      await confirmService(id);
+    } catch (e) {
+      setMsg((e as { message?: string }).message || 'No se pudo guardar. Inténtalo de nuevo.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="card stack gap-8">
+      <strong>¿Todo en orden?</strong>
+      <span className="muted" style={{ fontSize: 14 }}>Confirma para cerrar el servicio. Si no lo haces, se cierra solo 24 horas después de terminado.</span>
+      {msg && <p role="alert" className="form-error">{msg}</p>}
+      <button type="button" className="btn btn-primary" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={go}>{busy ? 'Guardando…' : 'Confirmar y cerrar el servicio'}</button>
+    </div>
   );
 }

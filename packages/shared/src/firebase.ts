@@ -219,7 +219,8 @@ export const TRACK_STEPS: { status: string; label: string }[] = [
 
 /** Próxima reserva activa del cliente (no completada ni cancelada), o null. */
 export function activeBooking(list: ClientBooking[]): ClientBooking | null {
-  const live = list.filter((b) => !['completada', 'cancelada'].includes(b.status));
+  // Terminada (por aprobar), completada, cancelada o en revisión ya no se sigue en el inicio.
+  const live = list.filter((b) => !['por_aprobar', 'completada', 'cancelada', 'en_disputa'].includes(b.status));
   return live.length ? [...live].sort((a, b) => (a.date + a.slot > b.date + b.slot ? 1 : -1))[0] : null;
 }
 
@@ -281,6 +282,14 @@ export function watchLivePosition(bookingId: string, cb: (p: LivePosition | null
     const d = snap.data() as { lat: number; lng: number; accuracy?: number; heading?: number; at?: Timestamp };
     cb({ lat: d.lat, lng: d.lng, accuracy: d.accuracy, heading: d.heading, at: d.at?.toDate?.() });
   }, () => cb(null));
+}
+
+/* ------------------------- Cierre del servicio ------------------------- */
+
+/** El cliente confirma que el servicio terminó (si no, se cierra solo a las 24 horas). */
+export async function confirmService(id: string): Promise<void> {
+  const fn = httpsCallable<{ id: string }, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'confirmarServicio');
+  await fn({ id });
 }
 
 /* ------------------------------ Notificaciones ------------------------------ */

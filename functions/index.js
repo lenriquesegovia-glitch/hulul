@@ -12,6 +12,7 @@
  */
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { defineSecret, defineString } from 'firebase-functions/params';
@@ -829,3 +830,35 @@ export const reprogramarReserva = onCall(
     return { ok: true };
   },
 );
+
+/* ---------------------------- Cierre del servicio ---------------------------- */
+
+/** El cliente confirma que el servicio terminó: la reserva pasa a completada. */
+export const confirmarServicio = onCall({ region: REGION }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const id = String(req.data?.id ?? '');
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('invalid-argument', 'Reserva no válida.');
+  const ref = db().doc(`bookings/${id}`);
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
+    const b = snap.data();
+    if (b.clientId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
+    if (b.status !== 'por_aprobar') throw new HttpsError('failed-precondition', 'Esta reserva ya está cerrada.');
+    tx.update(ref, { status: 'completada', completedAt: FieldValue.serverTimestamp(), completedBy: 'cliente', previousStatus: b.status });
+  });
+  return { ok: true };
+});
+
+/** Cada hora: las visitas terminadas hace más de 24 horas se cierran solas. */
+export const cerrarTerminadas = onSchedule({ schedule: 'every 60 minutes', region: REGION, timeZone: 'America/Guayaquil' }, async () => {
+  const limit = Date.now() - 24 * 3_600_000;
+  const snap = await db().collection('bookings').where('status', '==', 'por_aprobar').get();
+  const old = snap.docs.filter((d) => {
+    const t = d.data().finishedAt;
+    return t && typeof t.toMillis === 'function' && t.toMillis() < limit;
+  });
+  await Promise.all(old.map((d) => d.ref.update({ status: 'completada', completedAt: FieldValue.serverTimestamp(), completedBy: 'automatico', previousStatus: 'por_aprobar' })));
+  logger.info('Visitas cerradas automáticamente', { count: old.length });
+});
