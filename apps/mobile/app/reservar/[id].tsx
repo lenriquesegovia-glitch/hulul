@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router, useLocalSearchParams } from 'expo-router';
+import { CalendarPicker } from '@/components/CalendarPicker';
 import { Checkbox } from '@/components/Checkbox';
 import { ClientGate } from '@/components/ClientGate';
 import { Icon } from '@/components/Icon';
@@ -86,6 +87,8 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   const picked = useRef('');
   const [location, setLocation] = useState<LatLng | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+  const [calOpen, setCalOpen] = useState(false);
+  const dayRow = useRef<ScrollView>(null);
   const [job, setJob] = useState(trabajo && cat && (jobs.includes(trabajo) || trabajo === OTHER) ? trabajo : '');
   const [notes, setNotes] = useState('');
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
@@ -122,8 +125,12 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
   const q = quote(pro.visitRate);
 
+  /** Día sin horas libres (por anticipación, horario del servicio o del profesional). */
+  const dayOff = (i: number) => (!tester && !dayAvailable(i, now, lead)) || !slots.some((_, k) => okWith(i, k, hours));
   const pickDay = (i: number) => {
     setDay(i);
+    // Lleva el día elegido a la vista en la fila de días (58 de ancho + 8 de separación).
+    dayRow.current?.scrollTo({ x: Math.max(0, i * 66 - 120), animated: true });
     if (slot < 0 || !okWith(i, slot, hours)) setSlot(slots.findIndex((_, k) => okWith(i, k, hours)));
   };
 
@@ -208,11 +215,17 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
           </View>
 
           <View style={{ gap: 10 }}>
-            <Text style={s.label}>Día · desliza para ver más</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <Text style={s.label}>Día · desliza para ver más</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Ver calendario" onPress={() => setCalOpen(true)} style={s.calBtn} hitSlop={8}>
+                <Icon name="calendar" size={18} color={c.primary} strokeWidth={2} />
+                <Text style={s.calText}>Ver calendario</Text>
+              </Pressable>
+            </View>
+            <ScrollView ref={dayRow} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {days.map((d, i) => {
                 const on = i === day;
-                const off = (!tester && !dayAvailable(i, now, lead)) || !slots.some((_, k) => okWith(i, k, hours));
+                const off = dayOff(i);
                 return (
                   <Pressable key={i} disabled={off} accessibilityRole="button" accessibilityState={{ selected: on, disabled: off }} accessibilityLabel={d.long} onPress={() => pickDay(i)} style={[s.day, on && s.on, off && s.off]}>
                     <Text style={[s.dayMonth, on && s.onText]}>{d.month}</Text>
@@ -347,6 +360,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             })}
           </View>
 
+          <CalendarPicker visible={calOpen} from={now} days={BOOKING_DAYS} selected={day} isOff={dayOff} onPick={pickDay} onClose={() => setCalOpen(false)} />
           <MapPicker visible={mapOpen} initial={location} onClose={() => setMapOpen(false)} onConfirm={(p) => { setLocation(p); setMapOpen(false); }} />
 
           <View style={s.summary}>
@@ -404,6 +418,8 @@ const s = StyleSheet.create({
   content: { padding: 20, paddingBottom: 32, gap: 22 },
   title: { fontFamily: font.display, fontSize: 18, color: c.text },
   label: { fontFamily: font.bodyBold, fontSize: 14, color: c.textSecondary },
+  calBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  calText: { fontFamily: font.bodyBold, fontSize: 14, color: c.primary },
   day: { minWidth: 58, height: 78, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center', gap: 2 },
   dayMonth: { fontFamily: font.bodyBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase', color: c.copper, minHeight: 12 },
   dayTop: { fontFamily: font.bodySemi, fontSize: 12, color: c.text },
