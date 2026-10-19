@@ -16,6 +16,13 @@ export const BAD_WORDS = [
   // Insultos
   'idiota', 'imbecil', 'estupido', 'estupida', 'tarado', 'tarada', 'retrasado', 'retrasada', 'mongolico', 'mongolica', 'subnormal', 'baboso', 'babosa',
   'lacra', 'escoria',
+  // Abreviaturas y formas de chat (Ecuador)
+  'crv', 'careverga', 'carevrg', 'carechimba', 'mmvg', 'mmgv', 'mmv', 'mamavrg', 'vrga', 'vrgas', 'verg', 'berga', 'vergazo',
+  'ctm', 'ctmr', 'csm', 'cdsm', 'conchesumadre', 'chuchesumadre', 'ptm', 'ptmr', 'hpta', 'hpt', 'hptas', 'hijueputas', 'hueputa', 'jueputa', 'hdpt',
+  'mrd', 'mrda', 'mierd', 'pndj', 'pndjo', 'pndja', 'cbrn', 'hvn', 'hvon', 'gvn',
+  'cachudo', 'cachuda', 'plomazo', 'malnacido', 'malnacida', 'pelotudo', 'pelotuda', 'boludo', 'boluda', 'caremonda', 'monda',
+  // Inglés básico
+  'fuck', 'fucking', 'fck', 'shit', 'bitch', 'asshole', 'motherfucker', 'dick',
 ];
 
 /** Minúsculas, sin tildes, sin trucos (p3nd3j0, put@) y sin letras repetidas (mierdaaa). */
