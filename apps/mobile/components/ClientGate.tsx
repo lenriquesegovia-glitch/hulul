@@ -87,13 +87,13 @@ function SignIn({ title, lead }: { title: string; lead: string }) {
       {!create && (
         <Pressable accessibilityRole="button" onPress={async () => {
           if (!email.trim()) { setMsg('Escribe tu correo y vuelve a tocar "Olvidé mi contraseña".'); return; }
-          try { await resetPassword(email.trim()); setMsg('Te enviamos un correo para crear una nueva contraseña.'); } catch (e) { setMsg(authErrorMessage(e)); }
+          try { await resetPassword(email.trim()); setMsg('Te enviamos un correo para crear tu contraseña (revisa también la carpeta de spam). Sirve aunque hayas creado la cuenta con Google: después entras aquí con tu correo y esa contraseña.'); } catch (e) { setMsg(authErrorMessage(e)); }
         }}>
           <Text style={s.link}>Olvidé mi contraseña</Text>
         </Pressable>
       )}
       <Card style={{ backgroundColor: c.surfaceWarm }}>
-        <Body muted style={{ fontSize: 13 }}>Entrar con Google, Facebook o tu celular llegará con la app de las tiendas. Es la misma cuenta que usas en hululec.com.</Body>
+        <Body muted style={{ fontSize: 13 }}>Por ahora en la app se entra con correo y contraseña. Si te registraste con Google o Facebook en hululec.com, toca "Ya tengo cuenta", escribe ese correo y luego "Olvidé mi contraseña" para crearle una. Es la misma cuenta.</Body>
       </Card>
     </View>
   );
