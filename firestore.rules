@@ -187,6 +187,27 @@ service cloud.firestore {
     }
 
     // Todo lo demás, cerrado.
+    // Ubicación en vivo del profesional para una reserva: la escribe solo el
+    // profesional asignado mientras la reserva está confirmada, en camino o en
+    // curso; la leen él y el cliente de esa reserva.
+    match /tracking/{bookingId} {
+      function trackedBooking() {
+        return get(/databases/$(database)/documents/bookings/$(bookingId)).data;
+      }
+      allow read: if request.auth != null
+        && (trackedBooking().clientId == request.auth.uid || trackedBooking().professionalId == request.auth.uid);
+      allow create, update: if request.auth != null
+        && trackedBooking().professionalId == request.auth.uid
+        && trackedBooking().status in ['confirmada', 'en_camino', 'en_curso']
+        && request.resource.data.keys().hasOnly(['lat', 'lng', 'accuracy', 'heading', 'at'])
+        && num(request.resource.data.lat, -90, 90)
+        && num(request.resource.data.lng, -180, 180)
+        && request.resource.data.accuracy is number
+        && request.resource.data.heading is number
+        && request.resource.data.at == request.time;
+      allow delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

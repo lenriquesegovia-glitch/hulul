@@ -313,6 +313,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
             </>
           )}
           {b.status === 'confirmada' && <DepartPanel b={b} busy={!!busy} onGo={() => act('en_camino')} />}
+          {b.status === 'en_camino' && <LiveShare bookingId={b.id} />}
           {b.status === 'en_camino' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act('llegue')}>{busy ? 'Guardando…' : 'Llegué, empiezo'}</button>}
           {b.status === 'en_curso' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => setFinishing(true)}>Terminar la visita</button>}
           {(b.status === 'confirmada' || b.status === 'en_camino') && (
@@ -322,6 +323,47 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
       )}
     </article>
   );
+}
+
+/**
+ * Mientras va en camino, comparte su ubicación con el cliente (cada 15
+ * segundos o cuando se mueve más de 40 m). Funciona con la agenda abierta.
+ */
+function LiveShare({ bookingId }: { bookingId: string }) {
+  const [state, setState] = useState<'buscando' | 'ok' | 'denegado' | 'sin_gps'>('buscando');
+  const [sentAt, setSentAt] = useState<Date | null>(null);
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) { setState('sin_gps'); return; }
+    let last: { lat: number; lng: number; t: number } | null = null;
+    let wake: { release: () => Promise<void> } | null = null;
+    // Que la pantalla no se apague mientras maneja (si el navegador lo permite).
+    (navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock
+      ?.request('screen').then((w) => { wake = w; }).catch(() => {});
+    const id = navigator.geolocation.watchPosition(async (p) => {
+      const cur = { lat: p.coords.latitude, lng: p.coords.longitude, t: Date.now() };
+      const moved = last ? Math.hypot((cur.lat - last.lat) * 111_000, (cur.lng - last.lng) * 111_000 * Math.cos((cur.lat * Math.PI) / 180)) : Infinity;
+      if (last && cur.t - last.t < 15_000 && moved < 40) return;
+      last = cur;
+      try {
+        const { shareLivePosition } = await import('@hulul/shared/firebase');
+        await shareLivePosition(bookingId, { lat: cur.lat, lng: cur.lng, accuracy: p.coords.accuracy, heading: p.coords.heading });
+        setState('ok');
+        setSentAt(new Date());
+      } catch {
+        /* sin conexión: se reintenta con la siguiente posición */
+      }
+    }, (e) => setState(e.code === e.PERMISSION_DENIED ? 'denegado' : 'sin_gps'), { enableHighAccuracy: true, maximumAge: 10_000, timeout: 30_000 });
+    return () => { navigator.geolocation.clearWatch(id); wake?.release().catch(() => {}); };
+  }, [bookingId]);
+
+  const text = {
+    buscando: 'Activando tu ubicación para que el cliente te vea en el mapa…',
+    ok: `📍 El cliente te ve en el mapa en vivo${sentAt ? ` (última señal ${hhmmEcuador(sentAt)})` : ''}. Deja esta página abierta mientras manejas.`,
+    denegado: 'Tu navegador bloqueó la ubicación. Permítela (candado junto a la dirección de la página) para que el cliente te vea llegar.',
+    sin_gps: 'No pudimos leer tu GPS. Revisa que la ubicación del celular esté encendida.',
+  }[state];
+  return <span className={state === 'ok' ? 'muted' : 'form-error'} style={{ fontSize: 13.5, width: '100%' }}>{text}</span>;
 }
 
 /**

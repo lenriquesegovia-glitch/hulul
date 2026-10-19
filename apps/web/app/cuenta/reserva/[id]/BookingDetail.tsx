@@ -7,6 +7,7 @@ import type { ClientBooking } from '@hulul/shared/firebase';
 import { Icon } from '@/components/Icon';
 import { RescheduleBox, shortDay } from '@/components/RescheduleBox';
 import { SafetyNotice, VisitReport } from '@/components/VisitReport';
+import { LiveMap } from '@/components/LiveMap';
 import { useUser } from '@/lib/auth';
 import { CancelBox } from '../../Account';
 
@@ -49,7 +50,7 @@ export function BookingDetail({ id }: { id: string }) {
   const message: Record<string, string> = {
     pendiente: `Esperando que ${first} acepte tu reserva. Te avisamos por correo apenas lo haga.`,
     confirmada: `${first} confirmó. Saldrá hacia tu dirección con el tiempo justo para llegar a las ${b.slot} (puede salir desde las ${hhmmEcuador(new Date(at.getTime() - 120 * 60_000))}). Te avisamos cuando vaya en camino.`,
-    en_camino: `${first} va en camino a tu dirección. El mapa con su ubicación en vivo llega con la app del profesional; por ahora te avisamos por correo cuando llegue.`,
+    en_camino: `${first} va en camino a tu dirección. Míralo en el mapa en vivo.`,
     en_curso: `${first} está trabajando. Al terminar te deja el resultado y un diagnóstico con fotos.`,
     por_aprobar: `${first} terminó la visita. Revisa su diagnóstico; tienes 48 horas para calificarlo o reportar un problema.`,
     completada: 'Servicio completado. ¡Gracias por usar HULUL!',
@@ -84,6 +85,13 @@ export function BookingDetail({ id }: { id: string }) {
           </ol>
         )}
       </div>
+
+      {b.status === 'en_camino' && (
+        <div className="card stack gap-8">
+          <strong style={{ fontSize: 17 }}>¿Por dónde viene {first}?</strong>
+          <LiveMap bookingId={b.id} destination={b.location} name={first} />
+        </div>
+      )}
 
       <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} />
       {b.outcome && <p className="muted" style={{ fontSize: 14 }}>{AFTER_VISIT_NOTE}</p>}

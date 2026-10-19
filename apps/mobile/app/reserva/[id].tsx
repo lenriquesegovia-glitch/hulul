@@ -6,6 +6,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { AFTER_VISIT_NOTE, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, OUTCOME_LABEL, SLOTS, usd } from '@hulul/shared';
 import { firestore, reschedule, type ClientBooking, type RescheduleAction } from '@hulul/shared/firebase';
 import { Icon } from '@/components/Icon';
+import { LiveMap } from '@/components/LiveMap';
 import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
 import { CancelBox } from '../cuenta';
 import { c, font, radius } from '@/theme';
@@ -56,7 +57,7 @@ function Detail({ b }: { b: ClientBooking }) {
   const message: Record<string, string> = {
     pendiente: `Esperando que ${first} acepte tu reserva. Te avisamos apenas lo haga.`,
     confirmada: `${first} confirmó. Saldrá con el tiempo justo para llegar a las ${b.slot} (puede salir desde las ${hhmmEcuador(new Date(at.getTime() - 120 * 60_000))}).`,
-    en_camino: `${first} va en camino. El mapa con su ubicación en vivo llega pronto; te avisamos cuando llegue.`,
+    en_camino: `${first} va en camino. Míralo en el mapa en vivo.`,
     en_curso: `${first} está trabajando. Al terminar te deja el resultado y un diagnóstico con fotos.`,
     por_aprobar: `${first} terminó la visita. Revisa su diagnóstico; tienes 48 horas para calificarlo o reportar un problema.`,
     completada: 'Servicio completado.',
@@ -84,6 +85,12 @@ function Detail({ b }: { b: ClientBooking }) {
           );
         })}
       </Card>
+      {b.status === 'en_camino' && (
+        <Card style={{ gap: 10 }}>
+          <Text style={s.boxTitle}>¿Por dónde viene {first}?</Text>
+          <LiveMap bookingId={b.id} destination={b.location} name={first} />
+        </Card>
+      )}
       {b.outcome && (
         <Card style={{ gap: 10 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

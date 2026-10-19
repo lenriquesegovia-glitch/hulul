@@ -9,7 +9,7 @@
  * no guardan datos no carguen Firebase.
  */
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
-import { addDoc, collection, doc, getDoc, getDocs, getFirestore, query, serverTimestamp, setDoc, where, type Firestore } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, getFirestore, onSnapshot, query, serverTimestamp, setDoc, where, type Firestore, type Timestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { PRIVACY_VERSION } from './legal';
 import type { CategorySlug } from './categories';
@@ -245,6 +245,42 @@ export async function categoryRates(category: CategorySlug, exceptUid?: string):
     .filter((d) => d.id !== exceptUid)
     .map((d) => Number((d.data() as PublicPro).visitRates?.[category]))
     .filter((n) => Number.isFinite(n) && n > 0);
+}
+
+/* --------------------------- Ubicación en vivo --------------------------- */
+
+/**
+ * Ubicación del profesional mientras va en camino: `tracking/{reserva}`.
+ * La escribe solo el profesional asignado (con la reserva confirmada, en
+ * camino o en curso) y la leen él y el cliente de esa reserva.
+ */
+export interface LivePosition {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  heading?: number;
+  /** Cuándo se tomó (hora del servidor). */
+  at?: Date;
+}
+
+/** El profesional comparte su posición actual. */
+export async function shareLivePosition(bookingId: string, p: { lat: number; lng: number; accuracy?: number | null; heading?: number | null }): Promise<void> {
+  await setDoc(doc(firestore(), 'tracking', bookingId), {
+    lat: p.lat,
+    lng: p.lng,
+    accuracy: typeof p.accuracy === 'number' && Number.isFinite(p.accuracy) ? Math.round(p.accuracy) : 0,
+    heading: typeof p.heading === 'number' && Number.isFinite(p.heading) ? Math.round(p.heading) : -1,
+    at: serverTimestamp(),
+  });
+}
+
+/** El cliente (o el profesional) sigue la posición en vivo. Devuelve la función para dejar de escuchar. */
+export function watchLivePosition(bookingId: string, cb: (p: LivePosition | null) => void): () => void {
+  return onSnapshot(doc(firestore(), 'tracking', bookingId), (snap) => {
+    if (!snap.exists()) { cb(null); return; }
+    const d = snap.data() as { lat: number; lng: number; accuracy?: number; heading?: number; at?: Timestamp };
+    cb({ lat: d.lat, lng: d.lng, accuracy: d.accuracy, heading: d.heading, at: d.at?.toDate?.() });
+  }, () => cb(null));
 }
 
 /* ------------------------------ Notificaciones ------------------------------ */
