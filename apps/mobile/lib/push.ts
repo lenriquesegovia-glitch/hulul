@@ -67,13 +67,18 @@ async function setup(N: NotificationsModule): Promise<string | null> {
 /** Al tocar una notificación: el profesional va a su agenda; el cliente, a su reserva. */
 function openFrom(data: Record<string, unknown> | undefined) {
   if (!data) return;
-  if (typeof data.url === 'string' && data.url.startsWith('https://hululec.com/')) {
-    Linking.openURL(data.url).catch(() => {});
+  const id = typeof data.bookingId === 'string' && /^[A-Za-z0-9]{10,40}$/.test(data.bookingId) ? data.bookingId : '';
+  // Avisos del profesional: su trabajo dentro de la app (ya no la web).
+  if (data.to === 'pro') {
+    if (id) router.push({ pathname: '/agenda/[id]', params: { id } });
+    else router.push('/agenda');
     return;
   }
-  if (typeof data.bookingId === 'string' && /^[A-Za-z0-9]{10,40}$/.test(data.bookingId)) {
-    router.push({ pathname: '/reserva/[id]', params: { id: data.bookingId } });
+  if (id) {
+    router.push({ pathname: '/reserva/[id]', params: { id } });
+    return;
   }
+  if (typeof data.url === 'string' && data.url.startsWith('https://hululec.com/')) Linking.openURL(data.url).catch(() => {});
 }
 
 /**

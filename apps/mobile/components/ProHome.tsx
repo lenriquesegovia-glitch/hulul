@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { COMMISSION_RATE, formatUSD, getCategory } from '@hulul/shared';
 import { firestore, type ProBooking } from '@hulul/shared/firebase';
@@ -7,7 +8,6 @@ import { Icon } from '@/components/Icon';
 import { Body, H1, H2 } from '@/components/ui';
 import { c, font, radius } from '@/theme';
 
-const AGENDA_URL = 'https://hululec.com/profesionales/agenda';
 const SERVICES_URL = 'https://hululec.com/profesionales/registro';
 
 const STATUS: Record<string, string> = {
@@ -55,7 +55,8 @@ export function ProHome({ uid, name }: { uid: string; name: string }) {
   }, [rows]);
 
   const first = name.split(' ')[0];
-  const open = () => Linking.openURL(AGENDA_URL);
+  const open = () => router.push('/agenda');
+  const openJob = (id: string) => router.push({ pathname: '/agenda/[id]', params: { id } });
 
   return (
     <View style={{ gap: 18 }}>
@@ -71,7 +72,7 @@ export function ProHome({ uid, name }: { uid: string; name: string }) {
       </View>
 
       {data.pending.length > 0 && (
-        <Pressable accessibilityRole="button" onPress={open} style={s.alert}>
+        <Pressable accessibilityRole="button" onPress={() => (data.pending.length === 1 ? openJob(data.pending[0].id) : open())} style={s.alert}>
           <Text style={s.alertTitle}>🔔 {data.pending.length === 1 ? 'Tienes una solicitud nueva' : `Tienes ${data.pending.length} solicitudes nuevas`}</Text>
           <Body style={{ color: '#fff', fontSize: 13.5 }}>
             {getCategory(data.pending[0].category)?.name} · {dayLabel(data.pending[0].date)} {data.pending[0].slot}. Acéptala o recházala en tu agenda.
@@ -95,7 +96,7 @@ export function ProHome({ uid, name }: { uid: string; name: string }) {
             </View>
           )}
           <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            <Pressable accessibilityRole="button" onPress={open} style={s.primary}><Text style={s.primaryText}>Abrir en mi agenda</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={() => openJob(data.next!.id)} style={s.primary}><Text style={s.primaryText}>Ver trabajo</Text></Pressable>
             {data.next.location && (
               <Pressable accessibilityRole="button" onPress={() => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${data.next!.location!.lat},${data.next!.location!.lng}`)} style={s.ghost}>
                 <Icon name="pin" size={16} color={c.primary} /><Text style={s.ghostText}>Cómo llegar</Text>
@@ -116,7 +117,7 @@ export function ProHome({ uid, name }: { uid: string; name: string }) {
         <View style={{ gap: 10 }}>
           <H2>Próximos</H2>
           {data.upcoming.map((b) => (
-            <Pressable key={b.id} accessibilityRole="button" onPress={open} style={s.row}>
+            <Pressable key={b.id} accessibilityRole="button" onPress={() => openJob(b.id)} style={s.row}>
               <View style={s.when}><Text style={s.whenDay}>{dayLabel(b.date)}</Text><Text style={s.whenTime}>{b.slot}</Text></View>
               <View style={{ flex: 1 }}>
                 <Text style={s.rowTitle}>{getCategory(b.category)?.name}</Text>
@@ -131,7 +132,7 @@ export function ProHome({ uid, name }: { uid: string; name: string }) {
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <Pressable accessibilityRole="button" onPress={open} style={s.tile}><Icon name="calendar" size={22} color={c.primary} /><Text style={s.tileText}>Mi agenda</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={() => Linking.openURL(SERVICES_URL)} style={s.tile}><Icon name="card" size={22} color={c.primary} /><Text style={s.tileText}>Servicios y tarifas</Text></Pressable>
-        <Pressable accessibilityRole="button" onPress={() => Linking.openURL(`https://hululec.com/profesional/${uid}`)} style={s.tile}><Icon name="user" size={22} color={c.primary} /><Text style={s.tileText}>Mi perfil</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/profesional/[id]', params: { id: uid } })} style={s.tile}><Icon name="user" size={22} color={c.primary} /><Text style={s.tileText}>Mi perfil</Text></Pressable>
       </View>
     </View>
   );

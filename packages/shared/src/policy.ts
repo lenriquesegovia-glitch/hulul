@@ -64,6 +64,9 @@ export interface CancelTerms {
   freeUntil?: string;
 }
 
+/** Retraso aceptado por el cliente (minutos), o 0. */
+export const acceptedDelay = (b: { delay?: { minutes: number; status: string } }) => (b.delay?.status === 'aceptado' ? Number(b.delay.minutes || 0) : 0);
+
 /** Fecha y hora de la cita en Ecuador (UTC-5) como instante. */
 export function appointmentTime(date: string, slot: string): Date {
   const [y, m, d] = date.split('-').map(Number);
@@ -86,13 +89,13 @@ export function durationLabel(ms: number): string {
  * - Profesional en camino: cargo de $3.
  * - En curso o terminada: no se cancela; se reporta un problema.
  */
-export function cancelTerms(b: { date: string; slot: string; status: string }, now: Date = new Date()): CancelTerms {
+export function cancelTerms(b: { date: string; slot: string; status: string; delay?: { minutes: number; status: string } }, now: Date = new Date()): CancelTerms {
   if (!(CANCELLABLE_STATUSES as readonly string[]).includes(b.status)) {
     return { allowed: false, fee: 0, reason: b.status === 'cancelada' ? 'Esta reserva ya está cancelada.' : 'El servicio ya empezó o terminó. Si algo salió mal, repórtalo desde la reserva.' };
   }
   const at = appointmentTime(b.date, b.slot);
-  // Culpa del profesional (igual que clientCancel en el servidor).
-  const late = (now.getTime() - at.getTime()) / 60_000;
+  // Culpa del profesional (igual que clientCancel en el servidor), contando el retraso aceptado.
+  const late = (now.getTime() - at.getTime()) / 60_000 - acceptedDelay(b);
   if (b.status === 'confirmada' && late >= POLICY.lateToleranceMinutes) {
     return { allowed: true, fee: 0, reason: `El profesional no ha salido y ya pasó la hora de tu cita: cancelar es gratis, recibes ${usd(POLICY.lateCredit)} de crédito y a él se le aplica una falta.` };
   }
@@ -119,8 +122,8 @@ export function cancelTerms(b: { date: string; slot: string; status: string }, n
  * Aviso que ve el cliente en su reserva según la hora (los mismos que le
  * llegan por notificación). null si todo va normal.
  */
-export function clientAlert(b: { date: string; slot: string; status: string }, pro: string, now: Date = new Date()): { tone: 'warn' | 'bad'; text: string } | null {
-  const mins = (appointmentTime(b.date, b.slot).getTime() - now.getTime()) / 60_000;
+export function clientAlert(b: { date: string; slot: string; status: string; delay?: { minutes: number; status: string } }, pro: string, now: Date = new Date()): { tone: 'warn' | 'bad'; text: string } | null {
+  const mins = (appointmentTime(b.date, b.slot).getTime() - now.getTime()) / 60_000 + (b.status === 'pendiente' ? 0 : acceptedDelay(b));
   if (b.status === 'pendiente' && mins <= 120) {
     return { tone: mins <= 60 ? 'bad' : 'warn', text: `${pro} aún no acepta tu reserva y la cita es ${mins <= 60 ? 'en menos de 1 hora' : 'en menos de 2 horas'}. Escríbele por el chat o cancela gratis y elige otro profesional. Si no la acepta a tiempo, se cancela sola sin costo.` };
   }
@@ -139,6 +142,8 @@ export function clientAlert(b: { date: string; slot: string; status: string }, p
 /** Explicación de una reserva cancelada para el cliente. */
 export function cancelledText(b: { cancelledBy?: string; proFault?: string; cancelFee?: number; demo?: boolean }, pro: string): string {
   const fee = b.cancelFee ? ` con un cargo de ${usd(b.cancelFee)}${b.demo ? ' (prueba, no se cobra)' : ''}` : ' sin costo';
+  if (b.cancelledBy === 'profesional_tarde') return `${pro} llegó más tarde de lo acordado y no te encontró. Se canceló sin costo para ti y se le aplicó una falta.`;
+  if (b.proFault === 'retraso_rechazado') return `No aceptaste el retraso de ${pro}: se canceló sin costo y se le aplicó una falta.`;
   if (b.cancelledBy === 'cliente_ausente') return `${pro} llegó, esperó ${POLICY.clientNoShowWaitMinutes} minutos y no te encontró. La reserva se canceló${fee}.`;
   if (b.proFault === 'no_se_presento') return `${pro} no se presentó. No se te cobra nada y se le aplicó una falta.`;
   if (b.cancelledBy === 'sistema') return `${pro} no aceptó tu reserva a tiempo; se canceló sin costo.`;

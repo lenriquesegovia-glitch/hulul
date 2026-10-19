@@ -89,6 +89,8 @@ export const termsOfService: LegalSection[] = [
         `Más de ${P.veryLateMinutes} minutos tarde, o si el profesional cancela con menos de ${P.freeCancelHoursBefore} horas: el cliente puede cancelar sin costo y recibe ${usd(P.lateCredit)} de crédito; HULUL busca otro profesional. El profesional paga una multa de ${usd(P.proLateFine)}.`,
         `Una hora antes de la cita, si el profesional aún no sale, el cliente recibe un aviso y puede escribirle por el chat.`,
         `Si a los ${P.lateToleranceMinutes} minutos de la hora el profesional no ha salido, el cliente puede cancelar sin costo y recibe ${usd(P.lateCredit)} de crédito. Si no se presenta ni avisa, la reserva se cancela sola a las 3 horas. En ambos casos el profesional paga una multa de ${usd(P.proNoShowFine)}, suma una falta y el cliente puede calificarlo.`,
+        'Si el profesional va a llegar tarde, debe avisarlo en la app indicando cuántos minutos. Si el cliente acepta, la cita se corre a la nueva hora: desde ese momento las tolerancias se cuentan desde ella y, si el cliente cancela después, aplica el cargo normal de cancelación. Si el cliente no acepta el retraso, la reserva se cancela sin costo para él y es una falta del profesional.',
+        `Si el profesional llega más de ${P.lateToleranceMinutes} minutos después de la hora acordada (contando el retraso aceptado) y el cliente ya no está, no se cobra nada al cliente y es una falta del profesional.`,
         `${P.strikesToSuspend} faltas o cancelaciones tardías en ${P.strikesWindowDays} días: suspensión temporal.`,
         'La hora de llegada se mide con la ubicación que comparte el profesional en camino y con su marca de "Llegué".',
       ] },

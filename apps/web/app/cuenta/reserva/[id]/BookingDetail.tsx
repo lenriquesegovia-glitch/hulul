@@ -11,6 +11,7 @@ import { LiveMap } from '@/components/LiveMap';
 import { ExtraForClient } from '@/components/ExtraCharge';
 import { RatingBox } from '@/components/Rating';
 import { Chat } from '@/components/Chat';
+import { DelayClient } from '@/components/Delay';
 import { useUser } from '@/lib/auth';
 import { CancelBox } from '../../Account';
 
@@ -72,6 +73,8 @@ export function BookingDetail({ id }: { id: string }) {
         <h1 style={{ fontSize: 'clamp(24px, 4vw, 32px)' }}>{cat?.name ?? b.category} con {b.professionalName}</h1>
         <p style={{ fontSize: 17 }}><strong>{shortDay(b.date)} · {b.slot}</strong></p>
       </div>
+
+      {['confirmada', 'en_camino'].includes(b.status) && <DelayClient id={b.id} slot={b.slot} delay={b.delay} pro={first} />}
 
       {alert && (
         <div className="notice" role="alert" style={alert.tone === 'bad' ? { borderLeftColor: 'var(--primary)', fontWeight: 600 } : undefined}>{alert.text}</div>

@@ -12,7 +12,6 @@ import { c, font, radius } from '@/theme';
 import { useUser } from '@/lib/auth';
 import { useProviderStatus } from '@/lib/pros';
 
-const AGENDA_URL = 'https://hululec.com/profesionales/agenda';
 
 const popular = [
   { slug: 'climatizacion', title: 'Mantenimiento de split', sub: 'Limpieza, revisión de gas y drenaje' },
@@ -112,7 +111,7 @@ export default function Home() {
           ))}
         </View>
 
-        <Pressable accessibilityRole="button" onPress={() => Linking.openURL(isPro ? AGENDA_URL : 'https://hululec.com/profesionales/registro')} style={({ pressed }) => [s.proCard, pressed && { opacity: 0.9 }]}>
+        <Pressable accessibilityRole="button" onPress={() => (isPro ? router.push('/agenda') : Linking.openURL('https://hululec.com/profesionales/registro'))} style={({ pressed }) => [s.proCard, pressed && { opacity: 0.9 }]}>
           <Image source={{ uri: categoryImage('electricidad', 700) }} style={s.proImg} resizeMode="cover" />
           <View style={{ padding: 16, gap: 8 }}>
             <Text style={s.proEyebrow}>PARA TÉCNICOS Y PROFESIONALES</Text>
@@ -122,7 +121,7 @@ export default function Home() {
           </View>
         </Pressable>
         {!isPro && (
-          <Pressable accessibilityRole="link" onPress={() => Linking.openURL(AGENDA_URL)} style={{ alignSelf: 'center', padding: 8 }}>
+          <Pressable accessibilityRole="link" onPress={() => router.push('/agenda')} style={{ alignSelf: 'center', padding: 8 }}>
             <Text style={{ fontFamily: font.bodyBold, fontSize: 14, color: c.primary }}>Ya soy profesional de HULUL: abrir mi agenda</Text>
           </Pressable>
         )}

@@ -12,6 +12,7 @@ import { VisitReport } from '@/components/VisitReport';
 import { ExtraForPro } from '@/components/ExtraCharge';
 import { RateClientBox } from '@/components/Rating';
 import { Chat } from '@/components/Chat';
+import { DelayPro } from '@/components/Delay';
 import { SignIn } from '@/components/SignIn';
 import { logout, useUser } from '@/lib/auth';
 import { AgendaMap } from './AgendaMap';
@@ -336,10 +337,11 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
             </>
           )}
           {b.status === 'confirmada' && <DepartPanel b={b} busy={!!busy} onGo={() => act('en_camino')} />}
+          {['confirmada', 'en_camino'].includes(b.status) && <DelayPro id={b.id} slot={b.slot} delay={b.delay} client={first || 'El cliente'} />}
           {b.status === 'en_camino' && <LiveShare bookingId={b.id} />}
           {b.status === 'en_camino' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act('llegue')}>{busy ? 'Guardando…' : 'Llegué, empiezo'}</button>}
           {b.status === 'en_curso' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => setFinishing(true)}>Terminar la visita</button>}
-          {b.status === 'en_curso' && !b.outcome && <AbsentButton startedAt={b.startedAt?.toMillis?.()} disabled={!!busy} onClick={() => setAsking('cliente_ausente')} />}
+          {b.status === 'en_curso' && !b.outcome && <AbsentButton startedAt={b.startedAt?.toMillis?.()} late={arrivedLate(b)} disabled={!!busy} onClick={() => setAsking('cliente_ausente')} />}
           {(b.status === 'confirmada' || b.status === 'en_camino') && (
             <button type="button" className="link-btn" disabled={!!busy} onClick={() => setAsking('no_puedo')}>No puedo ir</button>
           )}
@@ -394,13 +396,21 @@ function LiveShare({ bookingId }: { bookingId: string }) {
  * "El cliente no está": se habilita 10 minutos después de marcar "Llegué"
  * (el tiempo de espera de las reglas). Muestra cuánto falta.
  */
-function AbsentButton({ startedAt, disabled, onClick }: { startedAt?: number; disabled: boolean; onClick: () => void }) {
+/** ¿Llegó más de 15 min después de la hora (contando el retraso aceptado)? Entonces no se cobra al cliente. */
+function arrivedLate(b: ProBooking): boolean {
+  const [y, m, d] = b.date.split('-').map(Number);
+  const [h, mi] = b.slot.split(':').map(Number);
+  const at = Date.UTC(y, m - 1, d, h + 5, mi) + (b.delay?.status === 'aceptado' ? b.delay.minutes * 60_000 : 0);
+  return (b.startedAt?.toMillis?.() ?? 0) > at + 15 * 60_000;
+}
+
+function AbsentButton({ startedAt, late, disabled, onClick }: { startedAt?: number; late: boolean; disabled: boolean; onClick: () => void }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15_000); return () => clearInterval(t); }, []);
   const left = startedAt ? Math.ceil((startedAt + 10 * 60_000 - now) / 60_000) : 0;
   return (
     <button type="button" className="link-btn" disabled={disabled || left > 0} onClick={onClick}>
-      {left > 0 ? `El cliente no está (disponible en ${left} min)` : 'El cliente no está'}
+      {left > 0 ? `El cliente no está (disponible en ${left} min)` : late ? 'El cliente no está (llegaste tarde: sin cobro al cliente)' : 'El cliente no está'}
     </button>
   );
 }

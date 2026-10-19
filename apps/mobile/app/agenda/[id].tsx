@@ -1,0 +1,390 @@
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
+import * as Location from 'expo-location';
+import {
+  acceptedDelay, appointmentTime, departPlan, extraQuote, formatUSD, getCategory, hhmmEcuador, JOB_OUTCOMES, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS,
+  MAX_EXTRA, MIN_DIAGNOSIS_CHARS, MIN_EXTRA, OUTCOME_LABEL, POLICY, type JobOutcome,
+} from '@hulul/shared';
+import { EXTRA_STATUS_LABEL, extraCharge, proAction, rateClient, shareLivePosition, type ExtraAction, type ProAction, type ProBooking } from '@hulul/shared/firebase';
+import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
+import { Chat } from '@/components/Chat';
+import { DelayPro } from '@/components/Delay';
+import { Reschedule, shortDay } from '@/components/Reschedule';
+import { StarInput } from '@/components/Rating';
+import { earned, STATUS_LABEL, todayEc, useBooking } from '@/lib/agenda';
+import { photosAvailable, pickPhotos, uploadLocalPhotos } from '@/lib/photos';
+import { useUser } from '@/lib/auth';
+import { c, font, radius } from '@/theme';
+
+const CHAT_OPEN = ['pendiente', 'confirmada', 'en_camino', 'en_curso', 'por_aprobar'];
+const errText = (e: unknown) => (e as { message?: string }).message || 'No se pudo guardar. Inténtalo de nuevo.';
+
+/** Un trabajo del profesional, en vivo, con todas sus acciones (todo dentro de la app). */
+export default function JobScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const user = useUser();
+  const b = useBooking(id);
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+          <BackButton />
+          {b === undefined && <ActivityIndicator color={c.primary} style={{ marginTop: 40 }} />}
+          {b === null && <Body>No encontramos este trabajo.</Body>}
+          {b && user && <Job b={b} uid={user.uid} />}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function Job({ b, uid }: { b: ProBooking; uid: string }) {
+  const cat = getCategory(b.category);
+  const first = String(b.contactName ?? 'el cliente').split(' ')[0];
+  const [busy, setBusy] = useState<ProAction | ''>('');
+  const [msg, setMsg] = useState('');
+  const [asking, setAsking] = useState<'' | 'rechazar' | 'no_puedo' | 'cliente_ausente'>('');
+  const [reason, setReason] = useState('');
+  const [finishing, setFinishing] = useState(false);
+
+  const act = async (a: ProAction, report?: Parameters<typeof proAction>[3]) => {
+    setBusy(a); setMsg('');
+    try { await proAction(b.id, a, reason.trim(), report); setAsking(''); setFinishing(false); setReason(''); }
+    catch (e) { setMsg(errText(e)); }
+    finally { setBusy(''); }
+  };
+
+  const nav = b.location
+    ? { google: `https://www.google.com/maps/dir/?api=1&destination=${b.location.lat},${b.location.lng}`, waze: `https://waze.com/ul?ll=${b.location.lat},${b.location.lng}&navigate=yes` }
+    : { google: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.address)}`, waze: `https://waze.com/ul?q=${encodeURIComponent(b.address)}&navigate=yes` };
+  const live = ['pendiente', 'confirmada', 'en_camino', 'en_curso'].includes(b.status);
+
+  return (
+    <View style={{ gap: 16 }}>
+      <View style={{ gap: 4 }}>
+        <Text style={[s.badge, b.status === 'pendiente' && s.badgeHot]}>{STATUS_LABEL[b.status] ?? b.status}</Text>
+        <H1 style={{ fontSize: 24 }}>{cat?.name} · {first}</H1>
+        <Text style={s.when}>{b.date === todayEc() ? 'Hoy' : shortDay(b.date)} · {b.slot}</Text>
+        <Body muted style={{ fontSize: 13.5 }}>{b.extra && !['propuesto', 'rechazado'].includes(b.extra.status) ? 'Visita + adicional' : 'Visita'}: te queda {formatUSD(earned(b))} · {b.paymentMethod === 'tarjeta' ? 'Tarjeta' : b.paymentMethod === 'transferencia' ? 'Transferencia' : 'DeUna'}{b.demo ? ' · prueba' : ''}</Body>
+      </View>
+
+      <Card style={{ gap: 10 }}>
+        <Text style={s.label}>Qué necesita</Text>
+        <Body>{b.notes || 'Sin descripción.'}</Body>
+        {!!b.photos?.length && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {b.photos.map((u) => <Pressable key={u} onPress={() => Linking.openURL(u)}><Image source={{ uri: u }} style={s.photo} accessibilityLabel="Foto del cliente" /></Pressable>)}
+          </View>
+        )}
+        <Text style={s.label}>Dónde</Text>
+        <Body>📍 {b.address}</Body>
+        {b.status !== 'cancelada' && (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable accessibilityRole="button" onPress={() => Linking.openURL(nav.google)} style={s.btn}><Text style={s.btnText}>Google Maps</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={() => Linking.openURL(nav.waze)} style={s.btn}><Text style={s.btnText}>Waze</Text></Pressable>
+          </View>
+        )}
+      </Card>
+
+      {b.outcome && (
+        <Card style={{ gap: 8 }}>
+          <Text style={s.label}>Tu diagnóstico · {OUTCOME_LABEL[b.outcome]}</Text>
+          {b.diagnosis ? <Body>{b.diagnosis}</Body> : null}
+          {!!b.diagnosisPhotos?.length && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {b.diagnosisPhotos.map((u) => <Pressable key={u} onPress={() => Linking.openURL(u)}><Image source={{ uri: u }} style={s.photo} /></Pressable>)}
+            </View>
+          )}
+        </Card>
+      )}
+
+      {msg ? <Body style={{ color: c.primary, fontSize: 13.5 }}>{msg}</Body> : null}
+
+      {finishing ? (
+        <FinishPanel bookingId={b.id} uid={uid} busy={!!busy} onCancel={() => setFinishing(false)} onSend={(r) => act('terminar', r)} />
+      ) : asking ? (
+        <Card style={{ gap: 10 }}>
+          <Text style={s.label}>{asking === 'rechazar' ? '¿Por qué no puedes? (opcional)' : asking === 'cliente_ausente' ? '¿Qué pasó? (opcional)' : 'Cuéntale al cliente qué pasó'}</Text>
+          <TextInput value={reason} onChangeText={setReason} maxLength={300} style={s.input} placeholderTextColor={c.textMuted} placeholder="Escribe aquí" />
+          {asking === 'no_puedo' && <Body muted style={{ fontSize: 12.5 }}>Cancelar con menos de 2 horas o yendo en camino cuenta como falta y tiene una multa de {formatUSD(POLICY.proLateFine)}.</Body>}
+          {asking === 'cliente_ausente' && <Body muted style={{ fontSize: 12.5 }}>Se cancela la reserva y al cliente se le cobra la visita, que es para ti (menos la comisión). Después podrás calificarlo.</Body>}
+          <PrimaryButton label={busy ? 'Guardando…' : 'Confirmar'} onPress={() => !busy && act(asking)} />
+          <Pressable onPress={() => setAsking('')}><Text style={[s.link, { textAlign: 'center' }]}>Volver</Text></Pressable>
+        </Card>
+      ) : (
+        <View style={{ gap: 10 }}>
+          {b.status === 'pendiente' && b.date >= todayEc() && (
+            <>
+              <PrimaryButton label={busy === 'aceptar' ? 'Aceptando…' : 'Aceptar trabajo'} onPress={() => !busy && act('aceptar')} />
+              <Pressable accessibilityRole="button" onPress={() => setAsking('rechazar')} style={s.btn}><Text style={s.btnText}>Rechazar</Text></Pressable>
+              <Body muted style={{ fontSize: 12.5 }}>Lee bien qué necesita el cliente y acepta solo si sabes hacerlo.</Body>
+            </>
+          )}
+          {b.status === 'confirmada' && <DepartInfo b={b} />}
+          {['confirmada', 'en_camino'].includes(b.status) && <DelayPro id={b.id} slot={b.slot} delay={b.delay} client={first} />}
+          {b.status === 'confirmada' && <PrimaryButton label={busy === 'en_camino' ? 'Guardando…' : 'Voy en camino'} onPress={() => !busy && act('en_camino')} />}
+          {b.status === 'en_camino' && <LiveShare bookingId={b.id} />}
+          {b.status === 'en_camino' && <PrimaryButton label={busy === 'llegue' ? 'Guardando…' : 'Llegué, empiezo'} onPress={() => !busy && act('llegue')} />}
+          {b.status === 'en_curso' && <PrimaryButton label="Terminar la visita" onPress={() => setFinishing(true)} />}
+          {b.status === 'en_curso' && !b.outcome && <AbsentButton startedAt={b.startedAt?.toMillis?.()} late={arrivedLate(b)} onPress={() => setAsking('cliente_ausente')} />}
+          {(b.status === 'confirmada' || b.status === 'en_camino') && (
+            <Pressable onPress={() => setAsking('no_puedo')}><Text style={[s.link, { textAlign: 'center' }]}>No puedo ir</Text></Pressable>
+          )}
+        </View>
+      )}
+
+      <ExtraPro b={b} />
+
+      {(['por_aprobar', 'completada'].includes(b.status) || b.cancelledBy === 'cliente_ausente') && !b.clientRating && <RateClient id={b.id} name={first} />}
+      {b.rating ? <Body muted>El cliente te calificó {'★'.repeat(b.rating)}</Body> : null}
+
+      {['pendiente', 'confirmada'].includes(b.status) && <Reschedule id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="profesional" other={first} />}
+
+      {b.status !== 'cancelada' && (
+        <Card style={{ gap: 10 }}>
+          <Text style={s.label}>💬 Chat con {first}</Text>
+          <Chat bookingId={b.id} uid={uid} me="profesional" otherName={first} open={CHAT_OPEN.includes(b.status)} />
+          {live && <AskPhotosHint />}
+        </Card>
+      )}
+    </View>
+  );
+}
+
+/** Pedir fotos: en la app va por el chat (el profesional escribe qué necesita). */
+function AskPhotosHint() {
+  return <Body muted style={{ fontSize: 12 }}>¿Necesitas ver el problema? Pídele fotos al cliente por el chat; él las envía con la cámara.</Body>;
+}
+
+/** Cuándo puede salir y a más tardar cuándo debe salir. */
+function DepartInfo({ b }: { b: ProBooking }) {
+  const [trip, setTrip] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!b.location) return;
+    let off = false;
+    (async () => {
+      const perm = await Location.getForegroundPermissionsAsync();
+      if (!perm.granted) return;
+      const p = await Location.getLastKnownPositionAsync();
+      if (!p || off) return;
+      const R = 6371, toR = (x: number) => (x * Math.PI) / 180;
+      const dLat = toR(b.location!.lat - p.coords.latitude), dLng = toR(b.location!.lng - p.coords.longitude);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toR(p.coords.latitude)) * Math.cos(toR(b.location!.lat)) * Math.sin(dLng / 2) ** 2;
+      const km = 2 * R * Math.asin(Math.sqrt(a)) * 1.4;
+      setTrip(Math.round((km / 22) * 60 + 5));
+    })().catch(() => {});
+    return () => { off = true; };
+  }, [b.location]);
+  const plan = departPlan(b, new Date(), trip);
+  return (
+    <View style={s.info}>
+      <Body style={{ fontSize: 13.5 }}>
+        {plan.canGo ? 'Ya puedes salir.' : `Podrás marcar "Voy en camino" desde las ${hhmmEcuador(plan.earliest)}.`}
+        {plan.latest ? ` Sal a más tardar a las ${hhmmEcuador(plan.latest)} (viaje aprox. ${trip} min).` : ''}
+        {plan.lateBy > 0 ? ` Si sales ahora llegarías ${plan.lateBy} min tarde: avisa al cliente por el chat.` : ''}
+      </Body>
+    </View>
+  );
+}
+
+/** Comparte la ubicación con el cliente mientras va en camino (con esta pantalla abierta). */
+function LiveShare({ bookingId }: { bookingId: string }) {
+  const [state, setState] = useState<'buscando' | 'ok' | 'denegado' | 'error'>('buscando');
+  const [last, setLast] = useState<Date | null>(null);
+  useEffect(() => {
+    let sub: Location.LocationSubscription | null = null;
+    let off = false;
+    (async () => {
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (!perm.granted) { setState('denegado'); return; }
+      sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 15_000, distanceInterval: 40 }, async (p) => {
+        try {
+          await shareLivePosition(bookingId, { lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy, heading: p.coords.heading });
+          if (!off) { setState('ok'); setLast(new Date()); }
+        } catch { /* sin conexión: se intenta con la siguiente posición */ }
+      });
+      if (off) sub.remove();
+    })().catch(() => setState('error'));
+    return () => { off = true; sub?.remove(); };
+  }, [bookingId]);
+  const text = {
+    buscando: 'Activando tu ubicación para que el cliente te vea en el mapa…',
+    ok: `📍 El cliente te ve en el mapa${last ? ` (última señal ${hhmmEcuador(last)})` : ''}. Deja esta pantalla abierta mientras vas.`,
+    denegado: 'Permite la ubicación de HULUL en los ajustes del celular para que el cliente te vea llegar.',
+    error: 'No pudimos leer tu GPS. Revisa que la ubicación esté encendida.',
+  }[state];
+  return <View style={s.info}><Body style={{ fontSize: 13.5, color: state === 'ok' ? c.text : c.primary }}>{text}</Body></View>;
+}
+
+/** "El cliente no está": 10 minutos después de marcar "Llegué". */
+/** ¿Llegó más de 15 min después de la hora (contando el retraso aceptado)? Entonces no se cobra al cliente. */
+function arrivedLate(b: ProBooking): boolean {
+  const at = appointmentTime(b.date, b.slot).getTime() + acceptedDelay(b) * 60_000;
+  return (b.startedAt?.toMillis?.() ?? 0) > at + POLICY.lateToleranceMinutes * 60_000;
+}
+
+function AbsentButton({ startedAt, late, onPress }: { startedAt?: number; late: boolean; onPress: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15_000); return () => clearInterval(t); }, []);
+  const left = startedAt ? Math.ceil((startedAt + POLICY.clientNoShowWaitMinutes * 60_000 - now) / 60_000) : 0;
+  return (
+    <Pressable accessibilityRole="button" disabled={left > 0} onPress={onPress}>
+      <Text style={[s.link, { textAlign: 'center' }, left > 0 && { color: c.textMuted }]}>{left > 0 ? `El cliente no está (disponible en ${left} min)` : late ? 'El cliente no está (llegaste tarde: sin cobro al cliente)' : 'El cliente no está'}</Text>
+    </Pressable>
+  );
+}
+
+/** Terminar: cómo quedó, diagnóstico y al menos una foto. */
+function FinishPanel({ bookingId, uid, busy, onCancel, onSend }: {
+  bookingId: string; uid: string; busy: boolean; onCancel: () => void; onSend: (r: { outcome: JobOutcome; diagnosis: string; photos: string[] }) => void;
+}) {
+  const [outcome, setOutcome] = useState<JobOutcome | ''>('');
+  const [diagnosis, setDiagnosis] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState('');
+  const canPhoto = photosAvailable();
+
+  const add = async (from: 'camara' | 'galeria') => {
+    setErr('');
+    try {
+      const uris = await pickPhotos(from, MAX_DIAGNOSIS_PHOTOS - photos.length);
+      if (!uris.length) return;
+      setUploading(true);
+      const urls = await uploadLocalPhotos(`diagnosticos/${uid}/${bookingId}`, uris);
+      setPhotos((p) => [...p, ...urls]);
+    } catch (e) {
+      setErr((e as { code?: string }).code === 'sin-permiso-camara' ? 'Permite la cámara en los ajustes del celular.' : 'No se pudieron subir las fotos.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const send = () => {
+    setErr('');
+    if (!outcome) { setErr('Elige cómo quedó el trabajo.'); return; }
+    if (outcome !== 'resuelto' && diagnosis.trim().length < MIN_DIAGNOSIS_CHARS) { setErr('Explica qué encontraste y qué hace falta.'); return; }
+    if (!photos.length) { setErr('Sube al menos una foto del trabajo, haya quedado resuelto o no.'); return; }
+    onSend({ outcome, diagnosis: diagnosis.trim(), photos });
+  };
+
+  return (
+    <Card style={{ gap: 12 }}>
+      <Text style={s.label}>¿Cómo quedó?</Text>
+      {JOB_OUTCOMES.map((o) => (
+        <Pressable key={o.value} accessibilityRole="radio" accessibilityState={{ checked: outcome === o.value }} onPress={() => setOutcome(o.value)} style={[s.option, outcome === o.value && s.optionOn]}>
+          <Text style={s.btnText}>{o.label}</Text>
+          <Body muted style={{ fontSize: 12.5 }}>{o.help}</Body>
+        </Pressable>
+      ))}
+      <TextInput value={diagnosis} onChangeText={setDiagnosis} maxLength={MAX_DIAGNOSIS_CHARS} multiline placeholderTextColor={c.textMuted}
+        placeholder={`Diagnóstico${outcome === 'resuelto' ? ' (opcional)' : ''}: qué encontraste, qué hiciste y qué recomiendas`} style={[s.input, { minHeight: 90, textAlignVertical: 'top', paddingTop: 10 }]} />
+      <Text style={s.label}>Fotos del trabajo ({photos.length}/{MAX_DIAGNOSIS_PHOTOS}, mínimo 1)</Text>
+      {photos.length > 0 && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{photos.map((u) => <Image key={u} source={{ uri: u }} style={s.photo} />)}</View>}
+      {canPhoto ? (
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable accessibilityRole="button" disabled={uploading} onPress={() => add('camara')} style={[s.btn, s.btnPrimary]}><Text style={[s.btnText, { color: '#fff' }]}>{uploading ? 'Subiendo…' : '📷 Tomar foto'}</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={uploading} onPress={() => add('galeria')} style={s.btn}><Text style={s.btnText}>Galería</Text></Pressable>
+        </View>
+      ) : (
+        <Body muted style={{ fontSize: 12.5 }}>Esta versión de la app aún no tiene cámara. Instala la versión nueva, o termina desde hululec.com/profesionales/agenda.</Body>
+      )}
+      {err ? <Body style={{ color: c.primary, fontSize: 13 }}>{err}</Body> : null}
+      <PrimaryButton label={busy ? 'Guardando…' : 'Terminar y enviar al cliente'} onPress={() => !busy && !uploading && send()} />
+      <Pressable onPress={onCancel}><Text style={[s.link, { textAlign: 'center' }]}>Volver</Text></Pressable>
+    </Card>
+  );
+}
+
+/** Cobro adicional: agregarlo y confirmar el pago en efectivo. */
+function ExtraPro({ b }: { b: ProBooking }) {
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [desc, setDesc] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const x = b.extra;
+  const canAdd = ['en_curso', 'por_aprobar'].includes(b.status) && (!x || x.status === 'rechazado');
+  const run = async (data: ExtraAction) => {
+    setBusy(true); setMsg('');
+    try { await extraCharge(data); setOpen(false); } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
+  };
+
+  if (x && x.status !== 'rechazado') {
+    return (
+      <Card style={{ gap: 8 }}>
+        <Text style={s.label}>Cobro adicional · {EXTRA_STATUS_LABEL[x.status]}</Text>
+        <Body muted>{x.description}</Body>
+        <Body>{formatUSD(x.amount)} + IVA = {formatUSD(x.total)}. Te queda {formatUSD(x.amount - x.commission)}.</Body>
+        {msg ? <Body style={{ color: c.primary, fontSize: 13 }}>{msg}</Body> : null}
+        {x.status === 'efectivo_pendiente' && <PrimaryButton label={busy ? 'Guardando…' : `Recibí ${formatUSD(x.total)} en efectivo`} onPress={() => !busy && run({ id: b.id, action: 'recibi_efectivo' })} />}
+      </Card>
+    );
+  }
+  if (!canAdd) return null;
+  if (!open) return <Pressable accessibilityRole="button" onPress={() => setOpen(true)} style={s.btn}><Text style={s.btnText}>+ Agregar cobro adicional</Text></Pressable>;
+
+  const n = Number(amount.replace(',', '.'));
+  const q = Number.isFinite(n) && n > 0 ? extraQuote(n) : null;
+  return (
+    <Card style={{ gap: 10 }}>
+      <Text style={s.label}>Cobro adicional</Text>
+      {x?.status === 'rechazado' && <Body muted style={{ fontSize: 12.5 }}>El cliente no aceptó el anterior ({formatUSD(x.total)}).</Body>}
+      <Body muted style={{ fontSize: 12.5 }}>Repuestos, más trabajo u otra visita que acordaste con el cliente. Él lo acepta y lo paga en la app.</Body>
+      <TextInput value={amount} onChangeText={(t) => setAmount(t.replace(/[^\d.,]/g, '').slice(0, 7))} keyboardType="decimal-pad" placeholder="Monto sin IVA (USD)" placeholderTextColor={c.textMuted} style={s.input} />
+      <TextInput value={desc} onChangeText={setDesc} maxLength={300} placeholder="¿Qué incluye? Ej.: capacitor y 1 hora más" placeholderTextColor={c.textMuted} style={s.input} />
+      {q && <Body muted style={{ fontSize: 12.5 }}>El cliente paga {formatUSD(q.total)}. Te queda {formatUSD(q.proPayout)}.</Body>}
+      {msg ? <Body style={{ color: c.primary, fontSize: 13 }}>{msg}</Body> : null}
+      <PrimaryButton label={busy ? 'Enviando…' : 'Enviar al cliente'} onPress={() => {
+        if (busy) return;
+        if (!q || n < MIN_EXTRA || n > MAX_EXTRA) { setMsg(`Escribe un monto entre $${MIN_EXTRA} y $${MAX_EXTRA}.`); return; }
+        if (desc.trim().length < 10) { setMsg('Explica qué incluye (al menos 10 caracteres).'); return; }
+        run({ id: b.id, action: 'proponer', amount: q.amount, description: desc.trim() });
+      }} />
+      <Pressable onPress={() => setOpen(false)}><Text style={[s.link, { textAlign: 'center' }]}>Cancelar</Text></Pressable>
+    </Card>
+  );
+}
+
+/** El profesional califica al cliente (privado). */
+function RateClient({ id, name }: { id: string; name: string }) {
+  const [n, setN] = useState(0);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  return (
+    <Card style={{ gap: 8 }}>
+      <Text style={s.label}>Califica a {name}</Text>
+      <Body muted style={{ fontSize: 12.5 }}>Solo lo ve HULUL. Nos ayuda a cuidarte de clientes problemáticos.</Body>
+      <StarInput value={n} onChange={setN} size={28} label="Calificación del cliente" />
+      {n > 0 && <TextInput value={text} onChangeText={setText} maxLength={600} placeholder="Comentario (opcional)" placeholderTextColor={c.textMuted} style={s.input} />}
+      {msg ? <Body style={{ color: c.primary, fontSize: 13 }}>{msg}</Body> : null}
+      <PrimaryButton label={busy ? 'Enviando…' : 'Enviar'} onPress={async () => {
+        if (busy) return;
+        if (!n) { setMsg('Elige las estrellas.'); return; }
+        setBusy(true); setMsg('');
+        try { await rateClient({ id, stars: n, comment: text.trim() }); } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
+      }} />
+    </Card>
+  );
+}
+
+const s = StyleSheet.create({
+  content: { padding: 20, paddingBottom: 40, gap: 16 },
+  badge: { alignSelf: 'flex-start', overflow: 'hidden', paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: c.successSoft, color: c.success, fontFamily: font.bodyBold, fontSize: 12 },
+  badgeHot: { backgroundColor: c.copperSoft, color: c.copper },
+  when: { fontFamily: font.display, fontSize: 17, color: c.text },
+  label: { fontFamily: font.bodyBold, fontSize: 14.5, color: c.text },
+  photo: { width: 80, height: 80, borderRadius: 10, borderWidth: 1, borderColor: c.border },
+  btn: { flex: 1, minHeight: 46, paddingHorizontal: 12, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center' },
+  btnPrimary: { backgroundColor: c.primary, borderColor: c.primary },
+  btnText: { fontFamily: font.bodyBold, fontSize: 14, color: c.text },
+  link: { fontFamily: font.bodyBold, fontSize: 14, color: c.primary, paddingVertical: 6 },
+  input: { minHeight: 46, borderWidth: 1, borderColor: c.border, borderRadius: radius.sm, paddingHorizontal: 12, fontFamily: font.body, fontSize: 14.5, color: c.text, backgroundColor: c.surface },
+  info: { padding: 12, borderRadius: 10, backgroundColor: c.copperSoft },
+  option: { padding: 12, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, gap: 2 },
+  optionOn: { borderColor: c.primary, borderWidth: 2 },
+});

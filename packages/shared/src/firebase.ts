@@ -171,6 +171,7 @@ export async function createClientProfile(uid: string, p: ClientProfile): Promis
 
 export interface ClientBooking {
   id: string;
+  delay?: Delay;
   /** Falta del profesional que causó la cancelación (no salió, muy tarde, no se presentó). */
   proFault?: string;
   cancelReason?: string;
@@ -204,6 +205,18 @@ export interface ClientBooking {
 
 /** Cambio de hora propuesto por una de las partes. */
 export interface Proposal { date: string; slot: string; by: 'cliente' | 'profesional' }
+
+/** Aviso de retraso del profesional (minutos totales sobre la hora reservada). */
+export interface Delay { minutes: number; added?: number; reason?: string; status: 'propuesto' | 'aceptado' | 'rechazado' }
+
+/** Minutos que el profesional puede avisar de retraso. */
+export const DELAY_OPTIONS = [10, 15, 20, 30, 45, 60, 90];
+
+/** El profesional avisa un retraso; el cliente lo acepta o lo rechaza (cancela sin costo). */
+export async function delayAction(data: { id: string; action: 'proponer'; minutes: number; reason?: string } | { id: string; action: 'aceptar' | 'rechazar' }): Promise<void> {
+  const fn = httpsCallable<typeof data, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'avisarRetraso');
+  await fn(data);
+}
 
 /** Reservas del cliente, de la más próxima a la más antigua. */
 export async function clientBookings(uid: string): Promise<ClientBooking[]> {
@@ -481,6 +494,7 @@ export async function proAction(id: string, action: ProAction, reason = '', repo
 
 export interface ProBooking {
   id: string;
+  delay?: Delay;
   /** Cuándo marcó "Llegué" (para esperar al cliente 10 minutos). */
   startedAt?: { toMillis: () => number };
   professionalId?: string;

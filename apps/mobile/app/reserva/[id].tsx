@@ -9,6 +9,7 @@ import { Icon } from '@/components/Icon';
 import { LiveMap } from '@/components/LiveMap';
 import { RatingBox } from '@/components/Rating';
 import { Chat } from '@/components/Chat';
+import { DelayClient } from '@/components/Delay';
 import { useUser } from '@/lib/auth';
 import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
 import { CancelBox } from '../cuenta';
@@ -75,6 +76,7 @@ function Detail({ b }: { b: ClientBooking }) {
         <H1 style={{ fontSize: 24 }}>{cat?.name ?? b.category} con {b.professionalName}</H1>
         <Text style={s.when}>{shortDay(b.date)} · {b.slot}</Text>
       </View>
+      {['confirmada', 'en_camino'].includes(b.status) && <DelayClient id={b.id} slot={b.slot} delay={b.delay} pro={first} />}
       {alert && (
         <View style={[s.box, { backgroundColor: c.copperSoft, borderLeftWidth: 4, borderLeftColor: alert.tone === 'bad' ? c.primary : c.copper }]} accessibilityRole="alert">
           <Body style={{ fontSize: 14, fontFamily: alert.tone === 'bad' ? font.bodyBold : font.body }}>{alert.text}</Body>

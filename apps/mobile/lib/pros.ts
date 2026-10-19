@@ -30,11 +30,12 @@ export function usePro(id?: string, category?: string): Professional | null | un
   return pro;
 }
 
-/** Estado de la cuenta de profesional del usuario (null si no es profesional). */
-export function useProviderStatus(uid?: string | null): string | null {
-  const [status, setStatus] = useState<string | null>(null);
+/** Estado de la cuenta de profesional del usuario (null si no es profesional, undefined mientras carga). */
+export function useProviderStatus(uid?: string | null): string | null | undefined {
+  const [status, setStatus] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     if (!uid) { setStatus(null); return; }
+    setStatus(undefined);
     let off = false;
     import('firebase/firestore').then(async (fs) => {
       const { firestore } = await import('@hulul/shared/firebase');

@@ -480,6 +480,8 @@ const appointmentMs = (date, slot) => {
   const [h, min] = String(slot).split(':').map(Number);
   return Date.UTC(y, m - 1, d, h + 5, min); // Ecuador, UTC-5
 };
+/** Hora efectiva de la cita: la reservada más el retraso que el cliente aceptó. */
+const effectiveMs = (b) => appointmentMs(b.date, b.slot) + (b.delay?.status === 'aceptado' ? Number(b.delay.minutes || 0) * 60_000 : 0);
 const hhmm = (ms) => { const e = new Date(ms - 5 * 3_600_000); return `${String(e.getUTCHours()).padStart(2, '0')}:${String(e.getUTCMinutes()).padStart(2, '0')}`; };
 
 export function cancelFee(b, now = new Date()) {
@@ -509,7 +511,8 @@ const LATE_CREDIT = 5;
 export function clientCancel(b, now = new Date()) {
   const fee = cancelFee(b, now);
   if (fee === null) return null;
-  const late = (now.getTime() - appointmentMs(b.date, b.slot)) / 60_000;
+  // Con un retraso aceptado por el cliente, se cuenta desde la nueva hora.
+  const late = (now.getTime() - effectiveMs(b)) / 60_000;
   if (b.status === 'confirmada' && late >= LATE_TOLERANCE_MIN) return { fee: 0, proFault: 'no_salio', proFine: PRO_NOSHOW_FINE };
   if (b.status === 'en_camino' && late >= VERY_LATE_MIN) return { fee: 0, proFault: 'muy_tarde', proFine: PRO_LATE_FINE };
   return { fee };
@@ -645,11 +648,21 @@ export const gestionarReserva = onCall(
         const started = cur.startedAt?.toMillis?.() ?? 0;
         const wait = CLIENT_WAIT_MIN * 60_000 - (Date.now() - started);
         if (wait > 0) throw new HttpsError('failed-precondition', `Espera ${Math.ceil(wait / 60_000)} min más: el cliente tiene ${CLIENT_WAIT_MIN} minutos desde que marcaste "Llegué".`);
-        const fee = Number(cur.visit ?? cur.subtotal ?? 0);
+        // Si llegó tarde (más de 15 min después de la hora, contando el retraso
+        // aceptado), no es culpa del cliente: no se le cobra y es falta del profesional.
+        const arrivedLate = started > effectiveMs(cur) + LATE_TOLERANCE_MIN * 60_000;
+        const fee = arrivedLate ? 0 : Number(cur.visit ?? cur.subtotal ?? 0);
         patch.cancelledBy = 'cliente_ausente';
         patch.cancelReason = reason || 'El cliente no estaba en la dirección ni respondió.';
         patch.cancelFee = fee;
-        if (fee > 0 && !cur.demo) tx.set(db().doc(`clients/${cur.clientId}`), { balance: FieldValue.increment(fee), noShows: FieldValue.increment(1) }, { merge: true });
+        if (arrivedLate) {
+          patch.arrivedLate = true;
+          patch.proFault = 'llego_tarde';
+          patch.cancelledBy = 'profesional_tarde';
+          if (!cur.demo) tx.set(db().doc(`providers/${uid}`), { strikes: FieldValue.increment(1) }, { merge: true });
+        } else if (fee > 0 && !cur.demo) {
+          tx.set(db().doc(`clients/${cur.clientId}`), { balance: FieldValue.increment(fee), noShows: FieldValue.increment(1) }, { merge: true });
+        }
       }
       if (action === 'rechazar' || action === 'no_puedo') {
         patch.cancelledBy = 'profesional';
@@ -672,6 +685,7 @@ export const gestionarReserva = onCall(
       const cat = CATEGORIES[b.category] ?? b.category;
       const when = `${longDate(b.date)} a las ${b.slot}`;
       const first = String(b.contactName ?? '').split(' ')[0];
+      const arrivedLate = action === 'cliente_ausente' && (b.startedAt?.toMillis?.() ?? 0) > effectiveMs(b) + LATE_TOLERANCE_MIN * 60_000;
       const msgs = {
         aceptar: [`${b.professionalName} confirmó tu reserva`, `Hola ${esc(first)}, ${esc(b.professionalName)} confirmó tu servicio de ${esc(cat)} para el ${esc(when)}. Te avisaremos cuando salga hacia tu dirección.`],
         en_camino: [`${b.professionalName} va en camino`, `Hola ${esc(first)}, ${esc(b.professionalName)} ya salió hacia ${esc(b.address)}. Míralo en <a href="https://hululec.com/cuenta">Mi cuenta</a>.`],
@@ -681,7 +695,9 @@ export const gestionarReserva = onCall(
           `<p style="font-size:14px;color:#3F3A37">${esc(AFTER_VISIT_NOTE)} Tienes 48 horas para calificarlo o reportar un problema en <a href="https://hululec.com/cuenta">Mi cuenta</a>.</p>`],
         rechazar: ['Tu reserva necesita otro profesional', `Hola ${esc(first)}, ${esc(b.professionalName)} no puede atender tu reserva del ${esc(when)}. No se te cobra nada. Elige otro profesional en <a href="https://hululec.com/servicios/${esc(b.category)}">HULUL</a>.`],
         no_puedo: ['Tu profesional canceló', `Hola ${esc(first)}, ${esc(b.professionalName)} canceló tu reserva del ${esc(when)}. No se te cobra nada y te ayudamos a encontrar otro profesional.`],
-        cliente_ausente: ['Tu profesional no te encontró', `Hola ${esc(first)}, ${esc(b.professionalName)} llegó a ${esc(b.address)}, esperó ${CLIENT_WAIT_MIN} minutos y no te encontró. La reserva se canceló y se cobra la visita (${usd(b.visit ?? b.subtotal)}), que compensa su traslado. Si hubo un error, respóndenos a este correo.`],
+        cliente_ausente: arrivedLate
+          ? ['Tu profesional llegó tarde', `Hola ${esc(first)}, ${esc(b.professionalName)} llegó más tarde de lo acordado y no te encontró. La reserva se canceló sin costo para ti y se le aplicó una falta. Puedes calificarlo en tu reserva.`]
+          : ['Tu profesional no te encontró', `Hola ${esc(first)}, ${esc(b.professionalName)} llegó a ${esc(b.address)}, esperó ${CLIENT_WAIT_MIN} minutos y no te encontró. La reserva se canceló y se cobra la visita (${usd(b.visit ?? b.subtotal)}), que compensa su traslado. Si hubo un error, respóndenos a este correo.`],
       }[action];
       const pushText = {
         aceptar: `Confirmó tu servicio de ${cat} para el ${when}.`,
@@ -690,7 +706,7 @@ export const gestionarReserva = onCall(
         terminar: 'Terminó la visita. Revisa el diagnóstico y las fotos, y califícalo.',
         rechazar: `No puede atender tu reserva del ${when}. No se te cobra nada.`,
         no_puedo: `Canceló tu reserva del ${when}. No se te cobra nada.`,
-        cliente_ausente: `Llegó, esperó ${CLIENT_WAIT_MIN} minutos y no te encontró. Se canceló la reserva y se cobra la visita.`,
+        cliente_ausente: arrivedLate ? 'Llegó más tarde de lo acordado y no te encontró. Se canceló sin costo para ti.' : `Llegó, esperó ${CLIENT_WAIT_MIN} minutos y no te encontró. Se canceló la reserva y se cobra la visita.`,
       }[action];
       if (pushText) await pushTo(b.clientId, msgs?.[0] ?? 'Tu reserva', pushText, { bookingId: id, to: 'cliente' });
       if (msgs && b.contactEmail) await mail.sendMail({ from, to: b.contactEmail, replyTo: notifyTo, subject: msgs[0], html: layout(msgs[0], `<div style="font-size:15px">${msgs[1]}</div>`) });
@@ -1159,7 +1175,7 @@ async function recordatorios() {
   for (const d of snap.docs) {
     const b = d.data();
     const id = d.id;
-    const at = appointmentMs(b.date, b.slot);
+    const at = b.status === 'pendiente' ? appointmentMs(b.date, b.slot) : effectiveMs(b);
     const mins = (at - now) / 60_000;
     const r = b.reminders ?? {};
     const pro = String(b.professionalName ?? 'tu profesional').split(' ')[0];
@@ -1210,3 +1226,69 @@ async function recordatorios() {
   }
   return { avisos, vencidas };
 }
+
+/* ------------------------------ Aviso de retraso ------------------------------ */
+
+const DELAYS = [10, 15, 20, 30, 45, 60, 90];
+
+/**
+ * El profesional avisa que llegará tarde (con su reserva confirmada o en
+ * camino) y el cliente decide:
+ * - aceptar: la cita se corre esos minutos; si después el cliente cancela,
+ *   paga el cargo normal (ya no hay culpa del profesional).
+ * - rechazar: la reserva se cancela sin costo para el cliente y es falta del
+ *   profesional (multa por retraso).
+ * Así un cliente no puede aceptar el retraso y luego cancelar gratis, y el
+ * profesional no puede cobrar "cliente ausente" si llegó más tarde de lo acordado.
+ */
+export const avisarRetraso = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const id = String(req.data?.id ?? '');
+  const action = String(req.data?.action ?? '');
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id) || !['proponer', 'aceptar', 'rechazar'].includes(action)) throw new HttpsError('invalid-argument', 'Acción no válida.');
+  const ref = db().doc(`bookings/${id}`);
+  const out = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
+    const b = snap.data();
+    if (!['confirmada', 'en_camino'].includes(b.status)) throw new HttpsError('failed-precondition', 'Solo se avisa un retraso antes de llegar.');
+    if (action === 'proponer') {
+      if (b.professionalId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
+      if (b.delay?.status === 'propuesto') throw new HttpsError('failed-precondition', 'Ya avisaste un retraso; espera la respuesta del cliente.');
+      const minutes = Number(req.data?.minutes);
+      if (!DELAYS.includes(minutes)) throw new HttpsError('invalid-argument', 'Elige cuántos minutos llegarás tarde.');
+      const total = (b.delay?.status === 'aceptado' ? Number(b.delay.minutes) : 0) + minutes;
+      if (total > 120) throw new HttpsError('failed-precondition', 'Un retraso de más de 2 horas no se puede avisar: propón otra hora o cancela.');
+      const reason = String(req.data?.reason ?? '').trim().slice(0, 200);
+      tx.update(ref, { delay: { minutes: total, added: minutes, reason, status: 'propuesto', previous: b.delay?.status === 'aceptado' ? Number(b.delay.minutes) : 0, at: FieldValue.serverTimestamp() } });
+      return { b, minutes, total, to: 'cliente' };
+    }
+    if (b.clientId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
+    if (b.delay?.status !== 'propuesto') throw new HttpsError('failed-precondition', 'No hay un aviso de retraso pendiente.');
+    if (action === 'aceptar') {
+      tx.update(ref, { 'delay.status': 'aceptado', 'delay.respondedAt': FieldValue.serverTimestamp(), reminders: {} });
+      return { b, minutes: b.delay.minutes, to: 'pro' };
+    }
+    // Rechazar: se cancela sin costo para el cliente; falta del profesional.
+    tx.update(ref, {
+      status: 'cancelada', cancelledBy: 'cliente', cancelledAt: FieldValue.serverTimestamp(), cancelFee: 0,
+      cancelReason: 'No aceptó el retraso del profesional.', previousStatus: b.status,
+      proFault: 'retraso_rechazado', proFine: PRO_LATE_FINE, 'delay.status': 'rechazado',
+    });
+    if (!b.demo) tx.set(db().doc(`providers/${b.professionalId}`), { strikes: FieldValue.increment(1), fines: FieldValue.increment(PRO_LATE_FINE) }, { merge: true });
+    return { b, minutes: b.delay.minutes, to: 'pro' };
+  });
+  try {
+    const { b, minutes, total } = out;
+    const pro = String(b.professionalName ?? 'Tu profesional').split(' ')[0];
+    const client = String(b.contactName ?? 'El cliente').split(' ')[0];
+    const newTime = hhmm(appointmentMs(b.date, b.slot) + (total ?? minutes) * 60_000);
+    if (action === 'proponer') await tellClient(b, id, `${pro} llegará ${out.minutes} min tarde`, `${pro} avisa que llegará unos ${out.minutes} minutos tarde (aprox. ${newTime}). Acepta el nuevo horario o, si no puedes esperar, cancela sin costo desde tu reserva.`);
+    else if (action === 'aceptar') await pushTo(b.professionalId, `${client} aceptó tu retraso`, `Te espera a las ${hhmm(appointmentMs(b.date, b.slot) + minutes * 60_000)}. Si llegas más tarde, es falta.`, { url: AGENDA, bookingId: id, to: 'pro' });
+    else await pushTo(b.professionalId, `${client} no aceptó tu retraso`, 'La reserva se canceló sin costo para el cliente y se te aplicó una falta.', { url: AGENDA, bookingId: id, to: 'pro' });
+  } catch (e) {
+    logger.warn('No se pudo avisar el retraso', { id, e: String(e) });
+  }
+  return { ok: true };
+});
