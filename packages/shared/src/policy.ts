@@ -91,6 +91,14 @@ export function cancelTerms(b: { date: string; slot: string; status: string }, n
     return { allowed: false, fee: 0, reason: b.status === 'cancelada' ? 'Esta reserva ya está cancelada.' : 'El servicio ya empezó o terminó. Si algo salió mal, repórtalo desde la reserva.' };
   }
   const at = appointmentTime(b.date, b.slot);
+  // Culpa del profesional (igual que clientCancel en el servidor).
+  const late = (now.getTime() - at.getTime()) / 60_000;
+  if (b.status === 'confirmada' && late >= POLICY.lateToleranceMinutes) {
+    return { allowed: true, fee: 0, reason: `El profesional no ha salido y ya pasó la hora de tu cita: cancelar es gratis, recibes ${usd(POLICY.lateCredit)} de crédito y a él se le aplica una falta.` };
+  }
+  if (b.status === 'en_camino' && late >= POLICY.veryLateMinutes) {
+    return { allowed: true, fee: 0, reason: `El profesional lleva más de ${POLICY.veryLateMinutes} minutos de retraso: cancelar es gratis, recibes ${usd(POLICY.lateCredit)} de crédito y a él se le aplica una falta.` };
+  }
   const freeUntil = new Date(at.getTime() - POLICY.freeCancelHoursBefore * 3_600_000);
   const fee = POLICY.lateCancelFee;
   if (b.status === 'en_camino') {
@@ -103,6 +111,40 @@ export function cancelTerms(b: { date: string; slot: string; status: string }, n
     return { allowed: true, fee: 0, reason: `Faltan ${durationLabel(at.getTime() - now.getTime())} para tu cita: cancelar es gratis (hasta ${POLICY.freeCancelHoursBefore} horas antes).`, freeUntil: freeUntil.toISOString() };
   }
   return { allowed: true, fee, reason: `Faltan menos de ${POLICY.freeCancelHoursBefore} horas para tu cita y el profesional ya la confirmó: cancelar ahora tiene un cargo de ${usd(fee)}.` };
+}
+
+/* --------------------------- Avisos al cliente --------------------------- */
+
+/**
+ * Aviso que ve el cliente en su reserva según la hora (los mismos que le
+ * llegan por notificación). null si todo va normal.
+ */
+export function clientAlert(b: { date: string; slot: string; status: string }, pro: string, now: Date = new Date()): { tone: 'warn' | 'bad'; text: string } | null {
+  const mins = (appointmentTime(b.date, b.slot).getTime() - now.getTime()) / 60_000;
+  if (b.status === 'pendiente' && mins <= 120) {
+    return { tone: mins <= 60 ? 'bad' : 'warn', text: `${pro} aún no acepta tu reserva y la cita es ${mins <= 60 ? 'en menos de 1 hora' : 'en menos de 2 horas'}. Escríbele por el chat o cancela gratis y elige otro profesional. Si no la acepta a tiempo, se cancela sola sin costo.` };
+  }
+  if (b.status === 'confirmada' && mins <= -POLICY.lateToleranceMinutes) {
+    return { tone: 'bad', text: `${pro} aún no sale y ya pasó la hora de tu cita. Escríbele por el chat, propón otra hora o cancela gratis: recibes ${usd(POLICY.lateCredit)} de crédito y a él se le aplica una falta.` };
+  }
+  if (b.status === 'confirmada' && mins <= 60) {
+    return { tone: 'warn', text: `${pro} confirmó, pero aún no sale hacia tu dirección. Si necesitas algo, escríbele por el chat.` };
+  }
+  if (b.status === 'en_camino' && mins <= -POLICY.veryLateMinutes) {
+    return { tone: 'bad', text: `${pro} lleva más de ${POLICY.veryLateMinutes} minutos de retraso. Míralo en el mapa, escríbele o cancela gratis.` };
+  }
+  return null;
+}
+
+/** Explicación de una reserva cancelada para el cliente. */
+export function cancelledText(b: { cancelledBy?: string; proFault?: string; cancelFee?: number; demo?: boolean }, pro: string): string {
+  const fee = b.cancelFee ? ` con un cargo de ${usd(b.cancelFee)}${b.demo ? ' (prueba, no se cobra)' : ''}` : ' sin costo';
+  if (b.cancelledBy === 'cliente_ausente') return `${pro} llegó, esperó ${POLICY.clientNoShowWaitMinutes} minutos y no te encontró. La reserva se canceló${fee}.`;
+  if (b.proFault === 'no_se_presento') return `${pro} no se presentó. No se te cobra nada y se le aplicó una falta.`;
+  if (b.cancelledBy === 'sistema') return `${pro} no aceptó tu reserva a tiempo; se canceló sin costo.`;
+  if (b.cancelledBy === 'profesional') return `${pro} canceló esta reserva. No se te cobra nada.`;
+  if (b.proFault) return `Cancelaste sin costo porque ${pro} no llegó a tiempo. Recibes ${usd(POLICY.lateCredit)} de crédito y se le aplicó una falta.`;
+  return `Cancelaste esta reserva${fee}.`;
 }
 
 /* ------------------------- Salida del profesional ------------------------- */

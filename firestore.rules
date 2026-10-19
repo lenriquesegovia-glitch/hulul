@@ -104,8 +104,10 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
       // El saldo pendiente (cargos por cancelar tarde) lo escribe solo el servidor.
       allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'consentMarketing', 'consentPrivacy', 'privacyVersion', 'createdAt', 'updatedAt', 'balance'])
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'consentMarketing', 'consentPrivacy', 'privacyVersion', 'createdAt', 'updatedAt', 'balance', 'credit', 'noShows'])
         && request.resource.data.get('balance', 0) == resource.data.get('balance', 0)
+        && request.resource.data.get('credit', 0) == resource.data.get('credit', 0)
+        && request.resource.data.get('noShows', 0) == resource.data.get('noShows', 0)
         && request.resource.data.uid == uid
         && request.resource.data.createdAt == resource.data.createdAt
         && str(request.resource.data.name, 2, 120)
@@ -134,7 +136,7 @@ service cloud.firestore {
     function providerFields(d) {
       return d.keys().hasOnly([
         'uid', 'status', 'step', 'kind', 'firstName', 'lastName', 'businessName', 'cedula', 'ruc',
-        'phone', 'email', 'categories', 'services', 'rates', 'minHours', 'visitRates', 'catEvidence', 'catStatus', 'strikes', 'tester', 'cashDebt', 'years', 'bio',
+        'phone', 'email', 'categories', 'services', 'rates', 'minHours', 'visitRates', 'catEvidence', 'catStatus', 'strikes', 'tester', 'cashDebt', 'fines', 'years', 'bio',
         'cities', 'days', 'from', 'to', 'acceptsCash', 'docs',
         'consentPrivacy', 'privacyVersion', 'termsAccepted', 'submittedAt', 'createdAt', 'updatedAt']);
     }
@@ -158,7 +160,7 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid
         && providerOk(uid, request.resource.data)
-        && !('catStatus' in request.resource.data) && !('strikes' in request.resource.data) && !('tester' in request.resource.data) && !('cashDebt' in request.resource.data)
+        && !('catStatus' in request.resource.data) && !('strikes' in request.resource.data) && !('tester' in request.resource.data) && !('cashDebt' in request.resource.data) && !('fines' in request.resource.data)
         && request.resource.data.status == 'borrador'
         && request.resource.data.createdAt == request.time;
       // catStatus (lo pone el servidor) puede existir pero no se cambia desde aquí.
@@ -169,6 +171,7 @@ service cloud.firestore {
         && request.resource.data.get('strikes', null) == resource.data.get('strikes', null)
         && request.resource.data.get('tester', null) == resource.data.get('tester', null)
         && request.resource.data.get('cashDebt', null) == resource.data.get('cashDebt', null)
+        && request.resource.data.get('fines', null) == resource.data.get('fines', null)
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if false;
 

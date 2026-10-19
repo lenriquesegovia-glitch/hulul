@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AFTER_VISIT_NOTE, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, usd } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, cancelledText, clientAlert, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, usd } from '@hulul/shared';
 import type { ClientBooking } from '@hulul/shared/firebase';
 import { Icon } from '@/components/Icon';
 import { RescheduleBox, shortDay } from '@/components/RescheduleBox';
@@ -50,6 +50,7 @@ export function BookingDetail({ id }: { id: string }) {
   const first = b.professionalName.split(' ')[0];
   const idx = STEPS.findIndex((s) => s.status === b.status);
   const at = appointmentTime(b.date, b.slot);
+  const alert = clientAlert(b, first);
   const message: Record<string, string> = {
     pendiente: `Esperando que ${first} acepte tu reserva. Te avisamos por correo apenas lo haga.`,
     confirmada: `${first} confirmó. Saldrá hacia tu dirección con el tiempo justo para llegar a las ${b.slot} (puede salir desde las ${hhmmEcuador(new Date(at.getTime() - 120 * 60_000))}). Te avisamos cuando vaya en camino.`,
@@ -57,7 +58,7 @@ export function BookingDetail({ id }: { id: string }) {
     en_curso: `${first} está trabajando. Al terminar te deja el resultado y un diagnóstico con fotos.`,
     por_aprobar: `${first} terminó la visita. Revisa su diagnóstico; tienes 48 horas para calificarlo o reportar un problema.`,
     completada: 'Servicio completado. ¡Gracias por usar HULUL!',
-    cancelada: b.cancelledBy === 'sistema' ? 'Ningún profesional aceptó esta reserva antes de la hora; se canceló sin costo.' : b.cancelledBy === 'profesional' ? `${first} canceló esta reserva. No se te cobra nada.` : `Cancelaste esta reserva${b.cancelFee ? ` con un cargo de ${usd(b.cancelFee)}${b.demo ? ' (prueba, no se cobra)' : ''}` : ' sin costo'}.`,
+    cancelada: cancelledText(b, first),
   };
   const changeable = ['pendiente', 'confirmada'].includes(b.status);
 
@@ -71,6 +72,10 @@ export function BookingDetail({ id }: { id: string }) {
         <h1 style={{ fontSize: 'clamp(24px, 4vw, 32px)' }}>{cat?.name ?? b.category} con {b.professionalName}</h1>
         <p style={{ fontSize: 17 }}><strong>{shortDay(b.date)} · {b.slot}</strong></p>
       </div>
+
+      {alert && (
+        <div className="notice" role="alert" style={alert.tone === 'bad' ? { borderLeftColor: 'var(--primary)', fontWeight: 600 } : undefined}>{alert.text}</div>
+      )}
 
       <div className="card stack gap-16">
         <p style={{ fontSize: 15.5 }}>{message[b.status] ?? ''}</p>
@@ -99,6 +104,7 @@ export function BookingDetail({ id }: { id: string }) {
       <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} />
       {b.outcome && <p className="muted" style={{ fontSize: 14 }}>{AFTER_VISIT_NOTE}</p>}
       <ExtraForClient id={b.id} extra={b.extra} proName={first} />
+      {b.status === 'cancelada' && b.proFault && !b.rating && <RatingBox id={b.id} proName={first} />}
       {['por_aprobar', 'completada'].includes(b.status) && !b.rating && b.extra?.status !== 'propuesto' && <RatingBox id={b.id} proName={first} />}
       {b.rating ? <p className="muted">Calificaste a {first} con {'★'.repeat(b.rating)}. ¡Gracias!</p> : null}
       {b.status === 'por_aprobar' && !b.rating && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}

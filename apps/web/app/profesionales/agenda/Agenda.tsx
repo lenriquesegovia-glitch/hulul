@@ -234,7 +234,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
   const nav = directions(b);
   const [busy, setBusy] = useState<ProAction | ''>('');
   const [msg, setMsg] = useState('');
-  const [asking, setAsking] = useState<'' | 'rechazar' | 'no_puedo'>('');
+  const [asking, setAsking] = useState<'' | 'rechazar' | 'no_puedo' | 'cliente_ausente'>('');
   const [finishing, setFinishing] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -303,7 +303,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
       {b.outcome && <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} title="Tu diagnóstico" />}
       {!compact && <ExtraForPro id={b.id} status={b.status} extra={b.extra} />}
       {b.rating ? <span className="muted" style={{ fontSize: 13.5 }}>El cliente te calificó {'★'.repeat(b.rating)}</span> : null}
-      {!compact && ['por_aprobar', 'completada'].includes(b.status) && !b.clientRating && <RateClientBox id={b.id} clientName={first} />}
+      {(!compact || b.cancelledBy === 'cliente_ausente') && (['por_aprobar', 'completada'].includes(b.status) || b.cancelledBy === 'cliente_ausente') && !b.clientRating && <RateClientBox id={b.id} clientName={first} />}
       {b.status === 'pendiente' && !compact && <span className="muted" style={{ fontSize: 13.5 }}>Lee bien qué necesita el cliente y acepta solo si sabes hacerlo. Cobras la visita; lo que haga falta después lo acuerdas con el cliente.</span>}
 
       {msg && <p role="alert" className="form-error">{msg}</p>}
@@ -317,10 +317,11 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
       ) : asking ? (
         <div className="stack gap-8">
           <div className="field">
-            <label htmlFor={`r-${b.id}`}>{asking === 'rechazar' ? '¿Por qué no puedes? (opcional)' : 'Cuéntale al cliente qué pasó'}</label>
+            <label htmlFor={`r-${b.id}`}>{asking === 'rechazar' ? '¿Por qué no puedes? (opcional)' : asking === 'cliente_ausente' ? '¿Qué pasó? (opcional)' : 'Cuéntale al cliente qué pasó'}</label>
             <input id={`r-${b.id}`} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>
           {asking === 'no_puedo' && <span className="muted" style={{ fontSize: 13 }}>Cancelar con menos de 2 horas o yendo en camino cuenta como falta y tiene una multa de $5.</span>}
+          {asking === 'cliente_ausente' && <span className="muted" style={{ fontSize: 13 }}>Se cancela la reserva y al cliente se le cobra la visita, que es para ti (menos la comisión). Después podrás calificarlo.</span>}
           <div className="row gap-8">
             <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act(asking)}>{busy ? 'Guardando…' : 'Confirmar'}</button>
             <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => setAsking('')}>Volver</button>
@@ -338,6 +339,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
           {b.status === 'en_camino' && <LiveShare bookingId={b.id} />}
           {b.status === 'en_camino' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act('llegue')}>{busy ? 'Guardando…' : 'Llegué, empiezo'}</button>}
           {b.status === 'en_curso' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => setFinishing(true)}>Terminar la visita</button>}
+          {b.status === 'en_curso' && !b.outcome && <AbsentButton startedAt={b.startedAt?.toMillis?.()} disabled={!!busy} onClick={() => setAsking('cliente_ausente')} />}
           {(b.status === 'confirmada' || b.status === 'en_camino') && (
             <button type="button" className="link-btn" disabled={!!busy} onClick={() => setAsking('no_puedo')}>No puedo ir</button>
           )}
@@ -386,6 +388,21 @@ function LiveShare({ bookingId }: { bookingId: string }) {
     sin_gps: 'No pudimos leer tu GPS. Revisa que la ubicación del celular esté encendida.',
   }[state];
   return <span className={state === 'ok' ? 'muted' : 'form-error'} style={{ fontSize: 13.5, width: '100%' }}>{text}</span>;
+}
+
+/**
+ * "El cliente no está": se habilita 10 minutos después de marcar "Llegué"
+ * (el tiempo de espera de las reglas). Muestra cuánto falta.
+ */
+function AbsentButton({ startedAt, disabled, onClick }: { startedAt?: number; disabled: boolean; onClick: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15_000); return () => clearInterval(t); }, []);
+  const left = startedAt ? Math.ceil((startedAt + 10 * 60_000 - now) / 60_000) : 0;
+  return (
+    <button type="button" className="link-btn" disabled={disabled || left > 0} onClick={onClick}>
+      {left > 0 ? `El cliente no está (disponible en ${left} min)` : 'El cliente no está'}
+    </button>
+  );
 }
 
 /**

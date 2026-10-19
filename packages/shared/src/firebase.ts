@@ -171,6 +171,9 @@ export async function createClientProfile(uid: string, p: ClientProfile): Promis
 
 export interface ClientBooking {
   id: string;
+  /** Falta del profesional que causó la cancelación (no salió, muy tarde, no se presentó). */
+  proFault?: string;
+  cancelReason?: string;
   category: CategorySlug;
   professionalName: string;
   date: string;
@@ -460,7 +463,7 @@ export function cancelErrorMessage(e: unknown): string {
 
 /* --------------------------- Agenda del profesional --------------------------- */
 
-export type ProAction = 'aceptar' | 'rechazar' | 'en_camino' | 'llegue' | 'terminar' | 'no_puedo';
+export type ProAction = 'aceptar' | 'rechazar' | 'en_camino' | 'llegue' | 'terminar' | 'no_puedo' | 'cliente_ausente';
 
 /** Resultado de la visita: lo envía el profesional al terminar. */
 export interface VisitReport {
@@ -478,6 +481,8 @@ export async function proAction(id: string, action: ProAction, reason = '', repo
 
 export interface ProBooking {
   id: string;
+  /** Cuándo marcó "Llegué" (para esperar al cliente 10 minutos). */
+  startedAt?: { toMillis: () => number };
   professionalId?: string;
   clientId?: string;
   category: CategorySlug;

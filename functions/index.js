@@ -492,6 +492,29 @@ export function cancelFee(b, now = new Date()) {
   return now.getTime() < at - FREE_CANCEL_HOURS * 3_600_000 ? 0 : LATE_CANCEL_FEE;
 }
 
+// Mismos valores que POLICY (policy.ts).
+const LATE_TOLERANCE_MIN = 15;
+const VERY_LATE_MIN = 30;
+const CLIENT_WAIT_MIN = 10;
+const PRO_LATE_FINE = 5;
+const PRO_NOSHOW_FINE = 10;
+const LATE_CREDIT = 5;
+
+/**
+ * Lo que cuesta al cliente cancelar ahora y si la culpa es del profesional:
+ * - confirmada y pasaron 15 min de la hora sin que salga: gratis, falta del profesional ($10).
+ * - en camino con más de 30 min de retraso: gratis, falta del profesional ($5).
+ * - si no, la regla normal (cancelFee).
+ */
+export function clientCancel(b, now = new Date()) {
+  const fee = cancelFee(b, now);
+  if (fee === null) return null;
+  const late = (now.getTime() - appointmentMs(b.date, b.slot)) / 60_000;
+  if (b.status === 'confirmada' && late >= LATE_TOLERANCE_MIN) return { fee: 0, proFault: 'no_salio', proFine: PRO_NOSHOW_FINE };
+  if (b.status === 'en_camino' && late >= VERY_LATE_MIN) return { fee: 0, proFault: 'muy_tarde', proFine: PRO_LATE_FINE };
+  return { fee };
+}
+
 /**
  * El cliente cancela su reserva. El cargo lo calcula el servidor (no la web
  * ni la app) y queda registrado en la reserva y como saldo del cliente.
@@ -511,12 +534,19 @@ export const cancelarReserva = onCall(
       if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
       const b = snap.data();
       if (b.clientId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
-      const fee = cancelFee(b);
-      if (fee === null) throw new HttpsError('failed-precondition', b.status === 'cancelada' ? 'Esta reserva ya está cancelada.' : 'El servicio ya empezó o terminó; no se puede cancelar.');
+      const terms = clientCancel(b);
+      if (terms === null) throw new HttpsError('failed-precondition', b.status === 'cancelada' ? 'Esta reserva ya está cancelada.' : 'El servicio ya empezó o terminó; no se puede cancelar.');
+      const fee = terms.fee;
       tx.update(ref, {
         status: 'cancelada', cancelledBy: 'cliente', cancelledAt: FieldValue.serverTimestamp(),
         cancelFee: fee, cancelReason: reason, previousStatus: b.status,
+        ...(terms.proFault ? { proFault: terms.proFault, proFine: terms.proFine, clientCredit: LATE_CREDIT } : {}),
       });
+      // Falta del profesional: multa, falta y crédito para el cliente.
+      if (terms.proFault && !b.demo) {
+        tx.set(db().doc(`providers/${b.professionalId}`), { strikes: FieldValue.increment(1), fines: FieldValue.increment(terms.proFine) }, { merge: true });
+        tx.set(db().doc(`clients/${uid}`), { credit: FieldValue.increment(LATE_CREDIT) }, { merge: true });
+      }
       // Con tarjeta se descontará del monto retenido; sin tarjeta queda como saldo pendiente.
       if (fee > 0 && !b.demo) tx.set(db().doc(`clients/${uid}`), { balance: FieldValue.increment(fee) }, { merge: true });
       return { b, fee };
@@ -558,6 +588,8 @@ const PRO_ACTIONS = {
   llegue: { from: ['en_camino'], to: 'en_curso', stamp: 'startedAt' },
   terminar: { from: ['en_curso'], to: 'por_aprobar', stamp: 'finishedAt' },
   no_puedo: { from: ['confirmada', 'en_camino'], to: 'cancelada', stamp: 'cancelledAt' },
+  // Llegó, esperó 10 minutos y el cliente no está ni responde.
+  cliente_ausente: { from: ['en_curso'], to: 'cancelada', stamp: 'cancelledAt' },
 };
 
 /**
@@ -608,6 +640,17 @@ export const gestionarReserva = onCall(
         }
       }
       const patch = { status: rule.to, [rule.stamp]: FieldValue.serverTimestamp(), previousStatus: cur.status, ...(report ?? {}) };
+      if (action === 'cliente_ausente') {
+        if (cur.outcome) throw new HttpsError('failed-precondition', 'Esta visita ya tiene un resultado registrado.');
+        const started = cur.startedAt?.toMillis?.() ?? 0;
+        const wait = CLIENT_WAIT_MIN * 60_000 - (Date.now() - started);
+        if (wait > 0) throw new HttpsError('failed-precondition', `Espera ${Math.ceil(wait / 60_000)} min más: el cliente tiene ${CLIENT_WAIT_MIN} minutos desde que marcaste "Llegué".`);
+        const fee = Number(cur.visit ?? cur.subtotal ?? 0);
+        patch.cancelledBy = 'cliente_ausente';
+        patch.cancelReason = reason || 'El cliente no estaba en la dirección ni respondió.';
+        patch.cancelFee = fee;
+        if (fee > 0 && !cur.demo) tx.set(db().doc(`clients/${cur.clientId}`), { balance: FieldValue.increment(fee), noShows: FieldValue.increment(1) }, { merge: true });
+      }
       if (action === 'rechazar' || action === 'no_puedo') {
         patch.cancelledBy = 'profesional';
         patch.cancelReason = reason;
@@ -638,6 +681,7 @@ export const gestionarReserva = onCall(
           `<p style="font-size:14px;color:#3F3A37">${esc(AFTER_VISIT_NOTE)} Tienes 48 horas para calificarlo o reportar un problema en <a href="https://hululec.com/cuenta">Mi cuenta</a>.</p>`],
         rechazar: ['Tu reserva necesita otro profesional', `Hola ${esc(first)}, ${esc(b.professionalName)} no puede atender tu reserva del ${esc(when)}. No se te cobra nada. Elige otro profesional en <a href="https://hululec.com/servicios/${esc(b.category)}">HULUL</a>.`],
         no_puedo: ['Tu profesional canceló', `Hola ${esc(first)}, ${esc(b.professionalName)} canceló tu reserva del ${esc(when)}. No se te cobra nada y te ayudamos a encontrar otro profesional.`],
+        cliente_ausente: ['Tu profesional no te encontró', `Hola ${esc(first)}, ${esc(b.professionalName)} llegó a ${esc(b.address)}, esperó ${CLIENT_WAIT_MIN} minutos y no te encontró. La reserva se canceló y se cobra la visita (${usd(b.visit ?? b.subtotal)}), que compensa su traslado. Si hubo un error, respóndenos a este correo.`],
       }[action];
       const pushText = {
         aceptar: `Confirmó tu servicio de ${cat} para el ${when}.`,
@@ -646,6 +690,7 @@ export const gestionarReserva = onCall(
         terminar: 'Terminó la visita. Revisa el diagnóstico y las fotos, y califícalo.',
         rechazar: `No puede atender tu reserva del ${when}. No se te cobra nada.`,
         no_puedo: `Canceló tu reserva del ${when}. No se te cobra nada.`,
+        cliente_ausente: `Llegó, esperó ${CLIENT_WAIT_MIN} minutos y no te encontró. Se canceló la reserva y se cobra la visita.`,
       }[action];
       if (pushText) await pushTo(b.clientId, msgs?.[0] ?? 'Tu reserva', pushText, { bookingId: id, to: 'cliente' });
       if (msgs && b.contactEmail) await mail.sendMail({ from, to: b.contactEmail, replyTo: notifyTo, subject: msgs[0], html: layout(msgs[0], `<div style="font-size:15px">${msgs[1]}</div>`) });
@@ -864,7 +909,7 @@ export const confirmarServicio = onCall({ region: REGION }, async (req) => {
 });
 
 /** Cada hora: las visitas terminadas hace más de 24 horas se cierran solas. */
-export const cerrarTerminadas = onSchedule({ schedule: 'every 60 minutes', region: REGION, timeZone: 'America/Guayaquil' }, async () => {
+export const cerrarTerminadas = onSchedule({ schedule: 'every 15 minutes', region: REGION, timeZone: 'America/Guayaquil' }, async () => {
   const limit = Date.now() - 24 * 3_600_000;
   const snap = await db().collection('bookings').where('status', '==', 'por_aprobar').get();
   const old = snap.docs.filter((d) => {
@@ -873,11 +918,8 @@ export const cerrarTerminadas = onSchedule({ schedule: 'every 60 minutes', regio
     return t && typeof t.toMillis === 'function' && t.toMillis() < limit && d.data().extra?.status !== 'propuesto';
   });
   await Promise.all(old.map((d) => d.ref.update({ status: 'completada', completedAt: FieldValue.serverTimestamp(), completedBy: 'automatico', previousStatus: 'por_aprobar' })));
-  // Reservas que nadie aceptó y cuya hora ya pasó: se cancelan sin costo.
-  const pend = await db().collection('bookings').where('status', '==', 'pendiente').get();
-  const expired = pend.docs.filter((d) => appointmentMs(d.data().date, d.data().slot) < Date.now() - 60 * 60_000);
-  await Promise.all(expired.map((d) => d.ref.update({ status: 'cancelada', cancelledBy: 'sistema', cancelReason: 'Ningún profesional la aceptó antes de la hora.', cancelFee: 0, cancelledAt: FieldValue.serverTimestamp(), previousStatus: 'pendiente' })));
-  logger.info('Visitas cerradas automáticamente', { count: old.length, vencidas: expired.length });
+  const n = await recordatorios();
+  logger.info('Visitas cerradas automáticamente', { count: old.length, ...n });
 });
 
 /* ------------------------------ Cobro adicional ------------------------------ */
@@ -1006,7 +1048,8 @@ export const calificar = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, as
     if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
     const bk = snap.data();
     if (bk.clientId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
-    if (!['por_aprobar', 'completada'].includes(bk.status)) throw new HttpsError('failed-precondition', 'Podrás calificar cuando el profesional termine la visita.');
+    const faultCancel = bk.status === 'cancelada' && !!bk.proFault;
+    if (!['por_aprobar', 'completada'].includes(bk.status) && !faultCancel) throw new HttpsError('failed-precondition', 'Podrás calificar cuando el profesional termine la visita.');
     if (bk.rating) throw new HttpsError('already-exists', 'Ya calificaste este servicio. ¡Gracias!');
     if (bk.extra?.status === 'propuesto') throw new HttpsError('failed-precondition', 'Primero acepta o rechaza el cobro adicional.');
     const proRef = db().doc(`pros/${bk.professionalId}`);
@@ -1021,7 +1064,7 @@ export const calificar = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, as
       const p = pro.data();
       const count = Number(p.reviewCount ?? 0);
       const avg = (Number(p.rating ?? 0) * count + proStars) / (count + 1);
-      tx.update(proRef, { rating: Math.round(avg * 100) / 100, reviewCount: count + 1, jobsDone: FieldValue.increment(1) });
+      tx.update(proRef, { rating: Math.round(avg * 100) / 100, reviewCount: count + 1, ...(faultCancel ? {} : { jobsDone: FieldValue.increment(1) }) });
     }
     tx.update(ref, {
       rating: proStars, ratedAt: FieldValue.serverTimestamp(),
@@ -1062,7 +1105,7 @@ export const calificarCliente = onCall({ region: REGION }, async (req) => {
     if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
     const b = snap.data();
     if (b.professionalId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
-    if (!['por_aprobar', 'completada'].includes(b.status)) throw new HttpsError('failed-precondition', 'Califica al cliente cuando termines la visita.');
+    if (!['por_aprobar', 'completada'].includes(b.status) && b.cancelledBy !== 'cliente_ausente') throw new HttpsError('failed-precondition', 'Califica al cliente cuando termines la visita.');
     if (b.clientRating) throw new HttpsError('already-exists', 'Ya calificaste a este cliente.');
     tx.update(ref, { clientRating: { stars: n, comment, at: FieldValue.serverTimestamp() } });
     tx.set(db().doc(`clientRatings/${b.clientId}`), { sum: FieldValue.increment(n), count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -1084,3 +1127,86 @@ export const avisoChat = onDocumentCreated({ document: 'bookings/{id}/messages/{
   const body = m.kind === 'foto' ? '📷 Te envió una foto' : m.kind === 'pedir_fotos' ? `📷 Te pide fotos: ${String(m.text ?? '').slice(0, 120)}` : String(m.text ?? '').slice(0, 160);
   await pushTo(toPro ? b.professionalId : b.clientId, `💬 ${name}`, body, toPro ? { url: AGENDA, bookingId: id, to: 'pro', chat: true } : { bookingId: id, to: 'cliente', chat: true });
 });
+
+/* ----------------------- Recordatorios y vencimientos ----------------------- */
+
+/** Correo + notificación al cliente (no hace fallar el proceso). */
+async function tellClient(b, id, title, text) {
+  await pushTo(b.clientId, title, text, { bookingId: id, to: 'cliente' });
+  if (!b.contactEmail) return;
+  try {
+    const { from, notifyTo } = senders();
+    await transport().sendMail({ from, to: b.contactEmail, replyTo: notifyTo, subject: title,
+      html: layout(title, `<p style="font-size:15px">${esc(text)}</p>` + button(`https://hululec.com/cuenta/reserva/${id}`, 'Ver mi reserva')) });
+  } catch (e) {
+    logger.warn('No se pudo enviar el recordatorio', { id, e: String(e) });
+  }
+}
+
+/**
+ * Cada 15 minutos:
+ * - Pendiente sin aceptar: aviso al cliente 2 h y 1 h antes (y empujón al
+ *   profesional); a la hora de la cita se cancela sola, sin costo.
+ * - Confirmada: 1 h antes, si el profesional no ha salido, aviso a ambos;
+ *   15 min después de la hora sin salir, aviso al cliente (puede cancelar
+ *   gratis); 3 h después sin salir, se cancela sola como falta del profesional.
+ * - En camino con 30 min de retraso: aviso al cliente (puede cancelar gratis).
+ */
+async function recordatorios() {
+  const now = Date.now();
+  const snap = await db().collection('bookings').where('status', 'in', ['pendiente', 'confirmada', 'en_camino']).get();
+  let avisos = 0, vencidas = 0;
+  for (const d of snap.docs) {
+    const b = d.data();
+    const id = d.id;
+    const at = appointmentMs(b.date, b.slot);
+    const mins = (at - now) / 60_000;
+    const r = b.reminders ?? {};
+    const pro = String(b.professionalName ?? 'tu profesional').split(' ')[0];
+    const when = `${longDate(b.date)} a las ${b.slot}`;
+    const mark = (k) => d.ref.update({ [`reminders.${k}`]: FieldValue.serverTimestamp() });
+    try {
+      if (b.status === 'pendiente') {
+        if (mins <= 0) {
+          await d.ref.update({ status: 'cancelada', cancelledBy: 'sistema', cancelReason: 'El profesional no aceptó antes de la hora.', cancelFee: 0, cancelledAt: FieldValue.serverTimestamp(), previousStatus: 'pendiente' });
+          await tellClient(b, id, 'Tu reserva se canceló sin costo', `${pro} no aceptó tu reserva del ${when} a tiempo. No se te cobra nada. Reserva con otro profesional en HULUL.`);
+          vencidas++;
+        } else if (mins <= 60 && !r.pend1h) {
+          await mark('pend1h');
+          await tellClient(b, id, `${pro} aún no confirma tu reserva`, `Tu cita es en menos de 1 hora (${b.slot}) y ${pro} todavía no la acepta. Escríbele por el chat o cancela gratis y elige otro profesional.`);
+          await pushTo(b.professionalId, 'Solicitud sin responder', `Tienes una reserva a las ${b.slot} sin aceptar. Acéptala o recházala ahora.`, { url: AGENDA, bookingId: id, to: 'pro' });
+          avisos++;
+        } else if (mins <= 120 && !r.pend2h && !r.pend1h) {
+          await mark('pend2h');
+          await tellClient(b, id, `${pro} aún no confirma tu reserva`, `Tu cita es a las ${b.slot} y ${pro} todavía no la acepta. Puedes esperar, escribirle por el chat o cancelar gratis y elegir otro profesional.`);
+          await pushTo(b.professionalId, 'Tienes una solicitud sin responder', `Reserva para el ${when}. Acéptala o recházala en tu agenda.`, { url: AGENDA, bookingId: id, to: 'pro' });
+          avisos++;
+        }
+      } else if (b.status === 'confirmada') {
+        if (mins <= -180) {
+          await d.ref.update({ status: 'cancelada', cancelledBy: 'sistema', cancelReason: 'El profesional no se presentó.', cancelFee: 0, proFault: 'no_se_presento', proFine: PRO_NOSHOW_FINE, cancelledAt: FieldValue.serverTimestamp(), previousStatus: 'confirmada' });
+          if (!b.demo) await db().doc(`providers/${b.professionalId}`).set({ strikes: FieldValue.increment(1), fines: FieldValue.increment(PRO_NOSHOW_FINE) }, { merge: true });
+          await tellClient(b, id, 'Tu reserva se canceló', `${pro} no se presentó a tu cita del ${when}. No se te cobra nada y le aplicamos una falta. Puedes calificarlo en la reserva.`);
+          vencidas++;
+        } else if (mins <= -LATE_TOLERANCE_MIN && !r.late15) {
+          await mark('late15');
+          await tellClient(b, id, `${pro} todavía no sale`, `Tu cita era a las ${b.slot} y ${pro} aún no marca que va en camino. Escríbele por el chat, propón otra hora o cancela sin costo desde tu reserva.`);
+          await pushTo(b.professionalId, 'Vas tarde', `Tu cita era a las ${b.slot}. Toca "Voy en camino" o avisa al cliente por el chat. Si no llegas, es una falta.`, { url: AGENDA, bookingId: id, to: 'pro' });
+          avisos++;
+        } else if (mins <= 60 && mins > 0 && !r.conf1h) {
+          await mark('conf1h');
+          await tellClient(b, id, `Tu cita con ${pro} es a las ${b.slot}`, `${pro} confirmó, pero aún no sale hacia tu dirección. Si necesitas algo, escríbele por el chat. Ten a una persona de confianza en casa.`);
+          await pushTo(b.professionalId, `Tu cita es a las ${b.slot}`, 'Sal con tiempo y toca "Voy en camino" para que el cliente te vea en el mapa.', { url: AGENDA, bookingId: id, to: 'pro' });
+          avisos++;
+        }
+      } else if (b.status === 'en_camino' && mins <= -VERY_LATE_MIN && !r.late30) {
+        await mark('late30');
+        await tellClient(b, id, `${pro} viene con retraso`, `${pro} lleva más de ${VERY_LATE_MIN} minutos de retraso. Míralo en el mapa, escríbele por el chat o cancela sin costo desde tu reserva.`);
+        avisos++;
+      }
+    } catch (e) {
+      logger.warn('Recordatorio fallido', { id, e: String(e) });
+    }
+  }
+  return { avisos, vencidas };
+}

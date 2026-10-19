@@ -3,7 +3,7 @@ import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'r
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { AFTER_VISIT_NOTE, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, OUTCOME_LABEL, SLOTS, usd } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, cancelledText, clientAlert, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, OUTCOME_LABEL, SLOTS, usd } from '@hulul/shared';
 import { confirmService, EXTRA_STATUS_LABEL, extraCharge, firestore, reschedule, type ClientBooking, type ExtraAction, type ExtraCharge, type RescheduleAction } from '@hulul/shared/firebase';
 import { Icon } from '@/components/Icon';
 import { LiveMap } from '@/components/LiveMap';
@@ -58,6 +58,7 @@ function Detail({ b }: { b: ClientBooking }) {
   const first = b.professionalName.split(' ')[0];
   const idx = STEPS.findIndex((x) => x.status === b.status);
   const at = appointmentTime(b.date, b.slot);
+  const alert = clientAlert(b, first);
   const message: Record<string, string> = {
     pendiente: `Esperando que ${first} acepte tu reserva. Te avisamos apenas lo haga.`,
     confirmada: `${first} confirmó. Saldrá con el tiempo justo para llegar a las ${b.slot} (puede salir desde las ${hhmmEcuador(new Date(at.getTime() - 120 * 60_000))}).`,
@@ -65,7 +66,7 @@ function Detail({ b }: { b: ClientBooking }) {
     en_curso: `${first} está trabajando. Al terminar te deja el resultado y un diagnóstico con fotos.`,
     por_aprobar: `${first} terminó la visita. Revisa su diagnóstico; tienes 48 horas para calificarlo o reportar un problema.`,
     completada: 'Servicio completado.',
-    cancelada: b.cancelledBy === 'sistema' ? 'Ningún profesional aceptó esta reserva antes de la hora; se canceló sin costo.' : b.cancelledBy === 'profesional' ? `${first} canceló. No se te cobra nada.` : `Cancelaste esta reserva${b.cancelFee ? ` con un cargo de ${usd(b.cancelFee)}${b.demo ? ' (prueba)' : ''}` : ' sin costo'}.`,
+    cancelada: cancelledText(b, first),
   };
 
   return (
@@ -74,6 +75,11 @@ function Detail({ b }: { b: ClientBooking }) {
         <H1 style={{ fontSize: 24 }}>{cat?.name ?? b.category} con {b.professionalName}</H1>
         <Text style={s.when}>{shortDay(b.date)} · {b.slot}</Text>
       </View>
+      {alert && (
+        <View style={[s.box, { backgroundColor: c.copperSoft, borderLeftWidth: 4, borderLeftColor: alert.tone === 'bad' ? c.primary : c.copper }]} accessibilityRole="alert">
+          <Body style={{ fontSize: 14, fontFamily: alert.tone === 'bad' ? font.bodyBold : font.body }}>{alert.text}</Body>
+        </View>
+      )}
       <Card style={{ gap: 14 }}>
         <Body>{message[b.status] ?? ''}</Body>
         {b.status !== 'cancelada' && STEPS.map((st, i) => {
@@ -115,6 +121,7 @@ function Detail({ b }: { b: ClientBooking }) {
         </Card>
       )}
       {b.extra && <ExtraBox id={b.id} extra={b.extra} proName={first} />}
+      {b.status === 'cancelada' && b.proFault && !b.rating && <RatingBox id={b.id} proName={first} />}
       {['por_aprobar', 'completada'].includes(b.status) && !b.rating && b.extra?.status !== 'propuesto' && <RatingBox id={b.id} proName={first} />}
       {b.rating ? <Body muted>Calificaste a {first} con {'★'.repeat(b.rating)}. ¡Gracias!</Body> : null}
       {b.status === 'por_aprobar' && !b.rating && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
