@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { RESCHEDULE_HOURS, RESCHEDULE_MINUTES } from '@hulul/shared';
 import { reschedule, type Proposal, type RescheduleAction } from '@hulul/shared/firebase';
-import { Body, PrimaryButton } from '@/components/ui';
+import { Body, Button } from '@/components/ui';
+import { Stepper } from '@/components/Stepper';
 import { c, font, radius } from '@/theme';
 
 const WD = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
@@ -37,46 +38,36 @@ export function Reschedule({ id, date, slot, proposal, me, other }: {
         <Body style={{ fontSize: 14 }}>De {shortDay(date)} {slot} → {shortDay(p.date)} {p.slot}.{mine ? ` Esperando la respuesta de ${other}.` : ''}</Body>
         {msg ? <Text style={s.err}>{msg}</Text> : null}
         {mine
-          ? <Pressable onPress={() => !busy && run('retirar')}><Text style={s.link}>Retirar propuesta</Text></Pressable>
+          ? <Button variant="secondary" label="Retirar propuesta" disabled={busy} onPress={() => run('retirar')} />
           : <>
-              <PrimaryButton label={busy ? 'Guardando…' : 'Aceptar nueva hora'} onPress={() => !busy && run('aceptar')} />
-              <Pressable onPress={() => !busy && run('rechazar')}><Text style={[s.link, { textAlign: 'center' }]}>Mantener la hora original</Text></Pressable>
+              <Button label={busy ? 'Guardando…' : 'Aceptar nueva hora'} disabled={busy} onPress={() => run('aceptar')} />
+              <Button variant="secondary" label="Mantener la hora original" disabled={busy} onPress={() => run('rechazar')} />
             </>}
       </View>
     );
   }
-  if (!open) return <Pressable onPress={() => setOpen(true)}><Text style={s.link}>Cambiar fecha u hora</Text></Pressable>;
+  if (!open) return <Button variant="secondary" label="Cambiar fecha u hora" onPress={() => setOpen(true)} />;
+  const di = Math.max(0, days.indexOf(d));
+  const hi = Math.max(0, RESCHEDULE_HOURS.indexOf(sl.slice(0, 2)));
+  const mi = Math.max(0, RESCHEDULE_MINUTES.indexOf(sl.slice(3, 5)));
+  const setH = (i: number) => setSl(`${RESCHEDULE_HOURS[i]}:${RESCHEDULE_MINUTES[mi]}`);
+  const setM = (i: number) => setSl(`${RESCHEDULE_HOURS[hi]}:${RESCHEDULE_MINUTES[i]}`);
   return (
     <View style={s.box}>
       <Text style={s.title}>Proponer otra fecha u hora</Text>
       <Body muted style={{ fontSize: 13 }}>Puedes adelantar o atrasar. {other} debe aceptar.</Body>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-        {days.map((x, i) => (
-          <Pressable key={x} onPress={() => setD(x)} style={[s.chip, d === x && s.chipOn]}>
-            <Text style={[s.chipText, d === x && { color: '#fff' }]}>{i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : shortDay(x)}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-      <Text style={s.small}>Hora</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {RESCHEDULE_HOURS.map((h) => (
-          <Pressable key={h} onPress={() => setSl(`${h}:${sl.slice(3, 5) || '00'}`)} style={[s.chip, sl.slice(0, 2) === h && s.chipOn]}>
-            <Text style={[s.chipText, sl.slice(0, 2) === h && { color: '#fff' }]}>{h}</Text>
-          </Pressable>
-        ))}
+      <Stepper label="Día" value={di === 0 ? 'Hoy' : di === 1 ? 'Mañana' : shortDay(days[di])}
+        onMinus={() => setD(days[di - 1])} onPlus={() => setD(days[di + 1])} canMinus={di > 0} canPlus={di < days.length - 1} minusLabel="Día anterior" plusLabel="Día siguiente" />
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Stepper label="Hora" value={RESCHEDULE_HOURS[hi]} onMinus={() => setH(hi - 1)} onPlus={() => setH(hi + 1)}
+          canMinus={hi > 0} canPlus={hi < RESCHEDULE_HOURS.length - 1} minusLabel="Hora anterior" plusLabel="Hora siguiente" />
+        <Stepper label="Minutos" value={`:${RESCHEDULE_MINUTES[mi]}`} onMinus={() => setM(mi - 1)} onPlus={() => setM(mi + 1)}
+          canMinus={mi > 0} canPlus={mi < RESCHEDULE_MINUTES.length - 1} minusLabel="Menos minutos" plusLabel="Más minutos" />
       </View>
-      <Text style={s.small}>Minutos</Text>
-      <View style={{ flexDirection: 'row', gap: 6 }}>
-        {RESCHEDULE_MINUTES.map((m) => (
-          <Pressable key={m} onPress={() => setSl(`${sl.slice(0, 2)}:${m}`)} style={[s.chip, { flex: 1, alignItems: 'center' }, sl.slice(3, 5) === m && s.chipOn]}>
-            <Text style={[s.chipText, sl.slice(3, 5) === m && { color: '#fff' }]}>:{m}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <Body style={{ fontSize: 14 }}>Nueva hora: <Text style={{ fontFamily: font.bodyBold }}>{shortDay(d)} · {sl}</Text></Body>
+      <Body style={{ fontSize: 14, textAlign: 'center' }}>Nueva hora: <Text style={{ fontFamily: font.bodyBold }}>{shortDay(d)} · {sl}</Text></Body>
       {msg ? <Text style={s.err}>{msg}</Text> : null}
-      <PrimaryButton label={busy ? 'Enviando…' : 'Enviar propuesta'} onPress={() => !busy && run('proponer')} />
-      <Pressable onPress={() => setOpen(false)}><Text style={[s.link, { textAlign: 'center' }]}>Volver</Text></Pressable>
+      <Button label={busy ? 'Enviando…' : 'Enviar propuesta'} disabled={busy || (d === date && sl === slot)} onPress={() => run('proponer')} />
+      <Button variant="secondary" label="Volver" onPress={() => setOpen(false)} />
     </View>
   );
 }
@@ -84,10 +75,5 @@ export function Reschedule({ id, date, slot, proposal, me, other }: {
 const s = StyleSheet.create({
   box: { gap: 10, padding: 14, borderRadius: radius.md, backgroundColor: c.surfaceWarm },
   title: { fontFamily: font.bodyBold, fontSize: 15, color: c.text },
-  link: { fontFamily: font.bodyBold, fontSize: 14, color: c.primary },
   err: { fontFamily: font.bodySemi, fontSize: 13, color: c.primary },
-  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
-  chipOn: { backgroundColor: c.text, borderColor: c.text },
-  chipText: { fontFamily: font.bodySemi, fontSize: 13, color: c.text },
-  small: { fontFamily: font.bodyBold, fontSize: 12.5, color: c.textSecondary },
 });

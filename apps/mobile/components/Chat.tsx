@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { sendChat, watchChat, type ChatMessage } from '@hulul/shared/firebase';
-import { Body } from '@/components/ui';
+import { Body, Button } from '@/components/ui';
 import { photosAvailable, pickPhotos, uploadLocalPhotos } from '@/lib/photos';
 import { c, font, radius } from '@/theme';
 
@@ -71,8 +71,8 @@ export function Chat({ bookingId, uid, me, otherName, open }: { bookingId: strin
           <Text style={s.askTitle}>{otherName} te pide fotos</Text>
           {canPhoto ? (
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Pressable accessibilityRole="button" onPress={() => sendPhotos('camara')} style={[s.btn, s.btnPrimary]}><Text style={[s.btnText, { color: '#fff' }]}>📷 Tomar foto</Text></Pressable>
-              <Pressable accessibilityRole="button" onPress={() => sendPhotos('galeria')} style={s.btn}><Text style={s.btnText}>Galería</Text></Pressable>
+              <Button label="📷 Tomar foto" onPress={() => sendPhotos('camara')} style={{ flex: 1 }} />
+              <Button variant="secondary" label="Galería" onPress={() => sendPhotos('galeria')} style={{ flex: 1 }} />
             </View>
           ) : <Body muted style={{ fontSize: 12.5 }}>Actualiza la app para enviar fotos desde aquí, o envíalas desde hululec.com.</Body>}
         </View>
@@ -86,8 +86,8 @@ export function Chat({ bookingId, uid, me, otherName, open }: { bookingId: strin
           </View>
           {canPhoto && (
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Pressable accessibilityRole="button" onPress={() => sendPhotos('camara')} style={s.btn}><Text style={s.btnText}>📷 Tomar foto</Text></Pressable>
-              <Pressable accessibilityRole="button" onPress={() => sendPhotos('galeria')} style={s.btn}><Text style={s.btnText}>Galería</Text></Pressable>
+              <Button variant="secondary" label="📷 Tomar foto" onPress={() => sendPhotos('camara')} style={{ flex: 1 }} />
+              <Button variant="secondary" label="Galería" onPress={() => sendPhotos('galeria')} style={{ flex: 1 }} />
             </View>
           )}
         </>

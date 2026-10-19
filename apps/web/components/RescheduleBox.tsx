@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { RESCHEDULE_HOURS, RESCHEDULE_MINUTES } from '@hulul/shared';
 import type { Proposal, RescheduleAction } from '@hulul/shared/firebase';
+import { Stepper } from '@/components/Stepper';
 
 const DAY = 86_400_000;
 const WD = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
@@ -51,13 +52,13 @@ export function RescheduleBox({ id, date, slot, proposal, me, other }: {
           {mine ? ` Esperando la respuesta de ${other}. Hasta entonces vale la hora original.` : ''}
         </span>
         {msg && <p role="alert" className="form-error">{msg}</p>}
-        <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+        <div className="actions">
           {mine ? (
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => run('retirar')}>Retirar propuesta</button>
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => run('retirar')}>Retirar propuesta</button>
           ) : (
             <>
               <button type="button" className="btn btn-primary" disabled={busy} onClick={() => run('aceptar')}>{busy ? 'Guardando…' : 'Aceptar nueva hora'}</button>
-              <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => run('rechazar')}>Mantener la hora original</button>
+              <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => run('rechazar')}>Mantener la hora original</button>
             </>
           )}
         </div>
@@ -66,36 +67,31 @@ export function RescheduleBox({ id, date, slot, proposal, me, other }: {
   }
 
   if (!open) {
-    return <button type="button" className="link-btn" style={{ padding: 0, alignSelf: 'flex-start' }} onClick={() => setOpen(true)}>Cambiar fecha u hora</button>;
+    return <button type="button" className="btn btn-secondary" onClick={() => setOpen(true)}>Cambiar fecha u hora</button>;
   }
+  const di = Math.max(0, days.indexOf(d));
+  const hi = Math.max(0, RESCHEDULE_HOURS.indexOf(s.slice(0, 2)));
+  const mi = Math.max(0, RESCHEDULE_MINUTES.indexOf(s.slice(3, 5)));
+  const setH = (i: number) => setS(`${RESCHEDULE_HOURS[i]}:${RESCHEDULE_MINUTES[mi]}`);
+  const setM = (i: number) => setS(`${RESCHEDULE_HOURS[hi]}:${RESCHEDULE_MINUTES[i]}`);
 
   return (
     <div className="stack gap-12" style={{ padding: 14, borderRadius: 12, background: 'var(--surface-warm)' }}>
       <strong style={{ fontSize: 15 }}>Proponer otra fecha u hora</strong>
       <span className="muted" style={{ fontSize: 13.5 }}>Puedes adelantar o atrasar. {other} debe aceptar; hasta entonces vale la hora original.</span>
-      <div className="form-2">
-        <div className="field">
-          <label htmlFor={`rd-${id}`}>Día</label>
-          <select id={`rd-${id}`} value={d} onChange={(e) => setD(e.target.value)}>
-            {days.map((x, i) => <option key={x} value={x}>{i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : shortDay(x)}</option>)}
-          </select>
-        </div>
-        <div className="field">
-          <label htmlFor={`rs-${id}`}>Hora</label>
-          <div className="row gap-8">
-            <select id={`rs-${id}`} aria-label="Hora" value={s.slice(0, 2)} onChange={(e) => setS(`${e.target.value}:${s.slice(3, 5) || '00'}`)}>
-              {RESCHEDULE_HOURS.map((h) => <option key={h} value={h}>{h}</option>)}
-            </select>
-            <select aria-label="Minutos" value={s.slice(3, 5)} onChange={(e) => setS(`${s.slice(0, 2)}:${e.target.value}`)}>
-              {RESCHEDULE_MINUTES.map((m) => <option key={m} value={m}>:{m}</option>)}
-            </select>
-          </div>
-        </div>
+      <Stepper label="Día" value={di === 0 ? 'Hoy' : di === 1 ? 'Mañana' : shortDay(days[di])}
+        onMinus={() => setD(days[di - 1])} onPlus={() => setD(days[di + 1])} canMinus={di > 0} canPlus={di < days.length - 1} minusLabel="Día anterior" plusLabel="Día siguiente" />
+      <div className="row gap-12">
+        <Stepper label="Hora" value={RESCHEDULE_HOURS[hi]} onMinus={() => setH(hi - 1)} onPlus={() => setH(hi + 1)}
+          canMinus={hi > 0} canPlus={hi < RESCHEDULE_HOURS.length - 1} minusLabel="Hora anterior" plusLabel="Hora siguiente" />
+        <Stepper label="Minutos" value={`:${RESCHEDULE_MINUTES[mi]}`} onMinus={() => setM(mi - 1)} onPlus={() => setM(mi + 1)}
+          canMinus={mi > 0} canPlus={mi < RESCHEDULE_MINUTES.length - 1} minusLabel="Menos minutos" plusLabel="Más minutos" />
       </div>
+      <span style={{ textAlign: 'center', fontSize: 14.5 }}>Nueva hora: <strong>{shortDay(d)} · {s}</strong></span>
       {msg && <p role="alert" className="form-error">{msg}</p>}
-      <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+      <div className="actions">
         <button type="button" className="btn btn-primary" disabled={busy || (d === date && s === slot)} onClick={() => run('proponer')}>{busy ? 'Enviando…' : 'Enviar propuesta'}</button>
-        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setOpen(false)}>Volver</button>
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setOpen(false)}>Volver</button>
       </div>
     </div>
   );

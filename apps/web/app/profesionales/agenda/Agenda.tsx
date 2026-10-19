@@ -324,17 +324,17 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
           </div>
           {asking === 'no_puedo' && <span className="muted" style={{ fontSize: 13 }}>Cancelar con menos de 2 horas o yendo en camino cuenta como falta y tiene una multa de $5.</span>}
           {asking === 'cliente_ausente' && <span className="muted" style={{ fontSize: 13 }}>Se cancela la reserva y al cliente se le cobra la visita, que es para ti (menos la comisión). Después podrás calificarlo.</span>}
-          <div className="row gap-8">
-            <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act(asking)}>{busy ? 'Guardando…' : 'Confirmar'}</button>
-            <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => setAsking('')}>Volver</button>
+          <div className="actions">
+            <button type="button" className="btn btn-danger" disabled={!!busy} onClick={() => act(asking)}>{busy ? 'Guardando…' : 'Confirmar'}</button>
+            <button type="button" className="btn btn-secondary" disabled={!!busy} onClick={() => setAsking('')}>Volver</button>
           </div>
         </div>
       ) : (
-        <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+        <div className="actions">
           {b.status === 'pendiente' && b.date >= ecDay() && (
             <>
               <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act('aceptar')}>{busy === 'aceptar' ? 'Aceptando…' : 'Aceptar'}</button>
-              <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => setAsking('rechazar')}>Rechazar</button>
+              <button type="button" className="btn btn-danger" disabled={!!busy} onClick={() => setAsking('rechazar')}>Rechazar</button>
             </>
           )}
           {b.status === 'confirmada' && <DepartPanel b={b} busy={!!busy} onGo={() => act('en_camino')} />}
@@ -342,7 +342,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
           {b.status === 'en_camino' && <LiveShare bookingId={b.id} />}
           {b.status === 'en_camino' && !b.arrivedAt && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => act('en_puerta')}>{busy ? 'Guardando…' : 'Estoy en la dirección'}</button>}
           {b.status === 'en_camino' && b.arrivedAt && (
-            <div className="row gap-8" style={{ width: '100%', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className="stack gap-8" style={{ width: '100%' }}>
               <div className="field" style={{ margin: 0 }}>
                 <label htmlFor={`code-${b.id}`}>Código del cliente</label>
                 <input id={`code-${b.id}`} inputMode="numeric" maxLength={4} value={code} placeholder="0000" style={{ width: 110, letterSpacing: 4, fontSize: 20 }} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} />
@@ -354,7 +354,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
           {b.status === 'en_curso' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => setFinishing(true)}>Terminar la visita</button>}
           {b.status === 'en_camino' && b.arrivedAt && <AbsentButton from={absentFrom(b)} late={arrivedLate(b)} disabled={!!busy} onClick={() => setAsking('cliente_ausente')} />}
           {(b.status === 'confirmada' || b.status === 'en_camino') && (
-            <button type="button" className="link-btn" disabled={!!busy} onClick={() => setAsking('no_puedo')}>No puedo ir</button>
+            <button type="button" className="btn btn-danger" disabled={!!busy} onClick={() => setAsking('no_puedo')}>No puedo ir</button>
           )}
         </div>
       )}
@@ -426,8 +426,8 @@ function AbsentButton({ from: startedAt, late, disabled, onClick }: { from?: num
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15_000); return () => clearInterval(t); }, []);
   const left = startedAt ? Math.ceil((startedAt + 10 * 60_000 - now) / 60_000) : 0;
   return (
-    <button type="button" className="link-btn" disabled={disabled || left > 0} onClick={onClick}>
-      {left > 0 ? `El cliente no está (disponible en ${left} min)` : late ? 'El cliente no está (llegaste tarde: sin cobro al cliente)' : 'El cliente no está'}
+    <button type="button" className="btn btn-danger" disabled={disabled || left > 0} onClick={onClick}>
+      {left > 0 ? `El cliente no está (en ${left} min)` : late ? 'El cliente no está (sin cobro: llegaste tarde)' : 'El cliente no está'}
     </button>
   );
 }
@@ -509,9 +509,9 @@ function FinishPanel({ bookingId, busy, onCancel, onSend }: { bookingId: string;
         </div>
       </div>
       {err && <p role="alert" className="form-error">{err}</p>}
-      <div className="row gap-8">
+      <div className="actions">
         <button type="button" className="btn btn-primary" disabled={busy || uploading} onClick={send}>{busy ? 'Guardando…' : 'Terminar y enviar al cliente'}</button>
-        <button type="button" className="btn btn-ghost" disabled={busy} onClick={onCancel}>Volver</button>
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={onCancel}>Volver</button>
       </div>
     </div>
   );
@@ -554,11 +554,11 @@ function DepartPanel({ b, busy, onGo }: { b: ProBooking; busy: boolean; onGo: ()
         </div>
       )}
       {geoMsg && <span className="muted" style={{ fontSize: 13.5 }}>{geoMsg}</span>}
-      <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+      <div className="actions">
         <button type="button" className="btn btn-primary" disabled={busy || !plan.canGo} onClick={onGo}>
           {busy ? 'Guardando…' : plan.canGo ? 'Voy en camino' : `Podrás salir desde las ${hhmmEcuador(plan.earliest)}`}
         </button>
-        <button type="button" className="btn btn-ghost" onClick={locate}>{trip ? 'Recalcular' : '¿Cuándo debo salir?'}</button>
+        <button type="button" className="btn btn-secondary" onClick={locate}>{trip ? 'Recalcular tiempo de viaje' : '¿Cuándo debo salir?'}</button>
       </div>
     </div>
   );

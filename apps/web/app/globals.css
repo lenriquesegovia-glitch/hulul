@@ -53,8 +53,25 @@ img { max-width: 100%; }
 }
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:hover { background: var(--primary-dark); color: #fff; }
-.btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
-.btn-ghost:hover { border-color: var(--copper); color: var(--text); }
+.btn-ghost, .btn-secondary { background: var(--surface); color: var(--primary); border: 1.5px solid var(--primary); }
+.btn-ghost:hover, .btn-secondary:hover { background: #F6E7E9; color: var(--primary); }
+/* Jerarquía de botones (mismo alto y forma en toda la web):
+   principal = el siguiente paso; secundario (borde) = otras opciones;
+   peligro (borde rojo) = cancelar, rechazar, reportar. */
+.btn-danger { background: var(--surface); color: #B42318; border: 1.5px solid #B42318; }
+.btn-danger:hover { background: #FBEAE8; color: #B42318; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+/* Paneles de acciones: botones apilados, del mismo ancho. */
+.actions { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 460px; }
+.actions .btn { width: 100%; }
+.actions .actions { max-width: none; }
+.actions-row { display: flex; gap: 10px; width: 100%; }
+.actions-row > .btn { flex: 1; }
+/* Selector tipo reloj (− valor +). */
+.stepper { display: flex; align-items: center; gap: 8px; padding: 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.stepper button { width: 44px; height: 44px; border-radius: 22px; border: none; background: var(--copper-soft, #F3E6DA); color: var(--primary); font-size: 22px; font-weight: 700; cursor: pointer; }
+.stepper button:disabled { opacity: .35; cursor: not-allowed; }
+.stepper output { flex: 1; text-align: center; font-family: var(--font-display); font-size: 22px; font-weight: 700; }
 
 /* Cabecera */
 .header { position: sticky; top: 0; z-index: 10; background: rgba(250,247,242,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
@@ -297,7 +314,7 @@ details p { margin-top: 10px; color: var(--text-2); }
 .tag.on { background: var(--success-soft); border-color: var(--success); color: var(--success); }
 .doc-row { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
 .doc-row.done { border-color: var(--success); }
-.doc-btn { position: relative; overflow: hidden; flex-shrink: 0; min-height: 42px; padding: 0 16px; font-size: 14px; }
+.doc-btn { position: relative; overflow: hidden; flex-shrink: 0; }
 .doc-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 16px; }
 .req { font-size: 11.5px; font-weight: 700; color: var(--copper); background: var(--copper-soft); border-radius: 6px; padding: 2px 6px; margin-left: 4px; vertical-align: middle; }
 .field select { appearance: auto; }

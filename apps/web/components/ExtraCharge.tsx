@@ -42,10 +42,10 @@ export function ExtraForClient({ id, extra, proName }: { id: string; extra?: Ext
         <>
           <span className="muted" style={{ fontSize: 13.5 }}>Págalo por la app para que quede registrado en tu reserva. HULUL no garantiza el trabajo adicional: califica al profesional según cómo lo hizo.</span>
           {msg && <p role="alert" className="form-error">{msg}</p>}
-          <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => act({ id, action: 'aceptar', method: 'tarjeta' })}>Aceptar y pagar con tarjeta (recomendado)</button>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act({ id, action: 'aceptar', method: 'efectivo' })}>Aceptar y pagar en efectivo</button>
-            <button type="button" className="link-btn" disabled={busy} onClick={() => act({ id, action: 'rechazar' })}>No acepto</button>
+          <div className="actions">
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => act({ id, action: 'aceptar', method: 'tarjeta' })}>Aceptar y pagar con tarjeta</button>
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => act({ id, action: 'aceptar', method: 'efectivo' })}>Aceptar y pagar en efectivo</button>
+            <button type="button" className="btn btn-danger" disabled={busy} onClick={() => act({ id, action: 'rechazar' })}>No acepto</button>
           </div>
         </>
       )}
@@ -99,7 +99,7 @@ export function ExtraForPro({ id, status, extra }: { id: string; status: string;
     <div className="stack gap-8" style={{ width: '100%', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
       {extra?.status === 'rechazado' && <span className="muted" style={{ fontSize: 13.5 }}>El cliente no aceptó el cobro anterior ({formatUSD(extra.total)}). Puedes proponer otro.</span>}
       {!open ? (
-        <button type="button" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(true)}>+ Agregar cobro adicional</button>
+        <div className="actions"><button type="button" className="btn btn-secondary" onClick={() => setOpen(true)}>+ Agregar cobro adicional</button></div>
       ) : (
         <>
           <strong>Cobro adicional</strong>

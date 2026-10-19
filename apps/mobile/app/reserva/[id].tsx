@@ -13,7 +13,7 @@ import { DelayClient } from '@/components/Delay';
 import { Reschedule } from '@/components/Reschedule';
 import { ArrivalCode, ProblemBox } from '@/components/ArrivalCode';
 import { useUser } from '@/lib/auth';
-import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
+import { BackButton, Body, Button, Card, H1, PrimaryButton } from '@/components/ui';
 import { CancelBox } from '../cuenta';
 import { c, font, radius } from '@/theme';
 
@@ -183,9 +183,9 @@ function ExtraBox({ id, extra, proName }: { id: string; extra: ExtraCharge; proN
         <>
           <Body muted style={{ fontSize: 12.5 }}>Págalo por la app para que quede registrado. HULUL no garantiza el trabajo adicional: califica al profesional según cómo lo hizo.</Body>
           {msg ? <Body style={{ fontSize: 13, color: c.primary }}>{msg}</Body> : null}
-          <PrimaryButton label={busy ? 'Guardando…' : 'Aceptar y pagar con tarjeta (recomendado)'} onPress={() => act({ id, action: 'aceptar', method: 'tarjeta' })} />
-          <Pressable accessibilityRole="button" onPress={() => act({ id, action: 'aceptar', method: 'efectivo' })} style={s.chip}><Text style={s.chipText}>Aceptar y pagar en efectivo</Text></Pressable>
-          <Pressable accessibilityRole="button" onPress={() => act({ id, action: 'rechazar' })}><Text style={[s.chipText, { color: c.primary, textAlign: 'center' }]}>No acepto</Text></Pressable>
+          <Button label={busy ? 'Guardando…' : 'Aceptar y pagar con tarjeta'} onPress={() => act({ id, action: 'aceptar', method: 'tarjeta' })} />
+          <Button variant="secondary" label="Aceptar y pagar en efectivo" onPress={() => act({ id, action: 'aceptar', method: 'efectivo' })} />
+          <Button variant="danger" label="No acepto" onPress={() => act({ id, action: 'rechazar' })} />
         </>
       )}
       {extra.status === 'por_cobrar' && <Body muted style={{ fontSize: 12.5 }}>Se cobrará con tu tarjeta. Versión de prueba: todavía no se hace el cobro real.</Body>}
@@ -208,7 +208,7 @@ function ConfirmBox({ id }: { id: string }) {
       <Text style={s.boxTitle}>¿Prefieres no calificar ahora?</Text>
       <Body muted style={{ fontSize: 13 }}>Puedes cerrar el servicio sin calificar. Si no haces nada, se cierra solo 24 horas después de terminado.</Body>
       {msg ? <Body style={{ fontSize: 13, color: c.primary }}>{msg}</Body> : null}
-      <PrimaryButton label={busy ? 'Guardando…' : 'Cerrar sin calificar'} onPress={go} />
+      <Button variant="secondary" label={busy ? 'Guardando…' : 'Cerrar sin calificar'} onPress={go} />
     </Card>
   );
 }

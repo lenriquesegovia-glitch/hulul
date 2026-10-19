@@ -8,7 +8,7 @@ import {
   MAX_EXTRA, MIN_DIAGNOSIS_CHARS, MIN_EXTRA, OUTCOME_LABEL, POLICY, type JobOutcome,
 } from '@hulul/shared';
 import { EXTRA_STATUS_LABEL, extraCharge, proAction, rateClient, shareLivePosition, type ExtraAction, type ProAction, type ProBooking } from '@hulul/shared/firebase';
-import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
+import { BackButton, Body, Card, H1, Button, PrimaryButton } from '@/components/ui';
 import { Chat } from '@/components/Chat';
 import { DelayPro } from '@/components/Delay';
 import { Reschedule, shortDay } from '@/components/Reschedule';
@@ -84,8 +84,8 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
         <Body>📍 {b.address}</Body>
         {b.status !== 'cancelada' && (
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable accessibilityRole="button" onPress={() => Linking.openURL(nav.google)} style={s.btn}><Text style={s.btnText}>Google Maps</Text></Pressable>
-            <Pressable accessibilityRole="button" onPress={() => Linking.openURL(nav.waze)} style={s.btn}><Text style={s.btnText}>Waze</Text></Pressable>
+            <Button variant="secondary" label="Google Maps" onPress={() => Linking.openURL(nav.google)} style={{ flex: 1 }} />
+            <Button variant="secondary" label="Waze" onPress={() => Linking.openURL(nav.waze)} style={{ flex: 1 }} />
           </View>
         )}
       </Card>
@@ -112,15 +112,15 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
           <TextInput value={reason} onChangeText={setReason} maxLength={300} style={s.input} placeholderTextColor={c.textMuted} placeholder="Escribe aquí" />
           {asking === 'no_puedo' && <Body muted style={{ fontSize: 12.5 }}>Cancelar con menos de 2 horas o yendo en camino cuenta como falta y tiene una multa de {formatUSD(POLICY.proLateFine)}.</Body>}
           {asking === 'cliente_ausente' && <Body muted style={{ fontSize: 12.5 }}>Se cancela la reserva y al cliente se le cobra la visita, que es para ti (menos la comisión). Después podrás calificarlo.</Body>}
-          <PrimaryButton label={busy ? 'Guardando…' : 'Confirmar'} onPress={() => !busy && act(asking)} />
-          <Pressable onPress={() => setAsking('')}><Text style={[s.link, { textAlign: 'center' }]}>Volver</Text></Pressable>
+          <Button variant={asking === 'rechazar' || asking === 'no_puedo' || asking === 'cliente_ausente' ? 'danger' : 'primary'} label={busy ? 'Guardando…' : 'Confirmar'} onPress={() => !busy && act(asking)} />
+          <Button variant="secondary" label="Volver" onPress={() => setAsking('')} />
         </Card>
       ) : (
         <View style={{ gap: 10 }}>
           {b.status === 'pendiente' && b.date >= todayEc() && (
             <>
               <PrimaryButton label={busy === 'aceptar' ? 'Aceptando…' : 'Aceptar trabajo'} onPress={() => !busy && act('aceptar')} />
-              <Pressable accessibilityRole="button" onPress={() => setAsking('rechazar')} style={s.btn}><Text style={s.btnText}>Rechazar</Text></Pressable>
+              <Button variant="danger" label="Rechazar" onPress={() => setAsking('rechazar')} />
               <Body muted style={{ fontSize: 12.5 }}>Lee bien qué necesita el cliente y acepta solo si sabes hacerlo.</Body>
             </>
           )}
@@ -140,7 +140,7 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
           {b.status === 'en_curso' && <PrimaryButton label="Terminar la visita" onPress={() => setFinishing(true)} />}
           {b.status === 'en_camino' && b.arrivedAt && <AbsentButton startedAt={Math.max(b.arrivedAt.toMillis(), appointmentTime(b.date, b.slot).getTime() + acceptedDelay(b) * 60_000)} late={arrivedLate(b)} onPress={() => setAsking('cliente_ausente')} />}
           {(b.status === 'confirmada' || b.status === 'en_camino') && (
-            <Pressable onPress={() => setAsking('no_puedo')}><Text style={[s.link, { textAlign: 'center' }]}>No puedo ir</Text></Pressable>
+            <Button variant="danger" label="No puedo ir" onPress={() => setAsking('no_puedo')} />
           )}
         </View>
       )}
@@ -257,9 +257,8 @@ function AbsentButton({ startedAt, late, onPress }: { startedAt?: number; late: 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15_000); return () => clearInterval(t); }, []);
   const left = startedAt ? Math.ceil((startedAt + POLICY.clientNoShowWaitMinutes * 60_000 - now) / 60_000) : 0;
   return (
-    <Pressable accessibilityRole="button" disabled={left > 0} onPress={onPress}>
-      <Text style={[s.link, { textAlign: 'center' }, left > 0 && { color: c.textMuted }]}>{left > 0 ? `El cliente no está (disponible en ${left} min)` : late ? 'El cliente no está (llegaste tarde: sin cobro al cliente)' : 'El cliente no está'}</Text>
-    </Pressable>
+    <Button variant="danger" disabled={left > 0} onPress={onPress}
+      label={left > 0 ? `El cliente no está (en ${left} min)` : late ? 'El cliente no está (sin cobro: llegaste tarde)' : 'El cliente no está'} />
   );
 }
 
@@ -312,15 +311,15 @@ function FinishPanel({ bookingId, uid, busy, onCancel, onSend }: {
       {photos.length > 0 && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{photos.map((u) => <Image key={u} source={{ uri: u }} style={s.photo} />)}</View>}
       {canPhoto ? (
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable accessibilityRole="button" disabled={uploading} onPress={() => add('camara')} style={[s.btn, s.btnPrimary]}><Text style={[s.btnText, { color: '#fff' }]}>{uploading ? 'Subiendo…' : '📷 Tomar foto'}</Text></Pressable>
-          <Pressable accessibilityRole="button" disabled={uploading} onPress={() => add('galeria')} style={s.btn}><Text style={s.btnText}>Galería</Text></Pressable>
+          <Button variant="secondary" disabled={uploading} label={uploading ? 'Subiendo…' : '📷 Tomar foto'} onPress={() => add('camara')} style={{ flex: 1 }} />
+          <Button variant="secondary" disabled={uploading} label="Galería" onPress={() => add('galeria')} style={{ flex: 1 }} />
         </View>
       ) : (
         <Body muted style={{ fontSize: 12.5 }}>Esta versión de la app aún no tiene cámara. Instala la versión nueva, o termina desde hululec.com/profesionales/agenda.</Body>
       )}
       {err ? <Body style={{ color: c.primary, fontSize: 13 }}>{err}</Body> : null}
       <PrimaryButton label={busy ? 'Guardando…' : 'Terminar y enviar al cliente'} onPress={() => !busy && !uploading && send()} />
-      <Pressable onPress={onCancel}><Text style={[s.link, { textAlign: 'center' }]}>Volver</Text></Pressable>
+      <Button variant="secondary" label="Volver" onPress={onCancel} />
     </Card>
   );
 }
@@ -351,7 +350,7 @@ function ExtraPro({ b }: { b: ProBooking }) {
     );
   }
   if (!canAdd) return null;
-  if (!open) return <Pressable accessibilityRole="button" onPress={() => setOpen(true)} style={s.btn}><Text style={s.btnText}>+ Agregar cobro adicional</Text></Pressable>;
+  if (!open) return <Button variant="secondary" label="+ Agregar cobro adicional" onPress={() => setOpen(true)} />;
 
   const n = Number(amount.replace(',', '.'));
   const q = Number.isFinite(n) && n > 0 ? extraQuote(n) : null;
@@ -370,7 +369,7 @@ function ExtraPro({ b }: { b: ProBooking }) {
         if (desc.trim().length < 10) { setMsg('Explica qué incluye (al menos 10 caracteres).'); return; }
         run({ id: b.id, action: 'proponer', amount: q.amount, description: desc.trim() });
       }} />
-      <Pressable onPress={() => setOpen(false)}><Text style={[s.link, { textAlign: 'center' }]}>Cancelar</Text></Pressable>
+      <Button variant="secondary" label="Cancelar" onPress={() => setOpen(false)} />
     </Card>
   );
 }

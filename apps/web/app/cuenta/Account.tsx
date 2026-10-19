@@ -100,7 +100,7 @@ export function CancelBox({ row, onDone }: { row: Row; onDone: () => void }) {
     return (
       <div className="row gap-12" style={{ justifyContent: 'space-between', flexWrap: 'wrap', marginTop: 6 }}>
         <span className="muted" style={{ fontSize: 13 }}>{hint}</span>
-        <button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => setOpen(true)}>Cancelar reserva</button>
+        <button type="button" className="btn btn-danger" onClick={() => setOpen(true)}>Cancelar reserva</button>
       </div>
     );
   }
@@ -128,11 +128,11 @@ export function CancelBox({ row, onDone }: { row: Row; onDone: () => void }) {
         <input id={`why-${row.id}`} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ej.: ya lo resolví, cambié de fecha" />
       </div>
       {msg && <p role="alert" className="form-error">{msg}</p>}
-      <div className="row gap-12" style={{ flexWrap: 'wrap' }}>
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={confirm}>
+      <div className="actions">
+        <button type="button" className="btn btn-danger" disabled={busy} onClick={confirm}>
           {busy ? 'Cancelando…' : t.fee > 0 ? `Cancelar y pagar ${usd(t.fee)}` : 'Sí, cancelar'}
         </button>
-        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setOpen(false)}>Mantener reserva</button>
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setOpen(false)}>Mantener reserva</button>
       </div>
     </div>
   );

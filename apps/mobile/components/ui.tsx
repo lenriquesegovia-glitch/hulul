@@ -28,16 +28,32 @@ export function Avatar({ initials, size = 48 }: { initials: string; size?: numbe
   );
 }
 
-export function PrimaryButton({ label, onPress, style }: { label: string; onPress: () => void; style?: StyleProp<ViewStyle> }) {
+/**
+ * Botones de HULUL: todos del mismo alto, ancho completo y forma, para que se
+ * reconozcan a simple vista.
+ * - primary: el siguiente paso (relleno vino). Uno por pantalla o tarjeta.
+ * - secondary: otras opciones (borde, texto vino).
+ * - danger: cancelar, rechazar, reportar (borde y texto rojo).
+ */
+export type ButtonVariant = 'primary' | 'secondary' | 'danger';
+export function Button({ label, onPress, variant = 'primary', disabled = false, style }: {
+  label: string; onPress: () => void; variant?: ButtonVariant; disabled?: boolean; style?: StyleProp<ViewStyle>;
+}) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [s.primary, pressed && { backgroundColor: c.primaryDark }, style]}
+      style={({ pressed }) => [s.btn, s[variant], pressed && s[`${variant}Pressed`], disabled && s.disabled, style]}
     >
-      <Text style={s.primaryText}>{label}</Text>
+      <Text style={[s.btnText, s[`${variant}Text`]]}>{label}</Text>
     </Pressable>
   );
+}
+
+export function PrimaryButton({ label, onPress, style, disabled }: { label: string; onPress: () => void; style?: StyleProp<ViewStyle>; disabled?: boolean }) {
+  return <Button label={label} onPress={onPress} style={style} disabled={disabled} />;
 }
 
 /** Volver atrás y, al lado, ir directo al inicio (sin tener que retroceder pantalla por pantalla). */
@@ -64,6 +80,8 @@ export function Pill({ label, tone = 'success' }: { label: string; tone?: 'succe
   );
 }
 
+const DANGER = '#B42318';
+
 const s = StyleSheet.create({
   h1: { fontFamily: font.display, fontSize: 26, lineHeight: 32, color: c.text },
   h2: { fontFamily: font.display, fontSize: 17, lineHeight: 22, color: c.text },
@@ -71,8 +89,18 @@ const s = StyleSheet.create({
   card: { backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, borderRadius: radius.lg, padding: 16 },
   avatar: { backgroundColor: c.copperSoft, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontFamily: font.display, color: c.primary },
-  primary: { minHeight: 52, borderRadius: radius.md, backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  primaryText: { fontFamily: font.bodyBold, fontSize: 15.5, color: c.onPrimary },
+  btn: { minHeight: 52, alignSelf: 'stretch', borderRadius: radius.md, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
+  btnText: { fontFamily: font.bodyBold, fontSize: 15.5, textAlign: 'center' },
+  primary: { backgroundColor: c.primary, borderColor: c.primary },
+  primaryPressed: { backgroundColor: c.primaryDark, borderColor: c.primaryDark },
+  primaryText: { color: c.onPrimary },
+  secondary: { backgroundColor: c.surface, borderColor: c.primary },
+  secondaryPressed: { backgroundColor: c.copperSoft },
+  secondaryText: { color: c.primary },
+  danger: { backgroundColor: c.surface, borderColor: DANGER },
+  dangerPressed: { backgroundColor: '#FBEAE8' },
+  dangerText: { color: DANGER },
+  disabled: { opacity: 0.45 },
   back: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center' },
   pill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
   pillText: { fontFamily: font.bodyBold, fontSize: 12 },

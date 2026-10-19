@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { PROBLEM_OPTIONS, reportProblem, watchArrivalCode } from '@hulul/shared/firebase';
-import { Body, Card, PrimaryButton } from '@/components/ui';
+import { Body, Button, Card, PrimaryButton } from '@/components/ui';
 import { c, font, radius } from '@/theme';
 
 /** Código de llegada del cliente: se lo da al profesional cuando llega, para que empiece. */
@@ -25,7 +25,7 @@ export function ProblemBox({ id }: { id: string }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  if (!open) return <Pressable onPress={() => setOpen(true)}><Text style={s.link}>Reportar un problema</Text></Pressable>;
+  if (!open) return <Button variant="danger" label="Reportar un problema" onPress={() => setOpen(true)} />;
   const send = async () => {
     if (busy) return;
     setMsg('');
@@ -46,7 +46,7 @@ export function ProblemBox({ id }: { id: string }) {
       <TextInput value={text} onChangeText={setText} maxLength={1000} multiline placeholder="Qué pasó, a qué hora, qué te dijo…" placeholderTextColor={c.textMuted} style={s.input} />
       {msg ? <Body style={{ color: c.primary, fontSize: 13 }}>{msg}</Body> : null}
       <PrimaryButton label={busy ? 'Enviando…' : 'Enviar reporte'} onPress={send} />
-      <Pressable onPress={() => setOpen(false)}><Text style={[s.link, { textAlign: 'center' }]}>Volver</Text></Pressable>
+      <Button variant="secondary" label="Volver" onPress={() => setOpen(false)} />
     </Card>
   );
 }

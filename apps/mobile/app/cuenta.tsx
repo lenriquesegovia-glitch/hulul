@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { cancelTerms, formatUSD, getCategory, usd } from '@hulul/shared';
 import { BOOKING_STATUS_LABEL, cancelBooking, cancelErrorMessage, clientBookings, type ClientBooking } from '@hulul/shared/firebase';
 import { ClientGate } from '@/components/ClientGate';
-import { BackButton, Body, Card, H1, H2, Pill, PrimaryButton } from '@/components/ui';
+import { BackButton, Body, Button, Card, H1, H2, Pill, PrimaryButton } from '@/components/ui';
 import { logout } from '@/lib/auth';
 import { c, font, radius } from '@/theme';
 
@@ -58,9 +58,7 @@ function Bookings({ uid }: { uid: string }) {
           <Body muted style={{ fontSize: 13 }}>{r.date} a las {r.slot} · {formatUSD(r.total)} · {r.id.slice(0, 8).toUpperCase()}</Body>
           {r.notes ? <Body style={{ fontSize: 13.5 }}>{r.notes}</Body> : null}
           {r.proposal ? <Text style={{ fontFamily: font.bodyBold, fontSize: 13, color: c.primary }}>Cambio de hora pendiente: {r.proposal.date} a las {r.proposal.slot}</Text> : null}
-          <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/reserva/[id]', params: { id: r.id } })}>
-            <Text style={s.link}>Ver detalle y seguimiento →</Text>
-          </Pressable>
+          <Button variant="secondary" label="Ver detalle y seguimiento" onPress={() => router.push({ pathname: '/reserva/[id]', params: { id: r.id } })} />
           {r.status === 'cancelada' && (
             <Body muted style={{ fontSize: 13 }}>
               {r.cancelFee ? `Cargo por cancelación tardía: ${usd(r.cancelFee)}${r.demo ? ' (prueba, no se cobra)' : ''}` : 'Cancelada sin costo.'}
@@ -95,7 +93,7 @@ export function CancelBox({ row, onDone }: { row: ClientBooking; onDone: () => v
     return (
       <View style={{ gap: 6, marginTop: 6 }}>
         {hint ? <Body muted style={{ fontSize: 12.5 }}>{hint}</Body> : null}
-        <Pressable accessibilityRole="button" onPress={() => setOpen(true)}><Text style={s.link}>Cancelar reserva</Text></Pressable>
+        <Button variant="danger" label="Cancelar reserva" onPress={() => setOpen(true)} />
       </View>
     );
   }
@@ -110,8 +108,8 @@ export function CancelBox({ row, onDone }: { row: ClientBooking; onDone: () => v
       {t.fee > 0 && row.demo ? <Body muted style={{ fontSize: 12.5 }}>Versión de prueba: el cargo se registra, pero no se cobra.</Body> : null}
       <TextInput value={reason} onChangeText={setReason} maxLength={300} placeholder="Motivo (opcional)" placeholderTextColor={c.textMuted} style={s.input} />
       {msg ? <Text style={{ fontFamily: font.bodySemi, fontSize: 13, color: c.primary }}>{msg}</Text> : null}
-      <PrimaryButton label={busy ? 'Cancelando…' : t.fee > 0 ? `Cancelar y pagar ${usd(t.fee)}` : 'Sí, cancelar'} onPress={busy ? () => {} : confirm} />
-      <Pressable accessibilityRole="button" onPress={() => setOpen(false)}><Text style={[s.link, { textAlign: 'center' }]}>Mantener reserva</Text></Pressable>
+      <Button variant="danger" label={busy ? 'Cancelando…' : t.fee > 0 ? `Cancelar y pagar ${usd(t.fee)}` : 'Sí, cancelar'} onPress={busy ? () => {} : confirm} />
+      <Button variant="secondary" label="Mantener reserva" onPress={() => setOpen(false)} />
     </View>
   );
 }

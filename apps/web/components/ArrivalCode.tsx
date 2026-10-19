@@ -31,7 +31,7 @@ export function ProblemBox({ id }: { id: string }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  if (!open) return <button type="button" className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(true)}>Reportar un problema</button>;
+  if (!open) return <div className="actions"><button type="button" className="btn btn-danger" onClick={() => setOpen(true)}>Reportar un problema</button></div>;
   const send = async () => {
     setMsg('');
     if (!kind) { setMsg('Elige qué pasó.'); return; }
@@ -57,9 +57,9 @@ export function ProblemBox({ id }: { id: string }) {
       </div>
       <textarea rows={3} maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Qué pasó, a qué hora, qué te dijo…" aria-label="Detalle del problema" />
       {msg && <p role="alert" className="form-error">{msg}</p>}
-      <div className="row gap-8">
+      <div className="actions">
         <button type="button" className="btn btn-primary" disabled={busy} onClick={send}>{busy ? 'Enviando…' : 'Enviar reporte'}</button>
-        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setOpen(false)}>Volver</button>
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setOpen(false)}>Volver</button>
       </div>
     </div>
   );
