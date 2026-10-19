@@ -40,11 +40,17 @@ export function PrimaryButton({ label, onPress, style }: { label: string; onPres
   );
 }
 
+/** Volver atrás y, al lado, ir directo al inicio (sin tener que retroceder pantalla por pantalla). */
 export function BackButton() {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Volver" onPress={() => router.back()} style={s.back} hitSlop={8}>
-      <Icon name="chevronLeft" size={20} />
-    </Pressable>
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Volver" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={s.back} hitSlop={8}>
+        <Icon name="chevronLeft" size={20} />
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Ir al inicio" onPress={() => router.dismissTo('/')} style={s.back} hitSlop={8}>
+        <Icon name="home" size={19} />
+      </Pressable>
+    </View>
   );
 }
 

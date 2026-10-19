@@ -14,6 +14,7 @@ import {
   type Professional,
   BOOKING_DAYS,
   checkSlot,
+  MAX_REQUEST_PHOTOS,
   leadMinutes,
   slotInWindow,
   visitHours,
@@ -32,6 +33,7 @@ import {
 import { Icon } from '@/components/Icon';
 import { AddressInput } from '@/components/AddressInput';
 import { ClientGate, type ClientProfile } from '@/components/ClientGate';
+import { PhotoPicker } from '@/components/PhotoPicker';
 import { LocationPicker } from '@/components/LocationPicker';
 import { Notice } from '@/components/Notice';
 import { DEMO_MODE } from '@/lib/site';
@@ -177,6 +179,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
   const hours = visitHours(pro.category);
   const minH = hours;
   const [service, setService] = useState('');
+  // Fotos opcionales del problema: el profesional las ve antes de aceptar.
+  const [photos, setPhotos] = useState<string[]>([]);
+  const draftId = useMemo(() => Math.random().toString(36).slice(2, 12), []);
   // Primero los trabajos que este profesional marcó; luego el resto de la categoría.
   const jobs = useMemo(() => {
     const own = pro.services ?? [];
@@ -246,6 +251,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         pricing: 'visita',
         visit: q.visit,
         safetyAccepted: true,
+        ...(photos.length ? { photos } : {}),
         address: get('direccion'),
         location: location ?? undefined,
         // El trabajo elegido va delante de la descripción: "Mantenimiento de split. 2 equipos…"
@@ -384,6 +390,8 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
             </span>
           </div>
         </div>
+        <PhotoPicker folder={`solicitudes/${uid}/${draftId}`} max={MAX_REQUEST_PHOTOS} value={photos} onChange={setPhotos}
+          label="Fotos del problema (opcional)" help="Una foto del equipo, la fuga o el lugar ayuda al profesional a saber qué llevar." />
       </fieldset>
 
       <fieldset className="stack gap-12 fs">

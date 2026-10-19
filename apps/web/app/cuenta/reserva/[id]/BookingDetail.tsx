@@ -55,7 +55,7 @@ export function BookingDetail({ id }: { id: string }) {
     en_curso: `${first} está trabajando. Al terminar te deja el resultado y un diagnóstico con fotos.`,
     por_aprobar: `${first} terminó la visita. Revisa su diagnóstico; tienes 48 horas para calificarlo o reportar un problema.`,
     completada: 'Servicio completado. ¡Gracias por usar HULUL!',
-    cancelada: b.cancelledBy === 'profesional' ? `${first} canceló esta reserva. No se te cobra nada.` : `Cancelaste esta reserva${b.cancelFee ? ` con un cargo de ${usd(b.cancelFee)}${b.demo ? ' (prueba, no se cobra)' : ''}` : ' sin costo'}.`,
+    cancelada: b.cancelledBy === 'sistema' ? 'Ningún profesional aceptó esta reserva antes de la hora; se canceló sin costo.' : b.cancelledBy === 'profesional' ? `${first} canceló esta reserva. No se te cobra nada.` : `Cancelaste esta reserva${b.cancelFee ? ` con un cargo de ${usd(b.cancelFee)}${b.demo ? ' (prueba, no se cobra)' : ''}` : ' sin costo'}.`,
   };
   const changeable = ['pendiente', 'confirmada'].includes(b.status);
 
@@ -108,8 +108,23 @@ export function BookingDetail({ id }: { id: string }) {
       <div className="card stack gap-8" style={{ fontSize: 15 }}>
         {b.address && <span>📍 {b.address}</span>}
         {b.notes && <span style={{ color: 'var(--text-2)' }}>{b.notes}</span>}
+        {!!b.photos?.length && (
+          <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+            {b.photos.map((u, i) => (
+              <a key={u} href={u} target="_blank" rel="noreferrer">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={u} alt={`Tu foto ${i + 1}`} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />
+              </a>
+            ))}
+          </div>
+        )}
         <span>{b.visit ? <>Visita {formatUSD(b.visit)} · </> : null}Total: <strong>{formatUSD(b.total)}</strong> · Código {b.id.slice(0, 8).toUpperCase()}</span>
         {b.professionalId && <Link href={`/profesional/${b.professionalId}?c=${b.category}`}>Ver perfil de {first}</Link>}
+      </div>
+
+      <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+        <Link href="/" className="btn btn-ghost">Volver al inicio</Link>
+        <Link href="/cuenta" className="btn btn-ghost">Mis reservas</Link>
       </div>
 
       <CancelBox row={b} onDone={() => {}} />

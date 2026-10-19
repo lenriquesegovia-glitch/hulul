@@ -178,6 +178,9 @@ export const OUTCOME_LABEL: Record<JobOutcome, string> = {
   resuelto: 'Quedó resuelto', parcial: 'Necesita más trabajo', no_resuelto: 'No se pudo resolver',
 };
 
+/** Fotos opcionales que el cliente adjunta al reservar. */
+export const MAX_REQUEST_PHOTOS = 4;
+
 /** Fotos del diagnóstico. */
 export const MAX_DIAGNOSIS_PHOTOS = 6;
 /** Siempre hace falta al menos una foto, se haya resuelto o no (respaldo para ambos). */

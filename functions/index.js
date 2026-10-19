@@ -375,6 +375,7 @@ export function proBookingEmail(b, id, p, { from, notifyTo }) {
       ['Dirección', esc(b.address)],
       ['Ubicación', mapRow(b.location)],
       ['Trabajo', esc(b.notes)],
+      ...(Array.isArray(b.photos) && b.photos.length ? [['Fotos', b.photos.slice(0, 4).map((u, i) => `<a href="${esc(u)}" style="color:#7A1E2C">Foto ${i + 1}</a>`).join(' · ')]] : []),
       ['Pago', esc(PAYMENTS[b.paymentMethod] ?? b.paymentMethod)],
       ['Te queda', `<strong>${usd((b.visit ?? b.subtotal ?? 0) * 0.85)}</strong> por la visita (menos la comisión)`],
     ]) +
@@ -862,7 +863,11 @@ export const cerrarTerminadas = onSchedule({ schedule: 'every 60 minutes', regio
     return t && typeof t.toMillis === 'function' && t.toMillis() < limit && d.data().extra?.status !== 'propuesto';
   });
   await Promise.all(old.map((d) => d.ref.update({ status: 'completada', completedAt: FieldValue.serverTimestamp(), completedBy: 'automatico', previousStatus: 'por_aprobar' })));
-  logger.info('Visitas cerradas automáticamente', { count: old.length });
+  // Reservas que nadie aceptó y cuya hora ya pasó: se cancelan sin costo.
+  const pend = await db().collection('bookings').where('status', '==', 'pendiente').get();
+  const expired = pend.docs.filter((d) => appointmentMs(d.data().date, d.data().slot) < Date.now() - 60 * 60_000);
+  await Promise.all(expired.map((d) => d.ref.update({ status: 'cancelada', cancelledBy: 'sistema', cancelReason: 'Ningún profesional la aceptó antes de la hora.', cancelFee: 0, cancelledAt: FieldValue.serverTimestamp(), previousStatus: 'pendiente' })));
+  logger.info('Visitas cerradas automáticamente', { count: old.length, vencidas: expired.length });
 });
 
 /* ------------------------------ Cobro adicional ------------------------------ */

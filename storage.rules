@@ -17,7 +17,16 @@ service firebase.storage {
     match /diagnosticos/{uid}/{bookingId}/{file} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid
-        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
+    // Fotos del problema que adjunta el cliente al reservar. El profesional las
+    // ve por el enlace que queda guardado en la reserva.
+    match /solicitudes/{uid}/{draftId}/{file} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 15 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow update, delete: if false;
     }

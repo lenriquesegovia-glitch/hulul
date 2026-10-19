@@ -10,7 +10,15 @@ const path = require('path');
 module.exports = ({ config }) => {
   // Notificaciones con sonido (canal "pedidos"). Va aquí y no en app.json para no
   // chocar con los ajustes locales de Expo que guarda actualizar.bat.
-  config.plugins = [...(config.plugins ?? []), ['expo-notifications', { color: '#7A1E2C', defaultChannel: 'pedidos' }]];
+  config.plugins = [
+    ...(config.plugins ?? []),
+    ['expo-notifications', { color: '#7A1E2C', defaultChannel: 'pedidos' }],
+    // Fotos del problema (cliente) y del trabajo: cámara y galería.
+    ['expo-image-picker', {
+      cameraPermission: 'HULUL usa la cámara para que tomes fotos del problema o del trabajo terminado.',
+      photosPermission: 'HULUL usa tus fotos para adjuntarlas a tu reserva.',
+    }],
+  ];
   const google = path.join(__dirname, 'google-services.json');
   if (fs.existsSync(google)) {
     config.android = { ...config.android, googleServicesFile: './google-services.json' };

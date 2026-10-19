@@ -72,6 +72,8 @@ export interface NewBooking {
   visit: number;
   /** El cliente aceptó el aviso de seguridad en el hogar. */
   safetyAccepted: true;
+  /** Fotos del problema (enlaces de descarga), opcionales. */
+  photos?: string[];
   address: string;
   /** Punto marcado en el mapa (opcional). */
   location?: LatLng;
@@ -192,6 +194,7 @@ export interface ClientBooking {
   diagnosis?: string;
   diagnosisPhotos?: string[];
   extra?: ExtraCharge;
+  photos?: string[];
 }
 
 /** Cambio de hora propuesto por una de las partes. */
@@ -220,8 +223,15 @@ export const TRACK_STEPS: { status: string; label: string }[] = [
 
 /** Próxima reserva activa del cliente (no completada ni cancelada), o null. */
 export function activeBooking(list: ClientBooking[]): ClientBooking | null {
-  // Terminada (por aprobar), completada, cancelada o en revisión ya no se sigue en el inicio.
-  const live = list.filter((b) => !['por_aprobar', 'completada', 'cancelada', 'en_disputa'].includes(b.status));
+  // Terminada (por aprobar), completada, cancelada o en revisión ya no se sigue en el inicio,
+  // ni las reservas cuya hora pasó hace más de 12 horas (pruebas viejas o sin respuesta).
+  const now = Date.now();
+  const at = (b: ClientBooking) => {
+    const [y, m, d] = String(b.date).split('-').map(Number);
+    const [h, min] = String(b.slot).split(':').map(Number);
+    return Date.UTC(y, m - 1, d, h + 5, min || 0);
+  };
+  const live = list.filter((b) => !['por_aprobar', 'completada', 'cancelada', 'en_disputa'].includes(b.status) && at(b) > now - 12 * 3_600_000);
   return live.length ? [...live].sort((a, b) => (a.date + a.slot > b.date + b.slot ? 1 : -1))[0] : null;
 }
 
@@ -406,6 +416,7 @@ export interface ProBooking {
   outcome?: JobOutcome;
   diagnosis?: string;
   diagnosisPhotos?: string[];
+  photos?: string[];
   extra?: ExtraCharge;
 }
 

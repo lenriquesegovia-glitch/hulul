@@ -61,7 +61,7 @@ function Detail({ b }: { b: ClientBooking }) {
     en_curso: `${first} está trabajando. Al terminar te deja el resultado y un diagnóstico con fotos.`,
     por_aprobar: `${first} terminó la visita. Revisa su diagnóstico; tienes 48 horas para calificarlo o reportar un problema.`,
     completada: 'Servicio completado.',
-    cancelada: b.cancelledBy === 'profesional' ? `${first} canceló. No se te cobra nada.` : `Cancelaste esta reserva${b.cancelFee ? ` con un cargo de ${usd(b.cancelFee)}${b.demo ? ' (prueba)' : ''}` : ' sin costo'}.`,
+    cancelada: b.cancelledBy === 'sistema' ? 'Ningún profesional aceptó esta reserva antes de la hora; se canceló sin costo.' : b.cancelledBy === 'profesional' ? `${first} canceló. No se te cobra nada.` : `Cancelaste esta reserva${b.cancelFee ? ` con un cargo de ${usd(b.cancelFee)}${b.demo ? ' (prueba)' : ''}` : ' sin costo'}.`,
   };
 
   return (
@@ -122,6 +122,11 @@ function Detail({ b }: { b: ClientBooking }) {
       <Card style={{ gap: 6 }}>
         {b.address ? <Body>📍 {b.address}</Body> : null}
         {b.notes ? <Body muted>{b.notes}</Body> : null}
+        {!!b.photos?.length && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {b.photos.map((u) => <Pressable key={u} onPress={() => Linking.openURL(u)}><Image source={{ uri: u }} style={s.photo} accessibilityLabel="Tu foto" /></Pressable>)}
+          </View>
+        )}
         <Body>{b.visit ? `Visita ${formatUSD(b.visit)} · ` : ''}Total: {formatUSD(b.total)} · Código {b.id.slice(0, 8).toUpperCase()}</Body>
       </Card>
       <CancelBox row={b} onDone={() => {}} />

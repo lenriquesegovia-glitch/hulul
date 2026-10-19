@@ -263,6 +263,16 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
       </div>
 
       {!compact && b.notes && <p style={{ color: 'var(--text-2)', fontSize: 15 }}>{b.notes}</p>}
+      {!compact && !!b.photos?.length && (
+        <div className="row gap-8" style={{ flexWrap: 'wrap' }} aria-label="Fotos del cliente">
+          {b.photos.map((u, i) => (
+            <a key={u} href={u} target="_blank" rel="noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={u} alt={`Foto ${i + 1} del cliente`} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--border)' }} />
+            </a>
+          ))}
+        </div>
+      )}
 
       {!compact && (
         <div className="stack gap-8">
@@ -386,23 +396,16 @@ function FinishPanel({ bookingId, busy, onCancel, onSend }: { bookingId: string;
     setErr('');
     const list = Array.from(files).filter((f) => f.type.startsWith('image/')).slice(0, MAX_DIAGNOSIS_PHOTOS - photos.length);
     if (!list.length) { setErr(photos.length >= MAX_DIAGNOSIS_PHOTOS ? `Máximo ${MAX_DIAGNOSIS_PHOTOS} fotos.` : 'Sube fotos (imágenes).'); return; }
-    if (list.some((f) => f.size > 10 * 1024 * 1024)) { setErr('Cada foto debe pesar menos de 10 MB.'); return; }
+    if (list.some((f) => f.size > 20 * 1024 * 1024)) { setErr('Cada foto debe pesar menos de 20 MB.'); return; }
     setUploading(true);
     try {
-      const [{ firebaseApp }, st, au] = await Promise.all([import('@hulul/shared/firebase'), import('firebase/storage'), import('firebase/auth')]);
+      const [{ firebaseApp }, au, { uploadPhotos }] = await Promise.all([import('@hulul/shared/firebase'), import('firebase/auth'), import('@/components/PhotoPicker')]);
       const uid = au.getAuth(firebaseApp()).currentUser?.uid;
       if (!uid) throw new Error('auth');
-      const storage = st.getStorage(firebaseApp());
-      const urls: string[] = [];
-      for (const f of list) {
-        const ext = (f.name.split('.').pop() || 'jpg').toLowerCase().slice(0, 5);
-        const r = st.ref(storage, `diagnosticos/${uid}/${bookingId}/${Date.now()}-${urls.length}.${ext}`);
-        await st.uploadBytes(r, f, { contentType: f.type });
-        urls.push(await st.getDownloadURL(r));
-      }
+      const urls = await uploadPhotos(`diagnosticos/${uid}/${bookingId}`, list);
       setPhotos((p) => [...p, ...urls]);
-    } catch {
-      setErr('No se pudieron subir las fotos. Revisa tu conexión e inténtalo de nuevo.');
+    } catch (e) {
+      setErr(`No se pudieron subir las fotos (${(e as { code?: string })?.code ?? 'error'}). Revisa tu conexión e inténtalo de nuevo.`);
     } finally {
       setUploading(false);
     }
@@ -439,11 +442,19 @@ function FinishPanel({ bookingId, busy, onCancel, onSend }: { bookingId: string;
           <strong style={{ fontSize: 14.5 }}>Fotos del trabajo (mínimo 1, hasta {MAX_DIAGNOSIS_PHOTOS})</strong>
           <span className="muted" style={{ fontSize: 13 }}>{photos.length ? `✓ ${photos.length} foto(s)` : 'Antes y después, la falla, la pieza dañada…'}</span>
         </div>
-        <label className="btn btn-ghost doc-btn" aria-busy={uploading}>
-          {uploading ? 'Subiendo…' : photos.length ? 'Agregar' : 'Tomar o subir'}
-          <input type="file" accept="image/*" multiple disabled={uploading || photos.length >= MAX_DIAGNOSIS_PHOTOS}
-            onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
-        </label>
+        <div className="row gap-8" style={{ flexWrap: 'wrap' }}>
+          {/* capture abre la cámara directamente en el celular */}
+          <label className="btn btn-primary doc-btn" aria-busy={uploading}>
+            {uploading ? 'Subiendo…' : '📷 Tomar foto'}
+            <input type="file" accept="image/*" capture="environment" disabled={uploading || photos.length >= MAX_DIAGNOSIS_PHOTOS}
+              onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
+          </label>
+          <label className="btn btn-ghost doc-btn" aria-busy={uploading}>
+            Galería
+            <input type="file" accept="image/*" multiple disabled={uploading || photos.length >= MAX_DIAGNOSIS_PHOTOS}
+              onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
+          </label>
+        </div>
       </div>
       {err && <p role="alert" className="form-error">{err}</p>}
       <div className="row gap-8">

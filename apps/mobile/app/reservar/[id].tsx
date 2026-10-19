@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { photosAvailable, pickPhotos, uploadLocalPhotos } from '@/lib/photos';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { CalendarPicker } from '@/components/CalendarPicker';
@@ -8,7 +9,7 @@ import { ClientGate } from '@/components/ClientGate';
 import { Icon } from '@/components/Icon';
 import { MapPicker } from '@/components/MapPicker';
 import type { ClientProfile } from '@hulul/shared/firebase';
-import { AFTER_VISIT_NOTE, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, TEST_SLOTS, testPeriodOpen, timeAvailable, type PaymentMethod } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, TEST_SLOTS, testPeriodOpen, timeAvailable, MAX_REQUEST_PHOTOS, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
@@ -91,6 +92,18 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   const dayRow = useRef<ScrollView>(null);
   const [job, setJob] = useState(trabajo && cat && (jobs.includes(trabajo) || trabajo === OTHER) ? trabajo : '');
   const [notes, setNotes] = useState('');
+  // Fotos opcionales del problema (rutas locales; se suben al confirmar).
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [photoMsg, setPhotoMsg] = useState('');
+  const addPhotos = async (from: 'camara' | 'galeria') => {
+    setPhotoMsg('');
+    try {
+      const got = await pickPhotos(from, MAX_REQUEST_PHOTOS - photos.length);
+      setPhotos((p) => [...p, ...got].slice(0, MAX_REQUEST_PHOTOS));
+    } catch (e) {
+      setPhotoMsg((e as { code?: string }).code === 'sin-permiso-camara' ? 'Permite la cámara en los ajustes del celular para tomar fotos.' : 'No se pudo abrir la cámara o la galería.');
+    }
+  };
   const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
   const [error, setError] = useState('');
   const [agreed, setAgreed] = useState(false);
@@ -167,6 +180,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
     setSaveError('');
     try {
       const { saveBooking, dateInDays } = await import('@hulul/shared/firebase');
+      const photoUrls = photos.length ? await uploadLocalPhotos(`solicitudes/${uid}/${Date.now().toString(36)}`, photos) : [];
       const bookingId = await saveBooking({
         source: 'app',
         clientId: uid,
@@ -182,6 +196,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
         address: address.trim(),
         location: location ?? undefined,
         notes: [tester ? '[PRUEBA]' : '', job === OTHER ? '' : job, notes.trim()].filter(Boolean).join('. ').slice(0, 1000),
+        ...(photoUrls.length ? { photos: photoUrls } : {}),
         contactName: profile.name,
         contactPhone: profile.phone,
         contactEmail: profile.email,
@@ -339,6 +354,30 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             {error ? <Text style={s.error}>{error}</Text> : null}
           </View>
 
+          {photosAvailable() && (
+            <View style={{ gap: 8 }}>
+              <Text style={s.label}>Fotos del problema (opcional)</Text>
+              <Body muted style={{ fontSize: 12.5 }}>Una foto del equipo, la fuga o el lugar ayuda al profesional a saber qué llevar.</Body>
+              {photos.length > 0 && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {photos.map((u, i) => (
+                    <Pressable key={u} accessibilityLabel={`Quitar foto ${i + 1}`} onPress={() => setPhotos((p) => p.filter((x) => x !== u))}>
+                      <Image source={{ uri: u }} style={{ width: 76, height: 76, borderRadius: 10 }} />
+                      <Text style={{ position: 'absolute', top: 2, right: 6, color: '#fff', fontFamily: font.bodyBold, fontSize: 16, textShadowColor: '#000', textShadowRadius: 3 }}>×</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+              {photos.length < MAX_REQUEST_PHOTOS && (
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <Pressable accessibilityRole="button" onPress={() => addPhotos('camara')} style={s.photoBtn}><Text style={s.photoBtnText}>📷 Tomar foto</Text></Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => addPhotos('galeria')} style={s.photoBtn}><Text style={s.photoBtnText}>Galería</Text></Pressable>
+                </View>
+              )}
+              {photoMsg ? <Text style={s.error}>{photoMsg}</Text> : null}
+            </View>
+          )}
+
           <View style={s.contact}>
             <View style={{ flex: 1 }}>
               <Text style={s.mapTitle}>{profile.name}</Text>
@@ -414,6 +453,8 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 const s = StyleSheet.create({
+  photoBtn: { flex: 1, height: 46, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center' },
+  photoBtnText: { fontFamily: font.bodyBold, fontSize: 14, color: c.text },
   warn: { gap: 8, padding: 12, borderRadius: 10, backgroundColor: c.copperSoft, borderLeftWidth: 4, borderLeftColor: c.primary },
   content: { padding: 20, paddingBottom: 32, gap: 22 },
   title: { fontFamily: font.display, fontSize: 18, color: c.text },

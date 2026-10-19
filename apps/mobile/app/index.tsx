@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { categories, categoryImage, suggestServices } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { ActiveBooking } from '@/components/ActiveBooking';
+import { ProHome } from '@/components/ProHome';
 import { Body, H1, H2 } from '@/components/ui';
 import { c, font, radius } from '@/theme';
 import { useUser } from '@/lib/auth';
@@ -21,6 +23,11 @@ const popular = [
 export default function Home() {
   const user = useUser();
   const isPro = useProviderStatus(user?.uid) === 'aprobado';
+  // Un profesional elige arriba cómo usar la app: como profesional (su día) o como cliente.
+  const [mode, setMode] = useState<'pro' | 'cliente'>('pro');
+  useEffect(() => { AsyncStorage.getItem('hulul.modo').then((v) => { if (v === 'cliente' || v === 'pro') setMode(v); }).catch(() => {}); }, []);
+  const pickMode = (m: 'pro' | 'cliente') => { setMode(m); AsyncStorage.setItem('hulul.modo', m).catch(() => {}); };
+  const proMode = isPro && mode === 'pro';
   const [q, setQ] = useState('');
   // Mismo buscador que la web: sugerencias desde la primera letra.
   const suggestions = useMemo(() => suggestServices(q), [q]);
@@ -42,6 +49,17 @@ export default function Home() {
           </Pressable>
         </View>
 
+        {isPro && (
+          <View style={s.seg} accessibilityRole="tablist">
+            {([['pro', 'Soy profesional'], ['cliente', 'Necesito un servicio']] as const).map(([m, l]) => (
+              <Pressable key={m} accessibilityRole="tab" accessibilityState={{ selected: mode === m }} onPress={() => pickMode(m)} style={[s.segBtn, mode === m && s.segOn]}>
+                <Text style={[s.segText, mode === m && s.segTextOn]}>{l}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {proMode && user ? <ProHome uid={user.uid} name={user.displayName ?? ''} /> : <>
         <ActiveBooking />
 
         <View style={{ gap: 6 }}>
@@ -113,8 +131,8 @@ export default function Home() {
           <H2>Sin presupuestos. Sin esperas.</H2>
           {[
             { icon: 'shield' as const, t: 'Profesionales verificados: cédula, foto y antecedentes' },
-            { icon: 'card' as const, t: 'Pago protegido: se libera cuando apruebas el trabajo' },
-            { icon: 'clock' as const, t: 'Precio claro antes de reservar: visita + hora' },
+            { icon: 'card' as const, t: 'Pago por la app: queda registrado en tu reserva' },
+            { icon: 'clock' as const, t: 'Precio claro antes de reservar: tarifa por visita' },
           ].map((p) => (
             <View key={p.t} style={s.promiseRow}>
               <Icon name={p.icon} size={18} color={c.copper} strokeWidth={2} />
@@ -135,7 +153,7 @@ export default function Home() {
             </Pressable>
           ))}
         </View>
-
+        </>}
 
         <Pressable accessibilityRole="link" onPress={() => router.push('/privacidad')} style={{ alignSelf: 'center', paddingVertical: 12 }}>
           <Text style={{ fontFamily: font.bodySemi, fontSize: 13, color: c.textMuted, textDecorationLine: 'underline' }}>Política de privacidad</Text>
@@ -148,6 +166,11 @@ export default function Home() {
 const s = StyleSheet.create({
   content: { padding: 20, paddingBottom: 40, gap: 24 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  seg: { flexDirection: 'row', padding: 4, borderRadius: radius.md, backgroundColor: c.surfaceWarm, borderWidth: 1, borderColor: c.border, marginTop: -8 },
+  segBtn: { flex: 1, paddingVertical: 10, borderRadius: radius.sm, alignItems: 'center' },
+  segOn: { backgroundColor: c.primary },
+  segText: { fontFamily: font.bodyBold, fontSize: 13.5, color: c.textSecondary },
+  segTextOn: { color: '#fff' },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logoWord: { fontFamily: font.displayHeavy, fontSize: 21, color: c.primary, letterSpacing: 0.8 },
   logoSub: { fontFamily: font.bodySemi, fontSize: 8.5, letterSpacing: 1.2, color: c.textMuted, marginTop: 1 },
