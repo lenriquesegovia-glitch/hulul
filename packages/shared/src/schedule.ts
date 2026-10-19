@@ -8,7 +8,9 @@ import type { CategorySlug } from './categories';
  *   urbanizaciones no dejan entrar proveedores ni hacer ruido.
  * - Hogar sin ruido (limpieza, clases, belleza…): todos los días de 08:00 a
  *   18:00; domingos y feriados con aviso (depende de la urbanización).
- * - Urgentes (cerrajería, salud): todos los días, también feriados, hasta 20:00.
+ * - Urgentes (cerrajería, salud): todos los días, también feriados, desde las
+ *   07:00 y hasta las 20:00, con solo 30 minutos de anticipación.
+ * - Mascotas (paseos al atardecer): como hogar, pero puede terminar hasta las 20:00.
  *
  * En todos: si el trabajo termina después de las 17:00 se avisa que HULUL no
  * responde si la urbanización no deja entrar al proveedor.
@@ -58,6 +60,26 @@ export const HOLIDAYS: Record<string, string> = {
   '2027-07-25': 'Fundación de Guayaquil',
 };
 
+/** Categorías que pueden terminar más tarde que su grupo. */
+export const HARD_END_OVERRIDE: Partial<Record<CategorySlug, number>> = { mascotas: 20 };
+
+/** Hora máxima de fin de una categoría. */
+export function hardEndFor(category: CategorySlug): number {
+  return HARD_END_OVERRIDE[category] ?? SCHEDULE_RULES[CATEGORY_SCHEDULE[category] ?? 'hogar'].hardEnd;
+}
+
+/** Anticipación mínima para reservar (minutos): urgentes 30, el resto 2 horas. */
+export function leadMinutes(category: CategorySlug): number {
+  return CATEGORY_SCHEDULE[category] === 'urgente' ? 30 : 120;
+}
+
+/** ¿Esa hora de llegada entra en el horario de la categoría? (para no mostrar horas imposibles) */
+export function slotInWindow(category: CategorySlug, slot: string): boolean {
+  const rule = SCHEDULE_RULES[CATEGORY_SCHEDULE[category] ?? 'hogar'];
+  const [h] = slot.split(':').map(Number);
+  return h >= rule.start && h + 1 <= hardEndFor(category);
+}
+
 const pad = (n: number) => String(n).padStart(2, '0');
 const toMin = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + (m || 0); };
 const fmt = (min: number) => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
@@ -97,7 +119,8 @@ export function checkSlot(input: {
   if (input.pro?.workDays?.length && !input.pro.workDays.includes(wd)) return no(`${first} no atiende los ${WEEKDAY[wd]}.`);
   if (start < rule.start * 60) return no(`Este servicio empieza desde las ${pad(rule.start)}:00.`);
   if (input.pro?.from && start < toMin(input.pro.from)) return no(`${first} empieza a atender a las ${input.pro.from}.`);
-  if (endMin > rule.hardEnd * 60) return no(`Terminaría a las ${end}. Este servicio debe terminar a más tardar a las ${pad(rule.hardEnd)}:00: elige una hora más temprano.`);
+  const hardEnd = hardEndFor(input.category);
+  if (endMin > hardEnd * 60) return no(`Terminaría a las ${end}. Este servicio debe terminar a más tardar a las ${pad(hardEnd)}:00: elige una hora más temprano.`);
   if (input.pro?.to && endMin > toMin(input.pro.to)) return no(`Terminaría a las ${end} y ${first} atiende hasta las ${input.pro.to}: elige una hora más temprano.`);
 
   if (endMin > rule.softEnd * 60) warnings.push(`El trabajo terminaría a las ${end}. Algunas urbanizaciones no permiten el ingreso de proveedores después de las ${pad(rule.softEnd)}:00; HULUL no se hace responsable si no le permiten entrar.`);
@@ -108,5 +131,5 @@ export function checkSlot(input: {
 
 /** Hora máxima de fin para un profesional en una categoría (para su registro). */
 export function maxEndHour(category: CategorySlug): number {
-  return SCHEDULE_RULES[CATEGORY_SCHEDULE[category] ?? 'hogar'].hardEnd;
+  return hardEndFor(category);
 }

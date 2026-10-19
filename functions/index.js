@@ -711,7 +711,7 @@ export const reprogramarReserva = onCall(
       if (action === 'proponer') {
         const date = String(req.data?.date ?? '');
         const slot = String(req.data?.slot ?? '');
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(0[8-9]|1[0-8]):00$/.test(slot)) throw new HttpsError('invalid-argument', 'Elige una fecha y una hora entre 08:00 y 18:00.');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(0[7-9]|1[0-9]):00$/.test(slot)) throw new HttpsError('invalid-argument', 'Elige una fecha y una hora entre 07:00 y 19:00.');
         const at = appointmentMs(date, slot);
         if (at < Date.now() + 60 * 60_000) throw new HttpsError('invalid-argument', 'La nueva hora debe ser al menos dentro de 1 hora.');
         if (at > Date.now() + 31 * 86_400_000) throw new HttpsError('invalid-argument', 'La nueva fecha debe ser dentro de los próximos 30 días.');

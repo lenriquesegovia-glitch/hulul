@@ -7,7 +7,7 @@ import { ClientGate } from '@/components/ClientGate';
 import { Icon } from '@/components/Icon';
 import { MapPicker } from '@/components/MapPicker';
 import type { ClientProfile } from '@hulul/shared/firebase';
-import { AFTER_VISIT_NOTE, BOOKING_DAYS, checkSlot, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, type PaymentMethod } from '@hulul/shared';
+import { AFTER_VISIT_NOTE, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
@@ -66,9 +66,10 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   /** Fecha AAAA-MM-DD de dentro de `d` días. */
   const isoAt = (d: number) => { const x = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
   /** Anticipación + horario de la categoría + horario del profesional. */
-  const okWith = (d: number, k: number, h: number) => slotAvailable(d, k, now) && checkSlot({ category: pro.category, date: isoAt(d), slot: SLOTS[k], hours: h, pro }).ok;
+  const lead = leadMinutes(pro.category);
+  const okWith = (d: number, k: number, h: number) => slotAvailable(d, k, now, lead) && checkSlot({ category: pro.category, date: isoAt(d), slot: SLOTS[k], hours: h, pro }).ok;
   const first = useMemo(() => {
-    const f = firstAvailable(now);
+    const f = firstAvailable(now, lead);
     for (let d = f.day; d < BOOKING_DAYS; d++) {
       const k = SLOTS.findIndex((_, i) => okWith(d, i, minH));
       if (k >= 0) return { day: d, slot: k };
@@ -128,7 +129,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
     if (sending) return;
     if (check && !check.ok) { setError(check.reason ?? 'Ese horario no está disponible.'); return; }
     if (check && check.warnings.length && !ack) { setError('Lee el aviso sobre el horario y marca que lo entiendes.'); return; }
-    if (slot < 0 || !slotAvailable(day, slot, new Date())) {
+    if (slot < 0 || !slotAvailable(day, slot, new Date(), lead)) {
       setError('Esa hora ya no está disponible. Elige otra hora de llegada.');
       return;
     }
@@ -208,7 +209,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {days.map((d, i) => {
                 const on = i === day;
-                const off = !dayAvailable(i, now) || !SLOTS.some((_, k) => okWith(i, k, hours));
+                const off = !dayAvailable(i, now, lead) || !SLOTS.some((_, k) => okWith(i, k, hours));
                 return (
                   <Pressable key={i} disabled={off} accessibilityRole="button" accessibilityState={{ selected: on, disabled: off }} accessibilityLabel={d.long} onPress={() => pickDay(i)} style={[s.day, on && s.on, off && s.off]}>
                     <Text style={[s.dayMonth, on && s.onText]}>{d.month}</Text>
@@ -224,6 +225,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             <Text style={s.label}>Hora de llegada</Text>
             <View style={s.slots}>
               {SLOTS.map((t, i) => {
+                if (!slotInWindow(pro.category, t)) return null;
                 const on = i === slot;
                 const off = !okWith(day, i, hours);
                 return (

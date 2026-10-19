@@ -63,7 +63,7 @@ export const faqGroups: { title: string; items: Q[] }[] = [
     items: [
       {
         q: '¿En qué horarios puedo reservar?',
-        a: 'De 08:00 en adelante, y el trabajo debe terminar a más tardar a las 18:00 (cerrajería y salud, hasta las 20:00). Los trabajos de obra o con ruido —aire acondicionado, plomería, electricidad, albañilería, pintura y similares— no se agendan domingos ni feriados. Si tu reserva termina después de las 17:00, cae en domingo o en feriado, te avisamos antes de confirmar: cada urbanización tiene sus reglas de ingreso y HULUL no responde si no dejan entrar al profesional.',
+        a: 'De 08:00 en adelante, y el trabajo debe terminar a más tardar a las 18:00. Paseos y cuidado de mascotas, hasta las 20:00. Cerrajería y salud, desde las 07:00 y hasta las 20:00, reservando con solo 30 minutos de anticipación (el resto, con 2 horas). Los trabajos de obra o con ruido —aire acondicionado, plomería, electricidad, albañilería, pintura y similares— no se agendan domingos ni feriados. Si tu reserva termina después de las 17:00, cae en domingo o en feriado, te avisamos antes de confirmar: cada urbanización tiene sus reglas de ingreso y HULUL no responde si no dejan entrar al profesional.',
       },
       {
         q: '¿Puedo cancelar?',

@@ -462,7 +462,7 @@ function StepZones({ d, set }: { d: Draft; set: SetField }) {
         </Field>
       </div>
       <div className="notice" style={{ fontSize: 13.5 }}>
-        <strong>Horarios de HULUL.</strong> Los trabajos deben <strong>terminar</strong> a más tardar a las 18:00 (cerrajería y salud, 20:00).
+        <strong>Horarios de HULUL.</strong> Los trabajos deben <strong>terminar</strong> a más tardar a las 18:00 (mascotas, cerrajería y salud, 20:00).
         {d.categories.some((c) => CATEGORY_SCHEDULE[c] === 'obra') && ' Los trabajos de obra o con ruido (aire, plomería, electricidad, albañilería, pintura…) no se agendan domingos ni feriados, porque muchas urbanizaciones no lo permiten.'}
         {' '}Si un trabajo termina después de las 17:00, el cliente recibe un aviso por el ingreso a urbanizaciones.
       </div>
@@ -635,7 +635,7 @@ function StatusCard({ status, name, user, onEdit }: { status: ProviderStatus; na
 
 /* ---------------------------- Piezas ---------------------------- */
 
-/** Hora máxima de fin según sus categorías (18:00; 20:00 si solo urgentes). */
+/** Hora máxima de fin según sus categorías (18:00; 20:00 en mascotas y urgentes). */
 function maxTo(d: Draft): string {
   const h = d.categories.length ? Math.max(...d.categories.map((c) => maxEndHour(c))) : 18;
   return `${String(h).padStart(2, '0')}:00`;

@@ -1,7 +1,10 @@
 import type { PaymentMethod } from './models';
 
-/** Horas de llegada que puede elegir el cliente: cada hora de 08:00 a 18:00. */
-export const SLOTS = Array.from({ length: 11 }, (_, i) => `${String(8 + i).padStart(2, '0')}:00`);
+/**
+ * Horas de llegada: cada hora de 07:00 a 19:00. Cada categoría muestra solo
+ * las que entran en su horario (schedule.ts: slotInWindow / checkSlot).
+ */
+export const SLOTS = Array.from({ length: 13 }, (_, i) => `${String(7 + i).padStart(2, '0')}:00`);
 
 /** Cuántos días hacia adelante se puede reservar. */
 export const BOOKING_DAYS = 30;
@@ -42,27 +45,27 @@ export function nextDays(n = BOOKING_DAYS, from: Date = new Date()): BookingDay[
   });
 }
 
-/** Anticipación mínima para reservar hoy: el profesional necesita tiempo para llegar. */
+/** Anticipación mínima por defecto para reservar hoy (urgentes: 30 min, ver leadMinutes en schedule.ts). */
 export const LEAD_TIME_HOURS = 2;
 
-/** ¿Se puede reservar esa hora? Las de hoy deben empezar al menos 2 horas después de ahora. */
-export function slotAvailable(dayIndex: number, slotIndex: number, now: Date = new Date()): boolean {
+/** ¿Se puede reservar esa hora? Las de hoy deben empezar al menos `leadMin` minutos después de ahora. */
+export function slotAvailable(dayIndex: number, slotIndex: number, now: Date = new Date(), leadMin = LEAD_TIME_HOURS * 60): boolean {
   if (dayIndex > 0) return true;
   const [h, m] = SLOTS[slotIndex].split(':').map(Number);
   const start = new Date(now);
   start.setHours(h, m, 0, 0);
-  return start.getTime() - now.getTime() >= LEAD_TIME_HOURS * 3_600_000;
+  return start.getTime() - now.getTime() >= leadMin * 60_000;
 }
 
 /** ¿Queda alguna hora libre ese día? */
-export function dayAvailable(dayIndex: number, now: Date = new Date()): boolean {
-  return SLOTS.some((_, i) => slotAvailable(dayIndex, i, now));
+export function dayAvailable(dayIndex: number, now: Date = new Date(), leadMin = LEAD_TIME_HOURS * 60): boolean {
+  return SLOTS.some((_, i) => slotAvailable(dayIndex, i, now, leadMin));
 }
 
 /** Primer día y hora que se pueden reservar. */
-export function firstAvailable(now: Date = new Date()): { day: number; slot: number } {
+export function firstAvailable(now: Date = new Date(), leadMin = LEAD_TIME_HOURS * 60): { day: number; slot: number } {
   for (let d = 0; d < 2; d++) {
-    const s = SLOTS.findIndex((_, i) => slotAvailable(d, i, now));
+    const s = SLOTS.findIndex((_, i) => slotAvailable(d, i, now, leadMin));
     if (s >= 0) return { day: d, slot: s };
   }
   return { day: 1, slot: 0 };

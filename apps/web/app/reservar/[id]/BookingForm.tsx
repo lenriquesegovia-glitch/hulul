@@ -14,6 +14,8 @@ import {
   type Professional,
   BOOKING_DAYS,
   checkSlot,
+  leadMinutes,
+  slotInWindow,
   visitHours,
   visitLabel,
   nextDays,
@@ -141,7 +143,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
     const n = new Date();
     setNow(n);
     // Primer día y hora que cumplan el horario del servicio y del profesional.
-    const first = firstAvailable(n);
+    const first = firstAvailable(n, leadMinutes(pro.category));
     for (let d = first.day; d < BOOKING_DAYS; d++) {
       const sIdx = SLOTS.findIndex((_, i) => okWith(n, d, i, minH));
       if (sIdx >= 0) { setDay(d); setSlot(sIdx); return; }
@@ -152,7 +154,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
 
   /** ¿Se puede ese día y hora? Anticipación + horario de la categoría + horario del profesional. */
   function okWith(n: Date, d: number, sIdx: number, h: number): boolean {
-    return slotAvailable(d, sIdx, n) && checkSlot({ category: pro.category, date: isoDay(n, d), slot: SLOTS[sIdx], hours: h, pro }).ok;
+    return slotAvailable(d, sIdx, n, leadMinutes(pro.category)) && checkSlot({ category: pro.category, date: isoDay(n, d), slot: SLOTS[sIdx], hours: h, pro }).ok;
   }
 
   const dayRow = useRef<HTMLDivElement>(null);
@@ -206,7 +208,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
       setError('Describe el trabajo que necesitas (al menos 10 caracteres).');
       return;
     }
-    if (slot < 0 || !slotAvailable(day, slot, new Date())) {
+    if (slot < 0 || !slotAvailable(day, slot, new Date(), leadMinutes(pro.category))) {
       setError('Esa hora ya no está disponible. Elige otra hora de llegada.');
       return;
     }
@@ -317,7 +319,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         <div className="chip-row" role="radiogroup" aria-label="Día" ref={dayRow}>
           {days.map((d, i) => (
             <button key={i} type="button" role="radio" aria-checked={i === day} aria-label={d.long}
-              disabled={!now || !dayAvailable(i, now) || !dayOk(i)}
+              disabled={!now || !dayAvailable(i, now, leadMinutes(pro.category)) || !dayOk(i)}
               className={`chip-day ${i === day ? 'on' : ''}`} onClick={() => pickDay(i)}>
               <span className="chip-month">{d.month}</span>
               <span style={{ fontSize: 12, fontWeight: 700 }}>{d.top}</span>
@@ -327,7 +329,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         </div>
         <span className="muted" style={{ fontSize: 14, fontWeight: 700 }}>Hora de llegada</span>
         <div className="slot-grid" role="radiogroup" aria-label="Hora de llegada">
-          {SLOTS.map((t, i) => (
+          {SLOTS.map((t, i) => slotInWindow(pro.category, t) && (
             <button key={t} type="button" role="radio" aria-checked={i === slot}
               disabled={!now || !okWith(now, day, i, hours)}
               className={`chip-slot ${i === slot ? 'on' : ''}`} onClick={() => setSlot(i)}>{t}</button>
