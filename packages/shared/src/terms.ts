@@ -48,7 +48,7 @@ export const termsOfService: LegalSection[] = [
       ] },
       { p: 'Al reservar, el cliente describe el problema para que el profesional acepte sabiendo qué va a hacer. La visita se paga siempre, se resuelva o no el problema, porque cubre el traslado y el diagnóstico.' },
       { p: 'Al terminar, el profesional registra en la app el resultado (resuelto, necesita más trabajo o no se pudo resolver), un diagnóstico escrito y al menos una foto del trabajo, que queda como respaldo para ambos.' },
-      { p: 'Repuestos, materiales, más horas de trabajo u otras visitas no están incluidos en la tarifa. Si hacen falta, el cliente y el profesional los acuerdan directamente. HULUL no interviene, no cobra ni garantiza esos acuerdos.' },
+      { p: `Repuestos, materiales, más horas de trabajo u otras visitas no están incluidos en la tarifa. Si hacen falta, el profesional los registra en la app como cobro adicional (monto y detalle) y el cliente lo acepta o lo rechaza. El cobro adicional lleva IVA, se paga por la app con tarjeta o en efectivo, y HULUL retiene sobre él la misma comisión del ${pct(P.commission)}. HULUL procesa el pago, pero no garantiza el resultado del trabajo adicional.` },
       { p: 'Tarifas sugeridas por HULUL como referencia para los profesionales (cada uno fija la suya):' },
       { ul: suggestedList },
     ],

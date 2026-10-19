@@ -52,7 +52,7 @@ const MAX_VISIT_RATE = 1000;
 
 // Mismos textos que packages/shared/src/policy.ts.
 const OUTCOMES = { resuelto: 'Quedó resuelto', parcial: 'Necesita más trabajo', no_resuelto: 'No se pudo resolver' };
-const AFTER_VISIT_NOTE = 'HULUL cobra solo la visita. Si hace falta más trabajo, repuestos u otra visita, lo acuerdas directamente con el profesional; HULUL no interviene ni garantiza ese acuerdo. Califica al profesional para que otros clientes sepan cómo trabajó.';
+const AFTER_VISIT_NOTE = 'La visita cubre el traslado, el diagnóstico y lo que se resuelva en ella. Si hace falta más trabajo, repuestos u otra visita, el profesional te envía un cobro adicional en la app y tú decides si lo aceptas; págalo por la app para que quede registrado. HULUL no garantiza el trabajo adicional: califica al profesional para que otros sepan cómo trabajó.';
 const HOME_SAFETY_NOTICE = [
   'Ten en casa a una persona adulta de tu confianza mientras dure el trabajo.',
   'Guarda dinero, joyas, documentos y objetos de valor, y no dejes al profesional solo en áreas que no necesita.',
@@ -846,6 +846,7 @@ export const confirmarServicio = onCall({ region: REGION }, async (req) => {
     const b = snap.data();
     if (b.clientId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
     if (b.status !== 'por_aprobar') throw new HttpsError('failed-precondition', 'Esta reserva ya está cerrada.');
+    if (b.extra?.status === 'propuesto') throw new HttpsError('failed-precondition', 'Primero acepta o rechaza el cobro adicional.');
     tx.update(ref, { status: 'completada', completedAt: FieldValue.serverTimestamp(), completedBy: 'cliente', previousStatus: b.status });
   });
   return { ok: true };
@@ -857,8 +858,107 @@ export const cerrarTerminadas = onSchedule({ schedule: 'every 60 minutes', regio
   const snap = await db().collection('bookings').where('status', '==', 'por_aprobar').get();
   const old = snap.docs.filter((d) => {
     const t = d.data().finishedAt;
-    return t && typeof t.toMillis === 'function' && t.toMillis() < limit;
+    // Con un cobro adicional sin responder, se espera al cliente.
+    return t && typeof t.toMillis === 'function' && t.toMillis() < limit && d.data().extra?.status !== 'propuesto';
   });
   await Promise.all(old.map((d) => d.ref.update({ status: 'completada', completedAt: FieldValue.serverTimestamp(), completedBy: 'automatico', previousStatus: 'por_aprobar' })));
   logger.info('Visitas cerradas automáticamente', { count: old.length });
+});
+
+/* ------------------------------ Cobro adicional ------------------------------ */
+
+// Mismos valores que packages/shared/src/pricing.ts (extraQuote).
+const IVA_RATE = 0.15;
+const COMMISSION = 0.15;
+const r2 = (n) => Math.round(n * 100) / 100;
+
+/**
+ * Cobro adicional (repuestos, más trabajo u otra visita):
+ * - proponer: el profesional, con la visita en curso o terminada.
+ * - aceptar (tarjeta o efectivo) / rechazar: el cliente.
+ * - recibi_efectivo: el profesional confirma que le pagaron en efectivo.
+ * HULUL retiene su comisión: con tarjeta se descuenta del pago; en efectivo
+ * queda como saldo a cargo del profesional.
+ */
+export const cobroAdicional = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const id = String(req.data?.id ?? '');
+  const action = String(req.data?.action ?? '');
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id) || !['proponer', 'aceptar', 'rechazar', 'recibi_efectivo'].includes(action)) throw new HttpsError('invalid-argument', 'Acción no válida.');
+  const ref = db().doc(`bookings/${id}`);
+
+  const out = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
+    const b = snap.data();
+    const isPro = b.professionalId === uid;
+    const isClient = b.clientId === uid;
+    const ex = b.extra;
+
+    if (action === 'proponer') {
+      if (!isPro) throw new HttpsError('permission-denied', 'Solo el profesional de la reserva puede agregar un cobro.');
+      if (!['en_curso', 'por_aprobar'].includes(b.status)) throw new HttpsError('failed-precondition', 'El cobro adicional se agrega durante o al terminar la visita.');
+      if (ex && ex.status !== 'rechazado') throw new HttpsError('failed-precondition', 'Ya hay un cobro adicional en esta reserva.');
+      const amount = r2(Number(req.data?.amount));
+      const description = String(req.data?.description ?? '').trim().slice(0, 300);
+      if (!Number.isFinite(amount) || amount < 1 || amount > 2000) throw new HttpsError('invalid-argument', 'El monto debe estar entre $1 y $2000.');
+      if (description.length < 10) throw new HttpsError('invalid-argument', 'Explica qué incluye el cobro (al menos 10 caracteres).');
+      const extra = { amount, description, iva: r2(amount * IVA_RATE), total: r2(amount * (1 + IVA_RATE)), commission: r2(amount * COMMISSION), status: 'propuesto', proposedAt: FieldValue.serverTimestamp() };
+      tx.update(ref, { extra });
+      return { b, extra, to: 'cliente' };
+    }
+
+    if (!ex) throw new HttpsError('failed-precondition', 'No hay un cobro adicional en esta reserva.');
+
+    if (action === 'aceptar' || action === 'rechazar') {
+      if (!isClient) throw new HttpsError('permission-denied', 'Solo el cliente de la reserva puede responder el cobro.');
+      if (ex.status !== 'propuesto') throw new HttpsError('failed-precondition', 'Este cobro ya fue respondido.');
+      if (action === 'rechazar') {
+        tx.update(ref, { 'extra.status': 'rechazado', 'extra.respondedAt': FieldValue.serverTimestamp() });
+        return { b, extra: { ...ex, status: 'rechazado' }, to: 'pro' };
+      }
+      const method = String(req.data?.method ?? '');
+      if (!['tarjeta', 'efectivo'].includes(method)) throw new HttpsError('invalid-argument', 'Elige cómo pagas.');
+      // Sin pasarela todavía: con tarjeta queda "por cobrar" hasta conectar los pagos.
+      const status = method === 'tarjeta' ? 'por_cobrar' : 'efectivo_pendiente';
+      tx.update(ref, { 'extra.status': status, 'extra.method': method, 'extra.respondedAt': FieldValue.serverTimestamp() });
+      return { b, extra: { ...ex, status, method }, to: 'pro' };
+    }
+
+    // recibi_efectivo
+    if (!isPro) throw new HttpsError('permission-denied', 'Solo el profesional confirma el pago en efectivo.');
+    if (ex.status !== 'efectivo_pendiente') throw new HttpsError('failed-precondition', 'Este cobro no está pendiente de pago en efectivo.');
+    tx.update(ref, { 'extra.status': 'pagado_efectivo', 'extra.paidAt': FieldValue.serverTimestamp() });
+    // La comisión de HULUL queda como saldo a cargo del profesional.
+    if (!b.demo) tx.set(db().doc(`providers/${uid}`), { cashDebt: FieldValue.increment(ex.commission) }, { merge: true });
+    return { b, extra: { ...ex, status: 'pagado_efectivo' }, to: 'cliente' };
+  });
+
+  // Avisos (no hacen fallar la operación).
+  try {
+    const { b, extra, to } = out;
+    const cat = CATEGORIES[b.category] ?? b.category;
+    const first = String(b.contactName ?? '').split(' ')[0];
+    const texts = {
+      proponer: [`Cobro adicional de ${usd(extra.total)}`, `${b.professionalName} agregó un cobro adicional a tu servicio de ${cat}: ${extra.description}. Revísalo y acéptalo o recházalo en la app.`],
+      aceptar: [`${first} aceptó el cobro adicional`, extra.method === 'tarjeta' ? `Aceptó ${usd(extra.total)} con tarjeta. Se cobra por la app.` : `Aceptó ${usd(extra.total)} en efectivo. Cuando te pague, marca "Recibí el efectivo" en tu agenda.`],
+      rechazar: [`${first} no aceptó el cobro adicional`, `No aceptó el cobro de ${usd(extra.total)}. Coordina con el cliente si hace falta.`],
+      recibi_efectivo: ['Pago en efectivo registrado', `${b.professionalName} confirmó que recibió ${usd(extra.total)} en efectivo por el cobro adicional.`],
+    }[action];
+    if (texts) {
+      await pushTo(to === 'cliente' ? b.clientId : b.professionalId, texts[0], texts[1], to === 'cliente' ? { bookingId: id, to: 'cliente' } : { url: AGENDA, bookingId: id, to: 'pro' });
+      const { from, notifyTo } = senders();
+      let email = to === 'cliente' ? b.contactEmail : null;
+      if (to === 'pro') email = (await db().doc(`providers/${b.professionalId}`).get()).data()?.email;
+      if (email) {
+        await transport().sendMail({ from, to: email, replyTo: notifyTo, subject: texts[0],
+          html: layout(texts[0], `<p style="font-size:15px">${esc(texts[1])}</p>` + rows([['Código', code(id)], ['Detalle', esc(extra.description)], ['Monto', usd(extra.amount)], ['IVA', usd(extra.iva)], ['Total', `<strong>${usd(extra.total)}</strong>`]]) +
+            button(to === 'cliente' ? `https://hululec.com/cuenta/reserva/${id}` : AGENDA, 'Ver la reserva')) });
+      }
+    }
+  } catch (e) {
+    logger.warn('No se pudo avisar el cobro adicional', { id, action, e: String(e) });
+  }
+  return { ok: true };
 });

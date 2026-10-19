@@ -45,6 +45,24 @@ export function quote(visitRate: number): Quote {
   return { visit, subtotal, fee, iva, total, proPayout };
 }
 
+/**
+ * Cobro adicional (repuestos, más trabajo u otra visita) que el profesional
+ * agrega en la app y el cliente acepta. Lleva IVA; HULUL retiene la misma
+ * comisión que en la visita. No lleva otro cargo de plataforma.
+ */
+export interface ExtraQuote { amount: number; iva: number; total: number; commission: number; proPayout: number }
+
+export function extraQuote(amount: number): ExtraQuote {
+  const a = round2(amount);
+  const iva = round2(a * IVA);
+  const commission = round2(a * COMMISSION_RATE);
+  return { amount: a, iva, total: round2(a + iva), commission, proPayout: round2(a - commission) };
+}
+
+/** Límites del cobro adicional (USD). */
+export const MIN_EXTRA = 1;
+export const MAX_EXTRA = 2000;
+
 export function formatUSD(n: number): string {
   return '$' + n.toFixed(2);
 }

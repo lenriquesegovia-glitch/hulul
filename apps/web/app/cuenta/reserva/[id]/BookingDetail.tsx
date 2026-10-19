@@ -8,6 +8,7 @@ import { Icon } from '@/components/Icon';
 import { RescheduleBox, shortDay } from '@/components/RescheduleBox';
 import { SafetyNotice, VisitReport } from '@/components/VisitReport';
 import { LiveMap } from '@/components/LiveMap';
+import { ExtraForClient } from '@/components/ExtraCharge';
 import { useUser } from '@/lib/auth';
 import { CancelBox } from '../../Account';
 
@@ -95,7 +96,8 @@ export function BookingDetail({ id }: { id: string }) {
 
       <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} />
       {b.outcome && <p className="muted" style={{ fontSize: 14 }}>{AFTER_VISIT_NOTE}</p>}
-      {b.status === 'por_aprobar' && <ConfirmBox id={b.id} />}
+      <ExtraForClient id={b.id} extra={b.extra} proName={first} />
+      {b.status === 'por_aprobar' && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
 
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && <SafetyNotice title={HOME_SAFETY_TITLE} items={HOME_SAFETY_NOTICE} />}
 

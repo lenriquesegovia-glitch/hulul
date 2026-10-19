@@ -21,7 +21,7 @@ export const faqGroups: { title: string; items: Q[] }[] = [
       },
       {
         q: '¿Los materiales y repuestos están incluidos?',
-        a: 'No. Si hacen falta, el profesional te explica qué se necesita y lo acuerdan directamente entre ustedes. HULUL no interviene en ese acuerdo.',
+        a: `No. Si hacen falta, el profesional te envía en la app un cobro adicional con el monto y el detalle. Tú lo aceptas o lo rechazas, y lo pagas por la app con tarjeta (recomendado) o en efectivo. Lleva IVA y HULUL retiene la misma comisión del ${pct(P.commission)}.`,
       },
       {
         q: '¿Cómo se protege mi pago?',

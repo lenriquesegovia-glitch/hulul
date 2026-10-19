@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { AFTER_VISIT_NOTE, appointmentTime, formatUSD, getCategory, hhmmEcuador, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, OUTCOME_LABEL, SLOTS, usd } from '@hulul/shared';
-import { confirmService, firestore, reschedule, type ClientBooking, type RescheduleAction } from '@hulul/shared/firebase';
+import { confirmService, EXTRA_STATUS_LABEL, extraCharge, firestore, reschedule, type ClientBooking, type ExtraAction, type ExtraCharge, type RescheduleAction } from '@hulul/shared/firebase';
 import { Icon } from '@/components/Icon';
 import { LiveMap } from '@/components/LiveMap';
 import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
@@ -110,7 +110,8 @@ function Detail({ b }: { b: ClientBooking }) {
           <Body muted style={{ fontSize: 13 }}>{AFTER_VISIT_NOTE}</Body>
         </Card>
       )}
-      {b.status === 'por_aprobar' && <ConfirmBox id={b.id} />}
+      {b.extra && <ExtraBox id={b.id} extra={b.extra} proName={first} />}
+      {b.status === 'por_aprobar' && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && (
         <View style={s.box}>
           <Text style={s.boxTitle}>{HOME_SAFETY_TITLE}</Text>
@@ -181,6 +182,39 @@ function Reschedule({ b, other }: { b: ClientBooking; other: string }) {
       <PrimaryButton label={busy ? 'Enviando…' : 'Enviar propuesta'} onPress={() => !busy && run('proponer')} />
       <Pressable onPress={() => setOpen(false)}><Text style={[s.link, { textAlign: 'center' }]}>Volver</Text></Pressable>
     </View>
+  );
+}
+
+/** Cobro adicional del profesional: el cliente lo acepta (tarjeta o efectivo) o lo rechaza. */
+function ExtraBox({ id, extra, proName }: { id: string; extra: ExtraCharge; proName: string }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const act = async (data: ExtraAction) => {
+    if (busy) return;
+    setBusy(true); setMsg('');
+    try { await extraCharge(data); } catch (e) { setMsg((e as { message?: string }).message || 'No se pudo guardar. Inténtalo de nuevo.'); } finally { setBusy(false); }
+  };
+  const paid = ['pagado', 'pagado_efectivo'].includes(extra.status);
+  return (
+    <Card style={{ gap: 10 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <Text style={s.boxTitle}>Cobro adicional de {proName}</Text>
+        <Text style={[s.badge, paid && { backgroundColor: c.successSoft, color: c.success }]}>{EXTRA_STATUS_LABEL[extra.status]}</Text>
+      </View>
+      <Body muted>{extra.description}</Body>
+      <Body>Monto {formatUSD(extra.amount)} + IVA {formatUSD(extra.iva)} = {formatUSD(extra.total)}</Body>
+      {extra.status === 'propuesto' && (
+        <>
+          <Body muted style={{ fontSize: 12.5 }}>Págalo por la app para que quede registrado. HULUL no garantiza el trabajo adicional: califica al profesional según cómo lo hizo.</Body>
+          {msg ? <Body style={{ fontSize: 13, color: c.primary }}>{msg}</Body> : null}
+          <PrimaryButton label={busy ? 'Guardando…' : 'Aceptar y pagar con tarjeta (recomendado)'} onPress={() => act({ id, action: 'aceptar', method: 'tarjeta' })} />
+          <Pressable accessibilityRole="button" onPress={() => act({ id, action: 'aceptar', method: 'efectivo' })} style={s.chip}><Text style={s.chipText}>Aceptar y pagar en efectivo</Text></Pressable>
+          <Pressable accessibilityRole="button" onPress={() => act({ id, action: 'rechazar' })}><Text style={[s.chipText, { color: c.primary, textAlign: 'center' }]}>No acepto</Text></Pressable>
+        </>
+      )}
+      {extra.status === 'por_cobrar' && <Body muted style={{ fontSize: 12.5 }}>Se cobrará con tu tarjeta. Versión de prueba: todavía no se hace el cobro real.</Body>}
+      {extra.status === 'efectivo_pendiente' && <Body muted style={{ fontSize: 12.5 }}>Págale {formatUSD(extra.total)} en efectivo a {proName}. Él confirmará que lo recibió.</Body>}
+    </Card>
   );
 }
 

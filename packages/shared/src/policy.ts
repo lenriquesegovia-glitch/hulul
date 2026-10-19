@@ -189,7 +189,7 @@ export const MIN_DIAGNOSIS_CHARS = 20;
 
 /** Qué se le explica al cliente sobre lo que viene después de la visita. */
 export const AFTER_VISIT_NOTE =
-  'HULUL cobra solo la visita. Si hace falta más trabajo, repuestos u otra visita, lo acuerdas directamente con el profesional; HULUL no interviene ni garantiza ese acuerdo. Califica al profesional para que otros clientes sepan cómo trabajó.';
+  'La visita cubre el traslado, el diagnóstico y lo que se resuelva en ella. Si hace falta más trabajo, repuestos u otra visita, el profesional te envía un cobro adicional en la app y tú decides si lo aceptas; págalo por la app para que quede registrado. HULUL no garantiza el trabajo adicional: califica al profesional para que otros sepan cómo trabajó.';
 
 /* ------------------------- Seguridad en el hogar ------------------------- */
 

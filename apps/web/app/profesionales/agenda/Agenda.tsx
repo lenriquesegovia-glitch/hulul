@@ -6,6 +6,7 @@ import { COMMISSION_RATE, departPlan, durationLabel, formatUSD, getCategory, hhm
 import { RescheduleBox } from '@/components/RescheduleBox';
 import type { ProAction, ProBooking, VisitReport as Report } from '@hulul/shared/firebase';
 import { VisitReport } from '@/components/VisitReport';
+import { ExtraForPro } from '@/components/ExtraCharge';
 import { SignIn } from '@/components/SignIn';
 import { logout, useUser } from '@/lib/auth';
 import { AgendaMap } from './AgendaMap';
@@ -40,7 +41,9 @@ function dayTitle(iso: string): string {
   return `${WEEKDAYS[dt.getUTCDay()][0].toUpperCase()}${WEEKDAYS[dt.getUTCDay()].slice(1)} ${d} ${MONTHS[m - 1]}`;
 }
 
-const earnings = (b: ProBooking) => (b.visit ?? b.subtotal ?? 0) * (1 - COMMISSION_RATE);
+/** Lo que gana: la visita y el cobro adicional aceptado, menos la comisión. */
+const earnings = (b: ProBooking) => (b.visit ?? b.subtotal ?? 0) * (1 - COMMISSION_RATE)
+  + (b.extra && ['por_cobrar', 'pagado', 'efectivo_pendiente', 'pagado_efectivo'].includes(b.extra.status) ? b.extra.amount - b.extra.commission : 0);
 
 export function Agenda() {
   const user = useUser();
@@ -278,10 +281,11 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
 
       <div className="row gap-12" style={{ justifyContent: 'space-between', flexWrap: 'wrap', fontSize: 14 }}>
         <span className="muted">{PAY[b.paymentMethod] ?? b.paymentMethod}{b.demo ? ' · prueba' : ''}</span>
-        <span>Visita: te queda <strong>{formatUSD(earnings(b))}</strong></span>
+        <span>{b.extra && b.extra.status !== 'propuesto' && b.extra.status !== 'rechazado' ? 'Visita + adicional' : 'Visita'}: te queda <strong>{formatUSD(earnings(b))}</strong></span>
       </div>
 
       {b.outcome && <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} title="Tu diagnóstico" />}
+      {!compact && <ExtraForPro id={b.id} status={b.status} extra={b.extra} />}
       {b.status === 'pendiente' && !compact && <span className="muted" style={{ fontSize: 13.5 }}>Lee bien qué necesita el cliente y acepta solo si sabes hacerlo. Cobras la visita; lo que haga falta después lo acuerdas con el cliente.</span>}
 
       {msg && <p role="alert" className="form-error">{msg}</p>}

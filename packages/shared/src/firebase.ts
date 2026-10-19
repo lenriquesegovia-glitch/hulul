@@ -191,6 +191,7 @@ export interface ClientBooking {
   outcome?: JobOutcome;
   diagnosis?: string;
   diagnosisPhotos?: string[];
+  extra?: ExtraCharge;
 }
 
 /** Cambio de hora propuesto por una de las partes. */
@@ -284,6 +285,42 @@ export function watchLivePosition(bookingId: string, cb: (p: LivePosition | null
   }, () => cb(null));
 }
 
+/* ---------------------------- Cobro adicional ---------------------------- */
+
+export type ExtraStatus = 'propuesto' | 'por_cobrar' | 'pagado' | 'efectivo_pendiente' | 'pagado_efectivo' | 'rechazado';
+
+/** Cobro adicional de una reserva (lo propone el profesional y lo acepta el cliente). */
+export interface ExtraCharge {
+  amount: number;
+  description: string;
+  iva: number;
+  total: number;
+  commission: number;
+  status: ExtraStatus;
+  method?: 'tarjeta' | 'efectivo';
+}
+
+export const EXTRA_STATUS_LABEL: Record<ExtraStatus, string> = {
+  propuesto: 'Esperando que el cliente acepte',
+  por_cobrar: 'Aceptado: se cobra con tarjeta',
+  pagado: 'Pagado con tarjeta',
+  efectivo_pendiente: 'Aceptado: se paga en efectivo',
+  pagado_efectivo: 'Pagado en efectivo',
+  rechazado: 'El cliente no lo aceptó',
+};
+
+export type ExtraAction =
+  | { id: string; action: 'proponer'; amount: number; description: string }
+  | { id: string; action: 'aceptar'; method: 'tarjeta' | 'efectivo' }
+  | { id: string; action: 'rechazar' }
+  | { id: string; action: 'recibi_efectivo' };
+
+/** Proponer, aceptar, rechazar o confirmar el pago de un cobro adicional (lo valida el servidor). */
+export async function extraCharge(data: ExtraAction): Promise<void> {
+  const fn = httpsCallable<ExtraAction, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'cobroAdicional');
+  await fn(data);
+}
+
 /* ------------------------- Cierre del servicio ------------------------- */
 
 /** El cliente confirma que el servicio terminó (si no, se cierra solo a las 24 horas). */
@@ -369,6 +406,7 @@ export interface ProBooking {
   outcome?: JobOutcome;
   diagnosis?: string;
   diagnosisPhotos?: string[];
+  extra?: ExtraCharge;
 }
 
 /* ------------------------------ Cambio de hora ------------------------------ */
