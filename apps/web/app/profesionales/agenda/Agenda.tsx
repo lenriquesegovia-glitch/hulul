@@ -7,6 +7,7 @@ import { RescheduleBox } from '@/components/RescheduleBox';
 import type { ProAction, ProBooking, VisitReport as Report } from '@hulul/shared/firebase';
 import { VisitReport } from '@/components/VisitReport';
 import { ExtraForPro } from '@/components/ExtraCharge';
+import { RateClientBox } from '@/components/Rating';
 import { SignIn } from '@/components/SignIn';
 import { logout, useUser } from '@/lib/auth';
 import { AgendaMap } from './AgendaMap';
@@ -296,6 +297,8 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
 
       {b.outcome && <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} title="Tu diagnóstico" />}
       {!compact && <ExtraForPro id={b.id} status={b.status} extra={b.extra} />}
+      {b.rating ? <span className="muted" style={{ fontSize: 13.5 }}>El cliente te calificó {'★'.repeat(b.rating)}</span> : null}
+      {!compact && ['por_aprobar', 'completada'].includes(b.status) && !b.clientRating && <RateClientBox id={b.id} clientName={first} />}
       {b.status === 'pendiente' && !compact && <span className="muted" style={{ fontSize: 13.5 }}>Lee bien qué necesita el cliente y acepta solo si sabes hacerlo. Cobras la visita; lo que haga falta después lo acuerdas con el cliente.</span>}
 
       {msg && <p role="alert" className="form-error">{msg}</p>}

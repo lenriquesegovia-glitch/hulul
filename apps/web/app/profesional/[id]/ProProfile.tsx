@@ -5,6 +5,7 @@ import { AFTER_VISIT_NOTE, formatPrice, formatRating, getCategory, proHref } fro
 import { DownloadBand } from '@/components/DownloadBand';
 import { Icon } from '@/components/Icon';
 import { usePro } from '@/lib/pros';
+import { ReviewsList } from '@/components/Rating';
 
 /** Ficha pública de un profesional aprobado (se lee de `pros/{uid}`). */
 export function ProProfile({ id }: { id: string }) {
@@ -97,7 +98,7 @@ export function ProProfile({ id }: { id: string }) {
 
           <div className="stack gap-12">
             <h2 style={{ fontSize: 22 }}>Reseñas</h2>
-            <p className="muted">{pro.reviewCount > 0 ? 'Las reseñas se muestran pronto.' : `${pro.name.split(' ')[0]} es nuevo en HULUL. Las reseñas aparecen aquí después de cada servicio.`}</p>
+            <ReviewsList uid={pro.id} first={pro.name.split(' ')[0]} />
           </div>
         </div>
       </section>

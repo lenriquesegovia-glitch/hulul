@@ -9,6 +9,7 @@ import { RescheduleBox, shortDay } from '@/components/RescheduleBox';
 import { SafetyNotice, VisitReport } from '@/components/VisitReport';
 import { LiveMap } from '@/components/LiveMap';
 import { ExtraForClient } from '@/components/ExtraCharge';
+import { RatingBox } from '@/components/Rating';
 import { useUser } from '@/lib/auth';
 import { CancelBox } from '../../Account';
 
@@ -97,7 +98,9 @@ export function BookingDetail({ id }: { id: string }) {
       <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} />
       {b.outcome && <p className="muted" style={{ fontSize: 14 }}>{AFTER_VISIT_NOTE}</p>}
       <ExtraForClient id={b.id} extra={b.extra} proName={first} />
-      {b.status === 'por_aprobar' && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
+      {['por_aprobar', 'completada'].includes(b.status) && !b.rating && b.extra?.status !== 'propuesto' && <RatingBox id={b.id} proName={first} />}
+      {b.rating ? <p className="muted">Calificaste a {first} con {'★'.repeat(b.rating)}. ¡Gracias!</p> : null}
+      {b.status === 'por_aprobar' && !b.rating && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
 
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && <SafetyNotice title={HOME_SAFETY_TITLE} items={HOME_SAFETY_NOTICE} />}
 
@@ -149,10 +152,10 @@ function ConfirmBox({ id }: { id: string }) {
   };
   return (
     <div className="card stack gap-8">
-      <strong>¿Todo en orden?</strong>
-      <span className="muted" style={{ fontSize: 14 }}>Confirma para cerrar el servicio. Si no lo haces, se cierra solo 24 horas después de terminado.</span>
+      <strong>¿Prefieres no calificar ahora?</strong>
+      <span className="muted" style={{ fontSize: 14 }}>Puedes cerrar el servicio sin calificar. Si no haces nada, se cierra solo 24 horas después de terminado.</span>
       {msg && <p role="alert" className="form-error">{msg}</p>}
-      <button type="button" className="btn btn-primary" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={go}>{busy ? 'Guardando…' : 'Confirmar y cerrar el servicio'}</button>
+      <button type="button" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={go}>{busy ? 'Guardando…' : 'Cerrar sin calificar'}</button>
     </div>
   );
 }

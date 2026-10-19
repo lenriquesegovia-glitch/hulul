@@ -60,7 +60,7 @@ export function ServiceManager({ uid }: { uid: string }) {
     setErr(''); setMsg('');
     for (const c of p.categories) {
       const name = getCategory(c)?.name ?? c;
-      const r = rateProblem(name, rates[c]);
+      const r = rateProblem(name, rates[c], c);
       if (r) { setErr(r); return; }
       if (!(services[c]?.length)) { setErr(`Marca al menos un trabajo en ${name}.`); return; }
     }
@@ -140,7 +140,7 @@ function AddCategory({ uid, p, onCancel, onDone }: { uid: string; p: ProviderSer
     if (!cat) { setErr('Elige la categoría.'); return; }
     const name = getCategory(cat)?.name ?? cat;
     if (!svc.length) { setErr(`Marca qué trabajos haces en ${name}.`); return; }
-    const r = rateProblem(name, rate);
+    const r = rateProblem(name, rate, cat);
     if (r) { setErr(r); return; }
     const e = evidenceProblem(cat, ev);
     if (e) { setErr(e); return; }

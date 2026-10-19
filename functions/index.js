@@ -49,6 +49,13 @@ const SUGGESTED = {
 };
 const MIN_VISIT_RATE = 5;
 const MAX_VISIT_RATE = 1000;
+// Banda de tarifas alrededor de la sugerida (igual que RATE_BAND en provider.ts).
+const RATE_BAND = { below: 0.25, above: 0.25 };
+const rateRange = (c) => {
+  const s = SUGGESTED[c] ?? 20;
+  return { min: Math.max(MIN_VISIT_RATE, Math.floor(s * (1 - RATE_BAND.below))), max: Math.ceil(s * (1 + RATE_BAND.above)) };
+};
+const clampRate = (c, r) => { const { min, max } = rateRange(c); return Math.min(max, Math.max(min, r)); };
 
 // Mismos textos que packages/shared/src/policy.ts.
 const OUTCOMES = { resuelto: 'Quedó resuelto', parcial: 'Necesita más trabajo', no_resuelto: 'No se pudo resolver' };
@@ -69,7 +76,8 @@ function approvedCats(p) {
   if (!p.catStatus) return cats;
   return cats.filter((c) => (p.catStatus[c] ?? 'aprobado') === 'aprobado');
 }
-const visitRateOf = (p, c) => validRate(p.visitRates?.[c]) ?? SUGGESTED[c] ?? 20;
+// Lo que se publica siempre queda dentro de la banda de la categoría.
+const visitRateOf = (p, c) => clampRate(c, validRate(p.visitRates?.[c]) ?? SUGGESTED[c] ?? 20);
 const DAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
@@ -635,7 +643,7 @@ export const gestionarReserva = onCall(
         aceptar: `Confirmó tu servicio de ${cat} para el ${when}.`,
         en_camino: `Va en camino a tu dirección.`,
         llegue: 'Llegó a tu dirección. Ten a una persona de tu confianza en casa durante el trabajo.',
-        terminar: 'Terminó la visita. Revisa el resultado, el diagnóstico y las fotos.',
+        terminar: 'Terminó la visita. Revisa el diagnóstico y las fotos, y califícalo.',
         rechazar: `No puede atender tu reserva del ${when}. No se te cobra nada.`,
         no_puedo: `Canceló tu reserva del ${when}. No se te cobra nada.`,
       }[action];
@@ -699,7 +707,8 @@ export const actualizarServicios = onCall(
       for (const c of cats) {
         if (c in rates) {
           const r = validRate(Number(rates[c]));
-          if (r === null) throw new HttpsError('invalid-argument', `La tarifa de ${CATEGORIES[c] ?? c} debe estar entre $${MIN_VISIT_RATE} y $${MAX_VISIT_RATE}.`);
+          const { min, max } = rateRange(c);
+          if (r === null || r < min || r > max) throw new HttpsError('invalid-argument', `La tarifa de ${CATEGORIES[c] ?? c} debe estar entre $${min} y $${max}.`);
           patch[`visitRates.${c}`] = r;
         }
         if (c in services) patch[`services.${c}`] = cleanServices(services[c]);
@@ -715,7 +724,8 @@ export const actualizarServicios = onCall(
       const status = p.catStatus?.[cat];
       if (cats.includes(cat) && status !== 'observado' && status !== 'rechazado') throw new HttpsError('already-exists', 'Ya tienes esa categoría.');
       const rate = validRate(Number(req.data?.visitRate));
-      if (rate === null) throw new HttpsError('invalid-argument', `La tarifa por visita debe estar entre $${MIN_VISIT_RATE} y $${MAX_VISIT_RATE}.`);
+      const band = rateRange(cat);
+      if (rate === null || rate < band.min || rate > band.max) throw new HttpsError('invalid-argument', `La tarifa por visita en ${CATEGORIES[cat]} debe estar entre $${band.min} y $${band.max}.`);
       const services = cleanServices(req.data?.services);
       if (!services.length) throw new HttpsError('invalid-argument', 'Marca al menos un trabajo que haces.');
       const evidence = cleanEvidence(req.data?.evidence, uid, cat);
@@ -965,5 +975,97 @@ export const cobroAdicional = onCall({ region: REGION, secrets: [MAIL_PASSWORD] 
   } catch (e) {
     logger.warn('No se pudo avisar el cobro adicional', { id, action, e: String(e) });
   }
+  return { ok: true };
+});
+
+/* ------------------------------- Calificaciones ------------------------------- */
+
+const stars = (n) => { const v = Math.round(Number(n)); return v >= 1 && v <= 5 ? v : null; };
+const STARS = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
+
+/**
+ * El cliente califica al profesional (obligatorio) y a HULUL (opcional). La
+ * reseña es pública en el perfil del profesional y actualiza su promedio. Si
+ * la visita estaba "terminada", calificar también cierra el servicio.
+ */
+export const calificar = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const id = String(req.data?.id ?? '');
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('invalid-argument', 'Reserva no válida.');
+  const proStars = stars(req.data?.proStars);
+  if (!proStars) throw new HttpsError('invalid-argument', 'Elige de 1 a 5 estrellas para el profesional.');
+  const appStars = req.data?.appStars == null ? null : stars(req.data.appStars);
+  const proComment = String(req.data?.proComment ?? '').trim().slice(0, 600);
+  const appComment = String(req.data?.appComment ?? '').trim().slice(0, 600);
+  if (proStars <= 2 && proComment.length < 10) throw new HttpsError('invalid-argument', 'Cuéntanos qué salió mal (al menos 10 caracteres): nos ayuda a cuidar la calidad.');
+  const ref = db().doc(`bookings/${id}`);
+
+  const b = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
+    const bk = snap.data();
+    if (bk.clientId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
+    if (!['por_aprobar', 'completada'].includes(bk.status)) throw new HttpsError('failed-precondition', 'Podrás calificar cuando el profesional termine la visita.');
+    if (bk.rating) throw new HttpsError('already-exists', 'Ya calificaste este servicio. ¡Gracias!');
+    if (bk.extra?.status === 'propuesto') throw new HttpsError('failed-precondition', 'Primero acepta o rechaza el cobro adicional.');
+    const proRef = db().doc(`pros/${bk.professionalId}`);
+    const pro = await tx.get(proRef);
+    tx.set(db().doc(`reviews/${id}`), {
+      bookingId: id, professionalId: bk.professionalId, category: bk.category,
+      clientName: String(bk.contactName ?? 'Cliente').split(' ')[0], rating: proStars, text: proComment,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    if (appStars) tx.set(db().doc(`appFeedback/${id}`), { bookingId: id, clientId: uid, rating: appStars, text: appComment, createdAt: FieldValue.serverTimestamp() });
+    if (pro.exists) {
+      const p = pro.data();
+      const count = Number(p.reviewCount ?? 0);
+      const avg = (Number(p.rating ?? 0) * count + proStars) / (count + 1);
+      tx.update(proRef, { rating: Math.round(avg * 100) / 100, reviewCount: count + 1, jobsDone: FieldValue.increment(1) });
+    }
+    tx.update(ref, {
+      rating: proStars, ratedAt: FieldValue.serverTimestamp(),
+      ...(bk.status === 'por_aprobar' ? { status: 'completada', completedAt: FieldValue.serverTimestamp(), completedBy: 'cliente', previousStatus: bk.status } : {}),
+    });
+    return bk;
+  });
+
+  // Avisos: al profesional siempre; a HULUL si algo salió mal.
+  try {
+    const { from, notifyTo } = senders();
+    const first = String(b.contactName ?? '').split(' ')[0];
+    await pushTo(b.professionalId, `${first} te calificó ${STARS(proStars)}`, proComment || 'Gracias por tu trabajo.', { url: AGENDA, bookingId: id, to: 'pro' });
+    if (proStars <= 2 || (appStars && appStars <= 2)) {
+      await transport().sendMail({ from, to: notifyTo, subject: `Calificación baja en ${code(id)} · profesional ${proStars}★${appStars ? ` · app ${appStars}★` : ''}`,
+        html: layout('Revisar una calificación baja', rows([
+          ['Código', code(id)], ['Profesional', esc(b.professionalName)], ['Cliente', esc(b.contactName)], ['Celular', esc(b.contactPhone)],
+          ['Profesional', `${STARS(proStars)} ${esc(proComment)}`], ['App', appStars ? `${STARS(appStars)} ${esc(appComment)}` : '—'],
+        ])) });
+    }
+  } catch (e) {
+    logger.warn('No se pudo avisar la calificación', { id, e: String(e) });
+  }
+  return { ok: true };
+});
+
+/** El profesional califica al cliente (privado: solo lo ve HULUL). */
+export const calificarCliente = onCall({ region: REGION }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const id = String(req.data?.id ?? '');
+  const n = stars(req.data?.stars);
+  const comment = String(req.data?.comment ?? '').trim().slice(0, 600);
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id) || !n) throw new HttpsError('invalid-argument', 'Elige de 1 a 5 estrellas.');
+  const ref = db().doc(`bookings/${id}`);
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
+    const b = snap.data();
+    if (b.professionalId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
+    if (!['por_aprobar', 'completada'].includes(b.status)) throw new HttpsError('failed-precondition', 'Califica al cliente cuando termines la visita.');
+    if (b.clientRating) throw new HttpsError('already-exists', 'Ya calificaste a este cliente.');
+    tx.update(ref, { clientRating: { stars: n, comment, at: FieldValue.serverTimestamp() } });
+    tx.set(db().doc(`clientRatings/${b.clientId}`), { sum: FieldValue.increment(n), count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  });
   return { ok: true };
 });

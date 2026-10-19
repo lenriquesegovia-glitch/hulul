@@ -296,7 +296,7 @@ function validate(step: number, d: Draft, bank: Bank): string {
     for (const c of d.categories) {
       const name = getCategory(c)?.name ?? c;
       if (!(d.services[c]?.length)) return `Marca qué trabajos haces en ${name}.`;
-      const r = rateProblem(name, d.visitRates[c]);
+      const r = rateProblem(name, d.visitRates[c], c);
       if (r) return r;
       const ev = evidenceProblem(c, d.catEvidence[c]);
       if (ev) return `${name}: ${ev}`;

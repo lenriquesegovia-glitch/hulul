@@ -7,6 +7,7 @@ import { AFTER_VISIT_NOTE, appointmentTime, formatUSD, getCategory, hhmmEcuador,
 import { confirmService, EXTRA_STATUS_LABEL, extraCharge, firestore, reschedule, type ClientBooking, type ExtraAction, type ExtraCharge, type RescheduleAction } from '@hulul/shared/firebase';
 import { Icon } from '@/components/Icon';
 import { LiveMap } from '@/components/LiveMap';
+import { RatingBox } from '@/components/Rating';
 import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
 import { CancelBox } from '../cuenta';
 import { c, font, radius } from '@/theme';
@@ -111,7 +112,9 @@ function Detail({ b }: { b: ClientBooking }) {
         </Card>
       )}
       {b.extra && <ExtraBox id={b.id} extra={b.extra} proName={first} />}
-      {b.status === 'por_aprobar' && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
+      {['por_aprobar', 'completada'].includes(b.status) && !b.rating && b.extra?.status !== 'propuesto' && <RatingBox id={b.id} proName={first} />}
+      {b.rating ? <Body muted>Calificaste a {first} con {'★'.repeat(b.rating)}. ¡Gracias!</Body> : null}
+      {b.status === 'por_aprobar' && !b.rating && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && (
         <View style={s.box}>
           <Text style={s.boxTitle}>{HOME_SAFETY_TITLE}</Text>
@@ -234,10 +237,10 @@ function ConfirmBox({ id }: { id: string }) {
   };
   return (
     <Card style={{ gap: 10 }}>
-      <Text style={s.boxTitle}>¿Todo en orden?</Text>
-      <Body muted style={{ fontSize: 13 }}>Confirma para cerrar el servicio. Si no lo haces, se cierra solo 24 horas después de terminado.</Body>
+      <Text style={s.boxTitle}>¿Prefieres no calificar ahora?</Text>
+      <Body muted style={{ fontSize: 13 }}>Puedes cerrar el servicio sin calificar. Si no haces nada, se cierra solo 24 horas después de terminado.</Body>
       {msg ? <Body style={{ fontSize: 13, color: c.primary }}>{msg}</Body> : null}
-      <PrimaryButton label={busy ? 'Guardando…' : 'Confirmar y cerrar el servicio'} onPress={go} />
+      <PrimaryButton label={busy ? 'Guardando…' : 'Cerrar sin calificar'} onPress={go} />
     </Card>
   );
 }

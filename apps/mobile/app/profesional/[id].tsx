@@ -7,6 +7,7 @@ import { usePro } from '@/lib/pros';
 import { Icon } from '@/components/Icon';
 import { Avatar, BackButton, Body, Card, H1, H2, PrimaryButton } from '@/components/ui';
 import { c, font } from '@/theme';
+import { ReviewsList } from '@/components/Rating';
 
 export default function ProfessionalScreen() {
   const { id, c: catParam, trabajo } = useLocalSearchParams<{ id: string; c?: string; trabajo?: string }>();
@@ -85,7 +86,7 @@ export default function ProfessionalScreen() {
 
         <View style={{ gap: 10 }}>
           <H2>Reseñas</H2>
-          <Body muted>{pro.reviewCount > 0 ? 'Las reseñas se muestran pronto.' : `${pro.name.split(' ')[0]} es nuevo en HULUL. Las reseñas aparecen aquí después de cada servicio.`}</Body>
+          <ReviewsList uid={pro.id} first={pro.name.split(' ')[0]} />
         </View>
       </ScrollView>
 

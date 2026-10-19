@@ -9,7 +9,7 @@
  * no guardan datos no carguen Firebase.
  */
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
-import { addDoc, collection, doc, getDoc, getDocs, getFirestore, onSnapshot, query, serverTimestamp, setDoc, where, type Firestore, type Timestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, getFirestore, limit, onSnapshot, query, serverTimestamp, setDoc, where, type Firestore, type Timestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { PRIVACY_VERSION } from './legal';
 import type { CategorySlug } from './categories';
@@ -195,6 +195,8 @@ export interface ClientBooking {
   diagnosisPhotos?: string[];
   extra?: ExtraCharge;
   photos?: string[];
+  /** Ya calificó al profesional (estrellas que dio). */
+  rating?: number;
 }
 
 /** Cambio de hora propuesto por una de las partes. */
@@ -331,6 +333,48 @@ export async function extraCharge(data: ExtraAction): Promise<void> {
   await fn(data);
 }
 
+/* ------------------------------ Calificaciones ------------------------------ */
+
+/** El cliente califica al profesional (obligatorio) y a la app (opcional). También cierra el servicio. */
+export interface RatingInput {
+  id: string;
+  proStars: number;
+  proComment?: string;
+  appStars?: number;
+  appComment?: string;
+}
+
+export async function rateService(data: RatingInput): Promise<void> {
+  const fn = httpsCallable<RatingInput, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'calificar');
+  await fn(data);
+}
+
+/** El profesional califica al cliente (solo lo ve HULUL; ayuda a cuidar a los profesionales). */
+export async function rateClient(data: { id: string; stars: number; comment?: string }): Promise<void> {
+  const fn = httpsCallable<{ id: string; stars: number; comment?: string }, { ok: boolean }>(getFunctions(firebaseApp(), 'southamerica-east1'), 'calificarCliente');
+  await fn(data);
+}
+
+/** Reseña pública de un profesional (colección `reviews`, la escribe el servidor). */
+export interface PublicReview {
+  id: string;
+  clientName: string;
+  rating: number;
+  text: string;
+  category: CategorySlug;
+  createdAt?: Date;
+}
+
+/** Últimas reseñas de un profesional. */
+export async function proReviews(uid: string, max = 10): Promise<PublicReview[]> {
+  // Sin orderBy para no necesitar un índice compuesto: se ordena aquí.
+  const snap = await getDocs(query(collection(firestore(), 'reviews'), where('professionalId', '==', uid), limit(100)));
+  return snap.docs.map((d) => {
+    const r = d.data() as { clientName?: string; rating?: number; text?: string; category?: CategorySlug; createdAt?: Timestamp };
+    return { id: d.id, clientName: r.clientName ?? 'Cliente', rating: Number(r.rating ?? 0), text: r.text ?? '', category: r.category as CategorySlug, createdAt: r.createdAt?.toDate?.() };
+  }).sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0)).slice(0, max);
+}
+
 /* ------------------------- Cierre del servicio ------------------------- */
 
 /** El cliente confirma que el servicio terminó (si no, se cierra solo a las 24 horas). */
@@ -417,6 +461,9 @@ export interface ProBooking {
   diagnosis?: string;
   diagnosisPhotos?: string[];
   photos?: string[];
+  /** Estrellas que le dio el cliente y las que el profesional le dio al cliente. */
+  rating?: number;
+  clientRating?: { stars: number; comment?: string };
   extra?: ExtraCharge;
 }
 

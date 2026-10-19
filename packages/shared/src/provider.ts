@@ -51,6 +51,26 @@ export const CATEGORY_PRICING: Record<CategorySlug, { suggested: number; hours: 
 export const MIN_VISIT_RATE = 5;
 export const MAX_VISIT_RATE = 1000;
 
+/**
+ * Banda de tarifas: cada profesional pone su tarifa, pero dentro de un rango
+ * alrededor de la sugerida de su categoría (como Uber: precios parecidos y
+ * creíbles en toda la app; nadie cobra $100 por una visita de $20).
+ * Se ajusta aquí y en functions/index.js (RATE_BAND).
+ */
+export const RATE_BAND = { below: 0.25, above: 0.25 };
+
+/** Tarifa mínima y máxima permitidas en una categoría (USD, enteros). */
+export function rateRange(slug: CategorySlug): { min: number; max: number } {
+  const s = CATEGORY_PRICING[slug]?.suggested ?? 20;
+  return { min: Math.max(MIN_VISIT_RATE, Math.floor(s * (1 - RATE_BAND.below))), max: Math.ceil(s * (1 + RATE_BAND.above)) };
+}
+
+/** Lleva una tarifa al rango permitido de su categoría. */
+export function clampRate(slug: CategorySlug, rate: number): number {
+  const { min, max } = rateRange(slug);
+  return Math.min(max, Math.max(min, rate));
+}
+
 /** Duración estimada de una visita en la categoría (horas). */
 export function visitHours(slug: CategorySlug): number {
   return CATEGORY_PRICING[slug]?.hours ?? 1;

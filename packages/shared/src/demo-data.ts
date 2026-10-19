@@ -1,7 +1,7 @@
 import type { CategorySlug } from './categories';
 import { cities } from './cities';
 import type { Professional } from './models';
-import { CATEGORY_PRICING } from './provider';
+import { CATEGORY_PRICING, clampRate } from './provider';
 
 /**
  * Directorio de profesionales REALES.
@@ -55,7 +55,8 @@ export function toProfessional(p: PublicPro, category?: CategorySlug): Professio
     bio: p.bio,
     years: p.years,
     // Fichas publicadas antes del precio por visita (18-oct-2026): tarifa sugerida.
-    visitRate: p.visitRates?.[cat] ?? CATEGORY_PRICING[cat]?.suggested ?? 0,
+    // Siempre dentro de la banda permitida de la categoría.
+    visitRate: cat ? clampRate(cat, p.visitRates?.[cat] ?? CATEGORY_PRICING[cat]?.suggested ?? 20) : 0,
     rating: p.rating ?? 0,
     reviewCount: p.reviewCount ?? 0,
     jobsDone: p.jobsDone ?? 0,

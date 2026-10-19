@@ -8,6 +8,7 @@ import {
   MAX_VISIT_RATE,
   MIN_VISIT_RATE,
   getCategory,
+  rateRange,
   referencePrices,
   subservicesOf,
   type CategoryEvidence,
@@ -40,8 +41,8 @@ export function useReference(category: CategorySlug, uid?: string): ReferencePri
   return ref;
 }
 
-export function referenceText(r: ReferencePrices): string {
-  const base = `Sugerido por HULUL: $${r.suggested}.`;
+export function referenceText(r: ReferencePrices, range?: { min: number; max: number }): string {
+  const base = `Sugerido por HULUL: $${r.suggested}.${range ? ` Puedes cobrar entre $${range.min} y $${range.max}.` : ''}`;
   if (r.median === undefined) return `${base} Aún hay pocos profesionales en esta categoría para comparar.`;
   return `${base} ${r.count} profesionales cobran entre $${r.min} y $${r.max} (la mitad cobra $${r.median} o menos).`;
 }
@@ -51,9 +52,11 @@ export function RateField({ category, uid, value, onChange }: {
   category: CategorySlug; uid?: string; value: number | undefined; onChange: (v: number | undefined) => void;
 }) {
   const ref = useReference(category, uid);
+  const range = rateRange(category);
+  const out = value !== undefined && (value < range.min || value > range.max);
   return (
     <div className="stack gap-8">
-      <Field id={`r-${category}`} label="Tu tarifa por visita (USD)" hint={referenceText(ref)}>
+      <Field id={`r-${category}`} label="Tu tarifa por visita (USD)" hint={referenceText(ref, range)}>
         <input id={`r-${category}`} type="text" inputMode="numeric" maxLength={4} value={value ? String(value) : ''}
           placeholder={String(ref.suggested)}
           onChange={(e) => {
@@ -62,16 +65,19 @@ export function RateField({ category, uid, value, onChange }: {
           }} />
       </Field>
       {!value && (
-        <button type="button" className="link-btn" style={{ alignSelf: 'flex-start', fontSize: 13.5 }} onClick={() => onChange(ref.median ?? ref.suggested)}>
-          Usar ${ref.median ?? ref.suggested}
+        <button type="button" className="link-btn" style={{ alignSelf: 'flex-start', fontSize: 13.5 }} onClick={() => onChange(Math.min(range.max, Math.max(range.min, ref.median ?? ref.suggested)))}>
+          Usar ${Math.min(range.max, Math.max(range.min, ref.median ?? ref.suggested))}
         </button>
       )}
+      {out && <span className="form-error" style={{ fontSize: 13.5 }}>Para que los precios de HULUL sean parecidos y creíbles, en esta categoría la tarifa va de ${range.min} a ${range.max}.</span>}
     </div>
   );
 }
 
-export const rateProblem = (name: string, v: number | undefined): string =>
-  !(Number(v) >= MIN_VISIT_RATE && Number(v) <= MAX_VISIT_RATE) ? `Pon tu tarifa por visita en ${name} (entre $${MIN_VISIT_RATE} y $${MAX_VISIT_RATE}).` : '';
+export const rateProblem = (name: string, v: number | undefined, category?: CategorySlug): string => {
+  const { min, max } = category ? rateRange(category) : { min: MIN_VISIT_RATE, max: MAX_VISIT_RATE };
+  return !(Number(v) >= min && Number(v) <= max) ? `Tu tarifa por visita en ${name} debe estar entre $${min} y $${max}.` : '';
+};
 
 /** Trabajos que hace en una categoría (los de la lista y los propios). */
 export function ServicesPicker({ category, value, onChange }: { category: CategorySlug; value: string[]; onChange: (v: string[]) => void }) {
