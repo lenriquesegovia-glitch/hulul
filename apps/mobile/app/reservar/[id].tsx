@@ -59,8 +59,8 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   const { confirm } = useBooking();
 
   const now = useMemo(() => new Date(), []);
-  // Modo prueba (cuenta de pruebas o periodo de prueba): cualquier hora, sin reglas de horario.
-  const tester = !!profile.tester || testPeriodOpen();
+  // Modo prueba: solo profesionales marcados (providers/{uid}.tester) y solo durante el periodo de prueba.
+  const tester = !!pro.tester && testPeriodOpen();
   const slots = tester ? TEST_SLOTS : SLOTS;
   const days = useMemo(() => nextDays(BOOKING_DAYS, now), [now]);
   // Se paga por visita. La duración estimada solo sirve para validar el horario.

@@ -132,7 +132,7 @@ service cloud.firestore {
     function providerFields(d) {
       return d.keys().hasOnly([
         'uid', 'status', 'step', 'kind', 'firstName', 'lastName', 'businessName', 'cedula', 'ruc',
-        'phone', 'email', 'categories', 'services', 'rates', 'minHours', 'visitRates', 'catEvidence', 'catStatus', 'strikes', 'years', 'bio',
+        'phone', 'email', 'categories', 'services', 'rates', 'minHours', 'visitRates', 'catEvidence', 'catStatus', 'strikes', 'tester', 'years', 'bio',
         'cities', 'days', 'from', 'to', 'acceptsCash', 'docs',
         'consentPrivacy', 'privacyVersion', 'termsAccepted', 'submittedAt', 'createdAt', 'updatedAt']);
     }
@@ -156,7 +156,7 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid
         && providerOk(uid, request.resource.data)
-        && !('catStatus' in request.resource.data) && !('strikes' in request.resource.data)
+        && !('catStatus' in request.resource.data) && !('strikes' in request.resource.data) && !('tester' in request.resource.data)
         && request.resource.data.status == 'borrador'
         && request.resource.data.createdAt == request.time;
       // catStatus (lo pone el servidor) puede existir pero no se cambia desde aquí.
@@ -165,6 +165,7 @@ service cloud.firestore {
         && providerOk(uid, request.resource.data)
         && request.resource.data.get('catStatus', null) == resource.data.get('catStatus', null)
         && request.resource.data.get('strikes', null) == resource.data.get('strikes', null)
+        && request.resource.data.get('tester', null) == resource.data.get('tester', null)
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if false;
 

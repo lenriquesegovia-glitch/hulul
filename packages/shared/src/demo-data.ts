@@ -30,6 +30,8 @@ export interface PublicPro {
   rating: number;
   reviewCount: number;
   jobsDone: number;
+  /** Profesional de pruebas: horario libre durante el periodo de prueba. */
+  tester?: boolean;
 }
 
 /** Día de la semana en Ecuador (0 = domingo). */
@@ -63,6 +65,7 @@ export function toProfessional(p: PublicPro, category?: CategorySlug): Professio
     workDays: p.days,
     from: p.from || undefined,
     to: p.to || undefined,
+    tester: !!p.tester,
   };
 }
 

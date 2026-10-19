@@ -134,9 +134,8 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 }
 
 function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string; profile: ClientProfile }) {
-  // Modo prueba: cualquier hora, sin reglas de horario (clients/{uid}.tester = true).
-  // También todas las cuentas mientras dure el periodo de prueba (TEST_PERIOD_UNTIL).
-  const tester = !!profile.tester || testPeriodOpen();
+  // Modo prueba: solo profesionales marcados (providers/{uid}.tester) y solo durante el periodo de prueba.
+  const tester = !!pro.tester && testPeriodOpen();
   const slots = tester ? TEST_SLOTS : SLOTS;
   const cat = getCategory(pro.category)!;
   // La hora real se toma en el navegador, no al publicar la página.

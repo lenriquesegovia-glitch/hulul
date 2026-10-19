@@ -18,8 +18,6 @@ export interface ClientProfile {
   phone: string;
   email: string;
   consentMarketing: boolean;
-  /** Cuenta de pruebas: reserva a cualquier hora (lo pone HULUL en la consola). */
-  tester?: boolean;
 }
 
 async function fb() {

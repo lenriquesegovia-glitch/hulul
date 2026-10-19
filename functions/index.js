@@ -338,6 +338,8 @@ export function publicPro(p, uid) {
     visitRates: Object.fromEntries(approvedCats(p).map((c) => [c, visitRateOf(p, c)])),
     cities: p.cities ?? [], years: Number(p.years ?? 0), bio: String(p.bio ?? ''),
     days: p.days ?? [], from: p.from ?? '', to: p.to ?? '', acceptsCash: !!p.acceptsCash,
+    // Profesional de pruebas (se marca a mano en la consola): horario libre en el periodo de prueba.
+    tester: p.tester === true,
   };
 }
 

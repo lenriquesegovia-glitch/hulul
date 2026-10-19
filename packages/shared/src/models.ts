@@ -34,6 +34,8 @@ export interface Professional {
   workDays?: number[];
   from?: string;
   to?: string;
+  /** Profesional de pruebas: horario libre durante el periodo de prueba. */
+  tester?: boolean;
 }
 
 export type BookingStatus =

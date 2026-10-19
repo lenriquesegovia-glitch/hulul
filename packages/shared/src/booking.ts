@@ -7,15 +7,16 @@ import type { PaymentMethod } from './models';
 export const SLOTS = Array.from({ length: 13 }, (_, i) => `${String(7 + i).padStart(2, '0')}:00`);
 
 /**
- * Modo prueba (cuentas con `tester: true` en `clients/{uid}`, puesto a mano en
- * la consola de Firebase): cualquier hora, cada 30 minutos de 06:00 a 23:30,
- * sin reglas de horario. Sirve para probar el ciclo completo de una reserva.
+ * Modo prueba: los profesionales marcados con `tester: true` en
+ * `providers/{uid}` (a mano, en la consola de Firebase) se pueden reservar a
+ * cualquier hora, cada 30 minutos de 06:00 a 23:30, sin reglas de horario,
+ * mientras dure el periodo de prueba. El resto sigue con las reglas normales.
  */
 export const TEST_SLOTS = Array.from({ length: 36 }, (_, i) => `${String(6 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
 
 /**
- * Periodo de prueba: hasta esta fecha (incluida, hora de Ecuador) TODAS las
- * cuentas reservan en modo prueba. Para cerrarlo antes, pon una fecha pasada.
+ * Periodo de prueba: hasta esta fecha (incluida, hora de Ecuador) vale el modo
+ * prueba de los profesionales marcados. Para cerrarlo antes, pon una fecha pasada.
  */
 export const TEST_PERIOD_UNTIL = '2026-10-31';
 
