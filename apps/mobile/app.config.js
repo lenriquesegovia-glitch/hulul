@@ -14,6 +14,15 @@ module.exports = ({ config }) => {
   const google = path.join(__dirname, 'google-services.json');
   if (fs.existsSync(google)) {
     config.android = { ...config.android, googleServicesFile: './google-services.json' };
+    // "Continuar con Google": usa el cliente web (client_type 3) del mismo archivo.
+    try {
+      const gs = JSON.parse(fs.readFileSync(google, 'utf8'));
+      const web = (gs.client ?? []).flatMap((c) => c.oauth_client ?? []).find((o) => o.client_type === 3);
+      if (web?.client_id) {
+        config.extra = { ...config.extra, googleWebClientId: web.client_id };
+        config.plugins = [...config.plugins, '@react-native-google-signin/google-signin'];
+      }
+    } catch { /* archivo inválido: se arma sin Google */ }
   }
   return config;
 };

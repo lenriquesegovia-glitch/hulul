@@ -7,7 +7,7 @@ import { e164Ecuador } from '@hulul/shared';
 import { createClientProfile, loadClientProfile, type ClientProfile } from '@hulul/shared/firebase';
 import { Checkbox } from '@/components/Checkbox';
 import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
-import { authErrorMessage, logout, resetPassword, signInEmail, useUser } from '@/lib/auth';
+import { authErrorMessage, googleAvailable, logout, resetPassword, signInEmail, signInGoogle, useUser } from '@/lib/auth';
 import { c, font, radius } from '@/theme';
 
 /**
@@ -63,12 +63,28 @@ function SignIn({ title, lead }: { title: string; lead: string }) {
     try { await signInEmail(email.trim(), pass, create); } catch (e) { setMsg(authErrorMessage(e)); } finally { setBusy(false); }
   };
 
+  const withGoogle = googleAvailable();
+  const goGoogle = async () => {
+    setMsg('');
+    setBusy(true);
+    try { await signInGoogle(); } catch (e) { setMsg(authErrorMessage(e)); } finally { setBusy(false); }
+  };
+
   return (
     <View style={{ gap: 16 }}>
       <View style={{ gap: 6 }}>
         <H1 style={{ fontSize: 24 }}>{title}</H1>
         <Body muted>{lead}</Body>
       </View>
+      {withGoogle && (
+        <>
+          <Pressable accessibilityRole="button" disabled={busy} onPress={goGoogle} style={s.google}>
+            <Text style={s.googleG}>G</Text>
+            <Text style={s.googleText}>Continuar con Google</Text>
+          </Pressable>
+          <Body muted style={{ textAlign: 'center', fontSize: 13 }}>o con tu correo</Body>
+        </>
+      )}
       <View style={s.seg}>
         {[['Crear cuenta', true], ['Ya tengo cuenta', false]].map(([l, v]) => (
           <Pressable key={String(l)} accessibilityRole="radio" accessibilityState={{ checked: create === v }} onPress={() => setCreate(v as boolean)} style={[s.segBtn, create === v && s.segOn]}>
@@ -93,7 +109,7 @@ function SignIn({ title, lead }: { title: string; lead: string }) {
         </Pressable>
       )}
       <Card style={{ backgroundColor: c.surfaceWarm }}>
-        <Body muted style={{ fontSize: 13 }}>Por ahora en la app se entra con correo y contraseña. Si te registraste con Google o Facebook en hululec.com, toca "Ya tengo cuenta", escribe ese correo y luego "Olvidé mi contraseña" para crearle una. Es la misma cuenta.</Body>
+        <Body muted style={{ fontSize: 13 }}>{withGoogle ? 'Es la misma cuenta que usas en hululec.com. Si te registraste allí con Facebook, toca "Ya tengo cuenta" y luego "Olvidé mi contraseña" para crearle una contraseña.' : 'Por ahora en la app se entra con correo y contraseña. Si te registraste con Google o Facebook en hululec.com, toca "Ya tengo cuenta", escribe ese correo y luego "Olvidé mi contraseña" para crearle una. Es la misma cuenta.'}</Body>
       </Card>
     </View>
   );
@@ -158,6 +174,9 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 const s = StyleSheet.create({
+  google: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 50, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
+  googleG: { fontFamily: font.display, fontSize: 18, color: '#4285F4' },
+  googleText: { fontFamily: font.bodyBold, fontSize: 15, color: c.text },
   label: { fontFamily: font.bodyBold, fontSize: 14, color: c.textSecondary },
   input: { minHeight: 50, paddingHorizontal: 14, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, fontFamily: font.body, fontSize: 16, color: c.text },
   error: { fontFamily: font.bodySemi, fontSize: 13, color: c.primary },

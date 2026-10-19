@@ -17,3 +17,6 @@ functions/node_modules/
 functions/.env*
 .firebase/
 firebase-debug.log
+
+# Claves secretas de Firebase (cuentas de servicio): nunca al repositorio.
+*firebase-adminsdk*.json
