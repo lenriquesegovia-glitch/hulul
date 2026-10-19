@@ -40,7 +40,7 @@ export const POLICY = {
   /** Días sin recibir reservas al llegar a las faltas del límite. */
   strikeSuspendDays: 7,
   /** Calificación mínima (con al menos minRatingReviews reseñas) y días de suspensión si baja. */
-  minRating: 4.5,
+  minRating: 3.5,
   minRatingReviews: 5,
   ratingSuspendDays: 14,
   /** Horas para calificar o reportar un problema después de terminado el servicio. */

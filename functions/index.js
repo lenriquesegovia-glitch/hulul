@@ -566,13 +566,13 @@ const LATE_CREDIT = 5;
 
 /* ------------------------- Faltas y suspensiones ------------------------- */
 
-// 3 faltas en 30 días: 7 días sin recibir trabajos. Calificación menor a 4.5
+// 3 faltas en 30 días: 7 días sin recibir trabajos. Calificación menor a 3.5
 // con 5 o más reseñas: 14 días. Las faltas anteriores a una suspensión no se
 // vuelven a contar. Lo revisa el servidor; el profesional no puede cambiarlo.
 const STRIKE_LIMIT = 3;
 const STRIKE_WINDOW_DAYS = 30;
 const STRIKE_SUSPEND_DAYS = 7;
-const RATING_MIN = 4.5;
+const RATING_MIN = 3.5;
 const RATING_MIN_REVIEWS = 5;
 const RATING_SUSPEND_DAYS = 14;
 const DAY_MS = 86_400_000;
