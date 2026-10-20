@@ -6,7 +6,31 @@ import type { LatLng } from './models';
  */
 export interface PlaceSuggestion { label: string; detail: string; p: LatLng }
 
+/** Búsquedas ya hechas: al borrar o repetir una letra, la respuesta es inmediata. */
+const cache = new Map<string, PlaceSuggestion[]>();
+/** Si el servicio tarda más que esto, se deja de esperar (el cliente igual puede escribir a mano). */
+const SEARCH_TIMEOUT_MS = 6000;
+
 export async function searchPlaces(q: string, signal?: AbortSignal): Promise<PlaceSuggestion[]> {
+  const key = q.trim().toLowerCase();
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const ctrl = new AbortController();
+  const stop = () => ctrl.abort();
+  signal?.addEventListener('abort', stop);
+  const timer = setTimeout(stop, SEARCH_TIMEOUT_MS);
+  try {
+    const out = await fetchPlaces(q, ctrl.signal);
+    if (cache.size > 200) cache.clear();
+    cache.set(key, out);
+    return out;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', stop);
+  }
+}
+
+async function fetchPlaces(q: string, signal: AbortSignal): Promise<PlaceSuggestion[]> {
   const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6&lat=-2.15&lon=-79.89&bbox=-81.1,-5.1,-75.1,1.5`;
   const r = await fetch(url, { signal });
   if (!r.ok) return [];

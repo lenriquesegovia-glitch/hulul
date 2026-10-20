@@ -86,6 +86,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   const [slot, setSlot] = useState(first.slot);
   const [address, setAddress] = useState('');
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [searching, setSearching] = useState(false);
   const picked = useRef('');
   const [location, setLocation] = useState<LatLng | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
@@ -119,9 +120,13 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   // Sugerencias de dirección mientras se escribe.
   useEffect(() => {
     const t = address.trim();
-    if (t.length < 3 || t === picked.current) { setSuggestions([]); return; }
+    // Recién elegida una sugerencia: no se vuelve a buscar (ni reaparece la lista).
+    if (t.length < 3 || t === picked.current.trim()) { setSuggestions([]); setSearching(false); return; }
     const ctrl = new AbortController();
-    const tm = setTimeout(() => searchPlaces(t, ctrl.signal).then(setSuggestions).catch(() => {}), 350);
+    const tm = setTimeout(() => {
+      setSearching(true);
+      searchPlaces(t, ctrl.signal).then(setSuggestions).catch(() => {}).finally(() => { if (!ctrl.signal.aborted) setSearching(false); });
+    }, 250);
     return () => { clearTimeout(tm); ctrl.abort(); };
   }, [address]);
 
@@ -129,6 +134,17 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   const [ack, setAck] = useState(false);
   const warnKey = check?.warnings.join('|') ?? '';
   useEffect(() => { setAck(false); }, [warnKey]);
+
+  // Disponibilidad de los 30 días y de las horas del día elegido: se calcula una
+  // vez, no en cada letra que se escribe en la dirección o la descripción.
+  const offDays = useMemo(
+    () => days.map((_, i) => (!tester && !dayAvailable(i, now, lead)) || !slots.some((_, k) => okWith(i, k, hours))),
+    [days, now, tester, lead, hours, pro], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const slotOk = useMemo(
+    () => slots.map((_, k) => okWith(day, k, hours)),
+    [day, now, tester, lead, hours, pro], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   if (!pro || !cat) {
     return (
@@ -144,7 +160,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   const q = quote(pro.visitRate, sc.amount, pro.taxRegime);
 
   /** Día sin horas libres (por anticipación, horario del servicio o del profesional). */
-  const dayOff = (i: number) => (!tester && !dayAvailable(i, now, lead)) || !slots.some((_, k) => okWith(i, k, hours));
+  const dayOff = (i: number) => offDays[i] ?? true;
   const pickDay = (i: number) => {
     setDay(i);
     // Lleva el día elegido a la vista en la fila de días (58 de ancho + 8 de separación).
@@ -269,7 +285,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
               {slots.map((t, i) => {
                 if (!tester && !slotInWindow(pro.category, t, pro)) return null;
                 const on = i === slot;
-                const off = !okWith(day, i, hours);
+                const off = !slotOk[i];
                 return (
                   <Pressable key={t} disabled={off} accessibilityRole="button" accessibilityState={{ selected: on, disabled: off }} onPress={() => setSlot(i)} style={[s.slot, on && s.on, off && s.off]}>
                     <Text style={[s.slotText, on && s.onText, off && { textDecorationLine: 'line-through' }]}>{!tester && isOffHour(t) ? `🌙 ${t}` : t}</Text>
@@ -334,6 +350,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
               accessibilityLabelledBy="dir-label"
               style={s.input}
             />
+            {searching && suggestions.length === 0 && <Body muted style={{ fontSize: 12.5 }}>Buscando…</Body>}
             {suggestions.length > 0 && (
               <View style={s.suggest}>
                 {suggestions.map((p) => (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import type { LatLng } from '@hulul/shared';
+import { searchPlaces, type LatLng, type PlaceSuggestion } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 
 /**
@@ -12,29 +12,7 @@ import { Icon } from '@/components/Icon';
  * villa a mano: muchas villas no están en ningún mapa.
  */
 
-interface Suggestion { label: string; detail: string; p: LatLng }
-
-const PHOTON = 'https://photon.komoot.io/api/';
-
-async function search(q: string, signal: AbortSignal): Promise<Suggestion[]> {
-  const url = `${PHOTON}?q=${encodeURIComponent(q)}&limit=6&lat=-2.15&lon=-79.89&bbox=-81.1,-5.1,-75.1,1.5`;
-  const r = await fetch(url, { signal });
-  if (!r.ok) return [];
-  const j = await r.json();
-  const seen = new Set<string>();
-  const out: Suggestion[] = [];
-  for (const f of j.features ?? []) {
-    const pr = f.properties ?? {};
-    if (pr.countrycode && pr.countrycode !== 'EC') continue;
-    const label = [pr.name, pr.street && pr.street !== pr.name ? pr.street : '', pr.housenumber].filter(Boolean).join(' ');
-    const detail = [pr.district ?? pr.locality, pr.city ?? pr.county, pr.state].filter(Boolean).join(', ');
-    if (!label || seen.has(label + detail)) continue;
-    seen.add(label + detail);
-    const [lng, lat] = f.geometry?.coordinates ?? [];
-    if (typeof lat === 'number' && typeof lng === 'number') out.push({ label, detail, p: { lat, lng } });
-  }
-  return out;
-}
+type Suggestion = PlaceSuggestion;
 
 export function AddressInput({ onPlace }: { onPlace: (p: LatLng, label: string) => void }) {
   const listId = useId();
@@ -42,15 +20,19 @@ export function AddressInput({ onPlace }: { onPlace: (p: LatLng, label: string) 
   const [items, setItems] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
+  const [searching, setSearching] = useState(false);
   const picked = useRef('');
 
   useEffect(() => {
     const q = value.trim();
-    if (q.length < 3 || q === picked.current) { setItems([]); return; }
+    // Recién elegida una sugerencia: no se vuelve a buscar.
+    if (q.length < 3 || q === picked.current.trim() || q === `${picked.current},`) { setItems([]); setSearching(false); return; }
     const ctrl = new AbortController();
     const t = setTimeout(() => {
-      search(q, ctrl.signal).then((r) => { setItems(r); setActive(-1); }).catch(() => {});
-    }, 350);
+      setSearching(true);
+      searchPlaces(q, ctrl.signal).then((r) => { setItems(r); setActive(-1); }).catch(() => {})
+        .finally(() => { if (!ctrl.signal.aborted) setSearching(false); });
+    }, 250);
     return () => { clearTimeout(t); ctrl.abort(); };
   }, [value]);
 
@@ -99,6 +81,7 @@ export function AddressInput({ onPlace }: { onPlace: (p: LatLng, label: string) 
         </ul>
       )}
       </div>
+      {searching && open && items.length === 0 && <span className="muted" style={{ fontSize: 13 }}>Buscando…</span>}
       <span className="muted" style={{ fontSize: 13 }}>Elige tu urbanización o calle de la lista y completa con manzana y villa.</span>
     </div>
   );

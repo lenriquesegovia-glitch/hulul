@@ -209,7 +209,10 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
   // Recargo nocturno o de feriado del profesional (monto fijo), si aplica.
   const sc = !tester && now && slot >= 0 ? surchargeFor(isoDay(now, day), slots[slot], pro) : { kind: null, amount: 0 };
   const q = quote(pro.visitRate, sc.amount, pro.taxRegime);
-  const dayOk = (i: number) => !!now && slots.some((_, sIdx) => okWith(now, i, sIdx, hours));
+  // Se calcula una vez (no en cada letra que se escribe en la descripción).
+  const okDays = useMemo(() => (now ? days.map((_, i) => slots.some((_, sIdx) => okWith(now, i, sIdx, hours))) : []), [now, days, hours, pro, tester]); // eslint-disable-line react-hooks/exhaustive-deps
+  const okSlots = useMemo(() => (now ? slots.map((_, i) => okWith(now, day, i, hours)) : []), [now, day, hours, pro, tester]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dayOk = (i: number) => !!okDays[i];
   const check = !tester && now && slot >= 0 ? checkSlot({ category: pro.category, date: isoDay(now, day), slot: slots[slot], hours, pro }) : null;
   const [ack, setAck] = useState(false);
   const warnKey = check?.warnings.join('|') ?? '';
@@ -359,7 +362,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         <div className="slot-grid" role="radiogroup" aria-label="Hora de llegada">
           {slots.map((t, i) => (tester || slotInWindow(pro.category, t, pro)) && (
             <button key={t} type="button" role="radio" aria-checked={i === slot}
-              disabled={!now || !okWith(now, day, i, hours)}
+              disabled={!now || !okSlots[i]}
               aria-label={!tester && isOffHour(t) ? `${t}, fuera de horario` : t}
               className={`chip-slot ${i === slot ? 'on' : ''}`} onClick={() => setSlot(i)}>{!tester && isOffHour(t) ? `🌙 ${t}` : t}</button>
           ))}
