@@ -208,7 +208,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
 
   // Recargo nocturno o de feriado del profesional (monto fijo), si aplica.
   const sc = !tester && now && slot >= 0 ? surchargeFor(isoDay(now, day), slots[slot], pro) : { kind: null, amount: 0 };
-  const q = quote(pro.visitRate, sc.amount);
+  const q = quote(pro.visitRate, sc.amount, pro.taxRegime);
   const dayOk = (i: number) => !!now && slots.some((_, sIdx) => okWith(now, i, sIdx, hours));
   const check = !tester && now && slot >= 0 ? checkSlot({ category: pro.category, date: isoDay(now, day), slot: slots[slot], hours, pro }) : null;
   const [ack, setAck] = useState(false);
@@ -276,6 +276,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         fee: q.fee,
         iva: q.iva,
         total: q.total,
+        // Régimen del profesional al reservar: define el IVA de la visita y las facturas.
+        taxRegime: q.regime,
+        visitIva: q.proInvoice.iva,
         consentMarketing: profile.consentMarketing,
         demo: DEMO_MODE,
       });
@@ -449,11 +452,12 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
             <div className="row" style={{ justifyContent: 'space-between' }}><span>{SURCHARGE_LABEL[sc.kind]}</span><span>{formatUSD(q.surcharge)}</span></div>
           )}
           <div className="row" style={{ justifyContent: 'space-between' }}><span>Cargo de plataforma HULUL</span><span>{formatUSD(q.fee)}</span></div>
-          <div className="row" style={{ justifyContent: 'space-between' }}><span>IVA 15%</span><span>{formatUSD(q.iva)}</span></div>
+          <div className="row" style={{ justifyContent: 'space-between' }}><span>{q.proInvoice.iva > 0 ? 'IVA 15%' : 'IVA 15% (del cargo de plataforma)'}</span><span>{formatUSD(q.iva)}</span></div>
           <div className="row" style={{ justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid var(--border)', fontWeight: 700, fontSize: 18 }}>
             <span>Total</span><span>{formatUSD(q.total)}</span>
           </div>
           <p className="muted" style={{ fontSize: 13.5 }}>{copy.priceNote}</p>
+          <p className="muted" style={{ fontSize: 13.5 }}>Recibes dos comprobantes electrónicos: la factura de {pro.name.split(' ')[0]} por la visita y la de HULUL por el cargo de plataforma.</p>
           {DEMO_MODE ? (
             <p className="pill pill-warm" style={{ alignSelf: 'flex-start' }}>Versión de prueba: no se pide la tarjeta ni se cobra nada.</p>
           ) : (

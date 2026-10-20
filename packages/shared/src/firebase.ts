@@ -17,6 +17,7 @@ import type { LatLng, PaymentMethod, Professional } from './models';
 import { sortPros, toProfessional, type PublicPro } from './demo-data';
 import type { JobOutcome } from './policy';
 import type { CategoryEvidence } from './provider';
+import type { TaxRegime } from './tax';
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyAR2w6K7JXPHyPvfLb3piv--48T3gvlL2o',
@@ -115,6 +116,9 @@ export interface NewBooking {
   fee: number;
   iva: number;
   total: number;
+  /** Régimen tributario del profesional (define el IVA de la visita) e IVA de la visita. */
+  taxRegime?: TaxRegime;
+  visitIva?: number;
   consentMarketing: boolean;
   /** true mientras los profesionales sean de ejemplo. */
   demo: boolean;
@@ -592,6 +596,8 @@ export interface ProBooking {
   surcharge?: number;
   surchargeKind?: 'nocturno' | 'feriado';
   noiseAccepted?: boolean;
+  /** Régimen tributario del profesional al reservar (IVA de la visita). */
+  taxRegime?: TaxRegime;
   outcome?: JobOutcome;
   diagnosis?: string;
   diagnosisPhotos?: string[];

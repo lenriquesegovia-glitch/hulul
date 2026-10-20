@@ -1,4 +1,5 @@
 import type { CategorySlug } from './categories';
+import type { TaxRegime } from './tax';
 
 /**
  * Modelos de datos. Pensados para Firestore: cada interfaz es un documento
@@ -42,6 +43,8 @@ export interface Professional {
   holidays?: boolean;
   /** Recargos en monto fijo (USD) para noche y feriado. */
   surcharges?: { nocturno?: number; feriado?: number };
+  /** Régimen tributario: define si la visita lleva IVA. */
+  taxRegime?: TaxRegime;
 }
 
 export type BookingStatus =

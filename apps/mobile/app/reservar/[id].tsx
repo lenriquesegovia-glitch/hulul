@@ -141,7 +141,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
   // Recargo nocturno o de feriado del profesional (monto fijo), si aplica.
   const sc = !tester && slot >= 0 ? surchargeFor(isoAt(day), slots[slot], pro) : { kind: null, amount: 0 };
-  const q = quote(pro.visitRate, sc.amount);
+  const q = quote(pro.visitRate, sc.amount, pro.taxRegime);
 
   /** Día sin horas libres (por anticipación, horario del servicio o del profesional). */
   const dayOff = (i: number) => (!tester && !dayAvailable(i, now, lead)) || !slots.some((_, k) => okWith(i, k, hours));
@@ -212,6 +212,9 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
         fee: q.fee,
         iva: q.iva,
         total: q.total,
+        // Régimen del profesional al reservar: define el IVA de la visita y las facturas.
+        taxRegime: q.regime,
+        visitIva: q.proInvoice.iva,
         consentMarketing: profile.consentMarketing,
         demo: true,
       });
@@ -429,12 +432,13 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             <Row label={`${pro.name.split(' ')[0]} (${copy.priceCovers})`} value={formatUSD(q.visit)} />
             {sc.kind && q.surcharge > 0 && <Row label={SURCHARGE_LABEL[sc.kind]} value={formatUSD(q.surcharge)} />}
             <Row label="Cargo de plataforma HULUL" value={formatUSD(q.fee)} />
-            <Row label="IVA 15%" value={formatUSD(q.iva)} />
+            <Row label={q.proInvoice.iva > 0 ? 'IVA 15%' : 'IVA 15% (del cargo de plataforma)'} value={formatUSD(q.iva)} />
             <View style={s.totalRow}>
               <Text style={s.totalText}>Total</Text>
               <Text style={s.totalText}>{formatUSD(q.total)}</Text>
             </View>
             <Body muted style={{ fontSize: 12.5 }}>{copy.priceNote}</Body>
+            <Body muted style={{ fontSize: 12.5 }}>Recibes dos comprobantes: la factura de {pro.name.split(' ')[0]} por la visita y la de HULUL por el cargo de plataforma.</Body>
             <Body style={{ fontSize: 12.5, color: c.copper }}>Versión de prueba: no se pide la tarjeta ni se cobra nada.</Body>
           </View>
 

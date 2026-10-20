@@ -20,6 +20,7 @@ import { logger } from 'firebase-functions';
 import nodemailer from 'nodemailer';
 import { randomInt } from 'node:crypto';
 import { hasProfanity, maskProfanity, PROFANITY_MESSAGE } from './profanity.js';
+import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
 
 /** Debe coincidir con la ubicación de la base de datos Firestore. */
 const REGION = 'southamerica-east1';
@@ -41,6 +42,9 @@ const CATEGORIES = {
   albanileria: 'Albañilería', fumigacion: 'Fumigación', mudanzas: 'Mudanzas', tecnologia: 'Tecnología',
 };
 const PAYMENTS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', deuna: 'DeUna' };
+
+// Precio, impuestos y libro de movimientos: money.js (misma fórmula que packages/shared).
+
 const BUCKET = 'hulul-59081.firebasestorage.app';
 
 // Misma lista que packages/shared/src/provider.ts (CATEGORY_PRICING.suggested).
@@ -335,17 +339,25 @@ async function checkPrice(b) {
   if (refusal && offHoursRefusal(pubDoc, b.date, b.slot)) return { ok: false, total: 0, reason: refusal };
   const sc = tester ? { kind: null, amount: 0 } : surchargeOf(p, b.date, b.slot);
   const visit = r2(visitRateOf(p, b.category));
-  const fee = 1.99;
-  const totalOf = (v, s) => { const sub = r2(v + s); return r2(sub + fee + r2((sub + fee) * IVA_RATE)); };
-  const total = totalOf(visit, sc.amount);
+  const fee = PLATFORM_FEE;
+  // Régimen del profesional: define si la visita lleva IVA.
+  const regime = regimeOf(p.taxRegime);
+  const total = priceOf(visit, sc.amount, regime).total;
   const near = (x, y) => Math.abs(Number(x ?? 0) - y) < 0.02;
   // También vale la tarifa publicada en el directorio (por si cambió hace segundos).
   const pub = pubDoc?.visitRates?.[b.category];
   const pubSc = tester ? sc : surchargeOf(pubDoc, b.date, b.slot);
-  const okFor = (v, s) => near(b.visit, v) && near(b.surcharge, s.amount) && (s.amount === 0 || b.surchargeKind === s.kind)
-    && near(b.subtotal, r2(v + s.amount)) && near(b.fee, fee) && near(b.iva, r2((r2(v + s.amount) + fee) * IVA_RATE)) && near(b.total, totalOf(v, s.amount));
+  const okFor = (v, s) => {
+    const q = priceOf(v, s.amount, regime);
+    // Apps anteriores calculaban el IVA sobre (visita + cargo) en un solo paso: también vale.
+    const legacyIva = r2((q.subtotal + fee) * IVA_RATE);
+    const ivaOk = near(b.iva, q.iva) || (chargesVat(regime) && near(b.iva, legacyIva));
+    const totalOk = near(b.total, q.total) || (chargesVat(regime) && near(b.total, r2(q.subtotal + fee + legacyIva)));
+    return near(b.visit, v) && near(b.surcharge, s.amount) && (s.amount === 0 || b.surchargeKind === s.kind)
+      && near(b.subtotal, q.subtotal) && near(b.fee, fee) && ivaOk && totalOk;
+  };
   const pubOk = Number.isFinite(Number(pub)) && (okFor(r2(Number(pub)), sc) || okFor(r2(Number(pub)), pubSc));
-  return { ok: okFor(visit, sc) || okFor(visit, pubSc) || pubOk, total };
+  return { ok: okFor(visit, sc) || okFor(visit, pubSc) || pubOk, total, regime };
 }
 
 export const avisoReserva = onDocumentCreated(
@@ -372,6 +384,13 @@ export const avisoReserva = onDocumentCreated(
           html: layout('Precio alterado o desactualizado', rows([['Código', code(event.params.id)], ['Cliente', esc(b.contactName)], ['Profesional', esc(b.professionalName)], ['Enviado', usd(b.total)], ['Correcto', usd(priced.total)]])) }).catch(() => {});
         logger.warn('Reserva anulada: precio no coincide', { id: event.params.id, sent: b.total, expected: priced.total });
         return;
+      }
+      // El régimen y el IVA de la visita los fija el servidor (facturas y libro de movimientos).
+      if (priced.regime) {
+        const q = priceOf(Number(b.visit ?? 0), Number(b.surcharge ?? 0), priced.regime);
+        b.taxRegime = priced.regime;
+        b.visitIva = q.proInvoice.iva;
+        await event.data.ref.update({ taxRegime: priced.regime, visitIva: q.proInvoice.iva }).catch(() => {});
       }
     } catch (e) {
       logger.warn('No se pudo validar el precio', { id: event.params.id, e: String(e) });
@@ -506,6 +525,8 @@ export function publicPro(p, uid) {
     surcharges: { nocturno: validSurcharge(p.surcharges?.nocturno) ?? 0, feriado: validSurcharge(p.surcharges?.feriado) ?? 0 },
     // Profesional de pruebas (se marca a mano en la consola): horario libre en el periodo de prueba.
     tester: p.tester === true,
+    // Régimen tributario: el cliente ve el precio con o sin IVA en la visita.
+    taxRegime: regimeOf(p.taxRegime),
   };
 }
 
@@ -1183,10 +1204,6 @@ export const cerrarTerminadas = onSchedule({ schedule: 'every 15 minutes', regio
 
 /* ------------------------------ Cobro adicional ------------------------------ */
 
-// Mismos valores que packages/shared/src/pricing.ts (extraQuote).
-const IVA_RATE = 0.15;
-const COMMISSION = 0.15;
-const r2 = (n) => Math.round(n * 100) / 100;
 
 /**
  * Cobro adicional (repuestos, más trabajo u otra visita):
@@ -1221,7 +1238,8 @@ export const cobroAdicional = onCall({ region: REGION, secrets: [MAIL_PASSWORD] 
       if (!Number.isFinite(amount) || amount < 1 || amount > 2000) throw new HttpsError('invalid-argument', 'El monto debe estar entre $1 y $2000.');
       if (description.length < 10) throw new HttpsError('invalid-argument', 'Explica qué incluye el cobro (al menos 10 caracteres).');
       if (hasProfanity(description)) throw new HttpsError('invalid-argument', PROFANITY_MESSAGE);
-      const extra = { amount, description, iva: r2(amount * IVA_RATE), total: r2(amount * (1 + IVA_RATE)), commission: r2(amount * COMMISSION), status: 'propuesto', proposedAt: FieldValue.serverTimestamp() };
+      const q = extraOf(amount, regimeOf(b.taxRegime));
+      const extra = { amount: q.amount, description, iva: q.iva, total: q.total, commission: q.commission, commissionIva: q.commissionIva, status: 'propuesto', proposedAt: FieldValue.serverTimestamp() };
       tx.update(ref, { extra });
       return { b, extra, to: 'cliente' };
     }
@@ -1247,8 +1265,8 @@ export const cobroAdicional = onCall({ region: REGION, secrets: [MAIL_PASSWORD] 
     if (!isPro) throw new HttpsError('permission-denied', 'Solo el profesional confirma el pago en efectivo.');
     if (ex.status !== 'efectivo_pendiente') throw new HttpsError('failed-precondition', 'Este cobro no está pendiente de pago en efectivo.');
     tx.update(ref, { 'extra.status': 'pagado_efectivo', 'extra.paidAt': FieldValue.serverTimestamp() });
-    // La comisión de HULUL queda como saldo a cargo del profesional.
-    if (!b.demo) tx.set(db().doc(`providers/${uid}`), { cashDebt: FieldValue.increment(ex.commission) }, { merge: true });
+    // La comisión de HULUL queda como saldo a cargo del profesional: la registra
+    // el libro de movimientos al cerrar la reserva (ledger.js).
     return { b, extra: { ...ex, status: 'pagado_efectivo' }, to: 'cliente' };
   });
 
@@ -1616,4 +1634,134 @@ export const reportarProblema = onCall({ region: REGION, secrets: [MAIL_PASSWORD
     logger.warn('No se pudo avisar el reclamo', { id, e: String(e) });
   }
   return { ok: true };
+});
+
+/* ------------------------ Libro de movimientos ------------------------ */
+
+/**
+ * Cada vez que una reserva cambia, el servidor deja en `ledger` los
+ * movimientos de dinero que le corresponden (money.js → ledgerEntriesFor) y
+ * revierte los que ya no corresponden (por ejemplo, una disputa que termina en
+ * devolución). Los movimientos no se editan ni se borran: se revierten.
+ * Solo el servidor escribe aquí; cada profesional ve los suyos.
+ */
+export const libroMovimientos = onDocumentWritten(
+  { document: 'bookings/{id}', region: REGION },
+  async (event) => {
+    const id = event.params.id;
+    const after = event.data?.after?.data();
+    if (!after || after.demo) return;
+    const before = event.data?.before?.data();
+    // Solo interesa cuando cambia algo que mueve dinero.
+    const sig = (b) => (b ? JSON.stringify([b.status, b.cancelFee ?? 0, b.proFine ?? 0, b.clientCredit ?? 0, b.extra?.status ?? '', b.extra?.amount ?? 0, b.paymentMethod, b.taxRegime ?? '']) : '');
+    if (sig(before) === sig(after)) return;
+    const desired = ledgerEntriesFor(after);
+    if (desired === null) return;
+    const proId = String(after.professionalId ?? '');
+    if (!proId) return;
+    const eventMs = (after.finishedAt ?? after.completedAt ?? after.cancelledAt)?.toMillis?.() ?? Date.now();
+    const holdUntil = Math.max(Date.now(), eventMs + PAYOUT_HOLD_HOURS * 3_600_000);
+    const col = db().collection('ledger');
+    const changed = await db().runTransaction(async (tx) => {
+      const existing = (await tx.get(col.where('bookingId', '==', id))).docs.map((d) => ({ id: d.id, ...d.data() }));
+      const { create, reverse } = ledgerDiff(desired, existing);
+      if (!create.length && !reverse.length) return false;
+      const base = { bookingId: id, proId, clientId: after.clientId ?? null, paymentMethod: after.paymentMethod ?? null, payoutId: null, createdAt: FieldValue.serverTimestamp() };
+      let n = existing.length;
+      for (const e of reverse) {
+        const rid = `${id}_${String(++n).padStart(3, '0')}`;
+        tx.set(col.doc(rid), { ...base, ...reversalOf(e, e.id), availableAt: Date.now() });
+        tx.update(col.doc(e.id), { reversedBy: rid });
+      }
+      for (const e of create) {
+        const { hold, ...rest } = e;
+        tx.set(col.doc(`${id}_${String(++n).padStart(3, '0')}`), { ...base, ...rest, availableAt: hold ? holdUntil : Date.now() });
+      }
+      return true;
+    });
+    if (changed) await refreshProBalance(proId);
+  },
+);
+
+/**
+ * Saldo del profesional con HULUL (lo pendiente de liquidar). Si es negativo,
+ * es deuda (cobros en efectivo, multas): con más de $30 se le desactiva el efectivo.
+ */
+async function refreshProBalance(proId) {
+  const snap = await db().collection('ledger').where('proId', '==', proId).where('payoutId', '==', null).get();
+  const balance = r2(snap.docs.reduce((s, d) => s + Number(d.data().proDelta ?? 0), 0));
+  await db().doc(`providers/${proId}`).set({ payoutBalance: balance, cashDebt: r2(Math.max(0, -balance)) }, { merge: true });
+}
+
+/**
+ * Liquidación semanal (lunes 06:00): por cada profesional suma lo pendiente que
+ * ya pasó la ventana de reclamos y no está en disputa, descuenta comisión,
+ * multas, deuda de efectivo y retenciones, y deja la orden de pago en
+ * `payouts` (status "por_pagar"). Si el neto no es positivo, el saldo pasa a la
+ * semana siguiente. La transferencia la hará la dispersión de la pasarela;
+ * mientras tanto HULUL la hace y cambia status a "pagado".
+ */
+export const liquidacionSemanal = onSchedule({ schedule: 'every monday 06:00', region: REGION, timeZone: 'America/Guayaquil', secrets: [MAIL_PASSWORD] }, async () => {
+  const now = Date.now();
+  const week = payoutWeek(now);
+  const pending = (await db().collection('ledger').where('payoutId', '==', null).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+  if (!pending.length) return;
+  // Reservas en disputa: su dinero espera a que HULUL resuelva.
+  const bookingIds = [...new Set(pending.map((e) => e.bookingId))];
+  const disputed = new Set();
+  for (let i = 0; i < bookingIds.length; i += 100) {
+    const refs = bookingIds.slice(i, i + 100).map((x) => db().doc(`bookings/${x}`));
+    const snaps = await db().getAll(...refs);
+    for (const s of snaps) if (s.exists && s.data().status === 'en_disputa') disputed.add(s.id);
+  }
+  const byPro = new Map();
+  for (const e of pending) {
+    if (Number(e.availableAt ?? 0) > now || disputed.has(e.bookingId)) continue;
+    byPro.set(e.proId, [...(byPro.get(e.proId) ?? []), e]);
+  }
+  const summary = [];
+  for (const [proId, entries] of byPro) {
+    const pSnap = await db().doc(`providers/${proId}`).get();
+    const p = pSnap.data() ?? {};
+    const liq = weeklyPayout(entries, p.taxRegime);
+    if (liq.net <= 0) { summary.push({ proId, name: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim(), net: liq.net, carried: true }); continue; }
+    const bank = (await db().doc(`providers/${proId}/private/banco`).get()).data() ?? null;
+    const payoutRef = db().collection('payouts').doc(`${week}_${proId}`);
+    const writer = db().bulkWriter();
+    writer.set(payoutRef, {
+      proId, week, status: 'por_pagar', regime: regimeOf(p.taxRegime),
+      gross: liq.gross, deductions: liq.deductions, retentions: liq.retentions, net: liq.net, byKind: liq.byKind,
+      entryIds: entries.map((e) => e.id), bank: bank ? { bank: bank.bank, type: bank.type, number: bank.number, holder: bank.holder, holderId: bank.holderId } : null,
+      retentionsDefined: false, createdAt: FieldValue.serverTimestamp(),
+    });
+    for (const e of entries) writer.update(db().doc(`ledger/${e.id}`), { payoutId: payoutRef.id });
+    // Retenciones como movimientos propios (para el comprobante mensual).
+    for (const [k, v] of Object.entries(liq.retentions)) {
+      if (v > 0) writer.set(db().collection('ledger').doc(`${payoutRef.id}_ret_${k}`), { kind: `retencion_${k}`, bucket: 'retenciones_por_pagar', amount: v, proDelta: -v, proId, bookingId: null, payoutId: payoutRef.id, availableAt: now, createdAt: FieldValue.serverTimestamp() });
+    }
+    await writer.close();
+    await refreshProBalance(proId);
+    summary.push({ proId, name: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim(), net: liq.net, email: p.email, liq, bank });
+    if (p.email) {
+      const { from, notifyTo } = senders();
+      await transport().sendMail({
+        from, to: p.email, replyTo: notifyTo, subject: `Tu liquidación HULUL de la semana ${week}`,
+        html: layout('Tu liquidación semanal', `<p style="font-size:15px">Hola ${esc(p.firstName ?? '')}, este es el resumen de lo que te depositamos esta semana.</p>` + rows([
+          ['Cobrado por tus servicios', usd(liq.gross)],
+          ['Comisión, cargos, multas y deuda de efectivo', `−${usd(liq.deductions)}`],
+          ...(liq.retentions.renta + liq.retentions.iva > 0 ? [['Retenciones de ley', `−${usd(liq.retentions.renta + liq.retentions.iva)}`]] : []),
+          ['A depositar', `<strong>${usd(liq.net)}</strong>`],
+          ['Cuenta', bank ? `${esc(bank.bank)} ****${esc(String(bank.number ?? '').slice(-4))}` : 'Sin cuenta registrada'],
+        ]) + '<p style="font-size:13px;color:#6B6560">La factura de la comisión y el comprobante de retención te llegan aparte.</p>'),
+      }).catch((e) => logger.warn('No se pudo enviar la liquidación', { proId, e: String(e) }));
+    }
+  }
+  const { from, notifyTo } = senders();
+  const toPay = summary.filter((s) => !s.carried);
+  await transport().sendMail({
+    from, to: notifyTo, subject: `Liquidación semanal ${week}: ${toPay.length} pagos por ${usd(toPay.reduce((s, x) => s + x.net, 0))}`,
+    html: layout('Pagos de la semana', rows(summary.map((s) => [esc(s.name || s.proId), s.carried ? `Saldo ${usd(s.net)} (pasa a la próxima semana)` : `${usd(s.net)} · ${s.bank ? `${esc(s.bank.bank)} ${esc(s.bank.type)} ${esc(s.bank.number)}` : 'SIN CUENTA'}`])) +
+      '<p style="font-size:13px;color:#6B6560">Órdenes en Firestore: colección <b>payouts</b> (status "por_pagar"). Al transferir, cambia status a <b>pagado</b>. Retenciones aún en 0: porcentajes por definir con el contador.</p>'),
+  }).catch((e) => logger.warn('No se pudo enviar el resumen de liquidación', { e: String(e) }));
+  logger.info('Liquidación semanal', { week, pagos: toPay.length });
 });

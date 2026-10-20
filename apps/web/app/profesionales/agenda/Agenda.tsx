@@ -306,7 +306,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
       </div>
 
       {b.outcome && <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} category={b.category} title={`Tu ${serviceCopy(b.category).reportTitle.toLowerCase()}`} />}
-      {!compact && <ExtraForPro id={b.id} status={b.status} extra={b.extra} />}
+      {!compact && <ExtraForPro id={b.id} status={b.status} extra={b.extra} taxRegime={b.taxRegime} />}
       {b.rating ? <span className="muted" style={{ fontSize: 13.5 }}>El cliente te calificó {'★'.repeat(b.rating)}</span> : null}
       {(!compact || b.cancelledBy === 'cliente_ausente') && (['por_aprobar', 'completada'].includes(b.status) || b.cancelledBy === 'cliente_ausente') && !b.clientRating && <RateClientBox id={b.id} clientName={first} />}
       {b.status === 'pendiente' && !compact && <span className="muted" style={{ fontSize: 13.5 }}>Lee bien qué necesita el cliente y acepta solo si sabes hacerlo. Cobras la visita; lo que haga falta después lo acuerdas con el cliente.</span>}

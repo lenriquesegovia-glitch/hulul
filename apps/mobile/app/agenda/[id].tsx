@@ -356,7 +356,7 @@ function ExtraPro({ b }: { b: ProBooking }) {
       <Card style={{ gap: 8 }}>
         <Text style={s.label}>Cobro adicional · {EXTRA_STATUS_LABEL[x.status]}</Text>
         <Body muted>{x.description}</Body>
-        <Body>{formatUSD(x.amount)} + IVA = {formatUSD(x.total)}. Te queda {formatUSD(x.amount - x.commission)}.</Body>
+        <Body>{x.iva > 0 ? `${formatUSD(x.amount)} + IVA = ${formatUSD(x.total)}` : formatUSD(x.total)}. Te queda {formatUSD(x.amount - x.commission)}.</Body>
         {msg ? <Body style={{ color: c.primary, fontSize: 13 }}>{msg}</Body> : null}
         {x.status === 'efectivo_pendiente' && <PrimaryButton label={busy ? 'Guardando…' : `Recibí ${formatUSD(x.total)} en efectivo`} onPress={() => !busy && run({ id: b.id, action: 'recibi_efectivo' })} />}
       </Card>
@@ -366,7 +366,7 @@ function ExtraPro({ b }: { b: ProBooking }) {
   if (!open) return <Button variant="secondary" label="+ Agregar cobro adicional" onPress={() => setOpen(true)} />;
 
   const n = Number(amount.replace(',', '.'));
-  const q = Number.isFinite(n) && n > 0 ? extraQuote(n) : null;
+  const q = Number.isFinite(n) && n > 0 ? extraQuote(n, b.taxRegime) : null;
   return (
     <Card style={{ gap: 10 }}>
       <Text style={s.label}>Cobro adicional</Text>

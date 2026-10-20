@@ -47,6 +47,7 @@ service cloud.firestore {
             'contactName', 'contactPhone', 'contactEmail', 'paymentMethod',
             'subtotal', 'fee', 'iva', 'total', 'consentMarketing', 'demo',
             'pricing', 'visit', 'safetyAccepted', 'photos', 'surcharge', 'surchargeKind', 'noiseAccepted',
+            'taxRegime', 'visitIva',
             'status', 'consentPrivacy', 'privacyVersion', 'createdAt'])
         && request.resource.data.source in ['web', 'app']
         // Desde la web solo se reserva con cuenta, y a nombre propio.
@@ -70,6 +71,9 @@ service cloud.firestore {
         && (!('surcharge' in request.resource.data) || num(request.resource.data.surcharge, 0, 500))
         && (!('surchargeKind' in request.resource.data) || request.resource.data.surchargeKind in ['nocturno', 'feriado'])
         && (!('noiseAccepted' in request.resource.data) || request.resource.data.noiseAccepted == true)
+        // Régimen del profesional e IVA de la visita (el servidor los vuelve a calcular).
+        && (!('taxRegime' in request.resource.data) || request.resource.data.taxRegime in ['general', 'rimpe_emprendedor', 'rimpe_popular'])
+        && (!('visitIva' in request.resource.data) || num(request.resource.data.visitIva, 0, 2000))
         // Fotos opcionales del problema (enlaces de Storage).
         && (!('photos' in request.resource.data) || (request.resource.data.photos is list && request.resource.data.photos.size() <= 4))
         && str(request.resource.data.address, 8, 300)
@@ -145,6 +149,7 @@ service cloud.firestore {
         'uid', 'status', 'step', 'kind', 'firstName', 'lastName', 'businessName', 'cedula', 'ruc',
         'phone', 'email', 'categories', 'services', 'rates', 'minHours', 'visitRates', 'catEvidence', 'catStatus', 'strikes', 'tester', 'cashDebt', 'fines', 'years', 'bio',
         'cities', 'days', 'from', 'to', 'acceptsCash', 'docs', 'offHours', 'holidays', 'surcharges',
+        'taxRegime', 'eSignature', 'mandateAccepted', 'payoutBalance',
         'consentPrivacy', 'privacyVersion', 'termsAccepted', 'submittedAt', 'createdAt', 'updatedAt']);
     }
 
@@ -164,14 +169,18 @@ service cloud.firestore {
         // Fuera de horario y feriados: horas que activa y recargos en monto fijo.
         && (!('offHours' in d) || (d.offHours is list && d.offHours.size() <= 14))
         && (!('holidays' in d) || d.holidays is bool)
-        && (!('surcharges' in d) || (d.surcharges is map && d.surcharges.keys().hasOnly(['nocturno', 'feriado'])));
+        && (!('surcharges' in d) || (d.surcharges is map && d.surcharges.keys().hasOnly(['nocturno', 'feriado'])))
+        // Régimen tributario (define si su visita lleva IVA) y si tiene firma electrónica.
+        && (!('taxRegime' in d) || d.taxRegime in ['general', 'rimpe_emprendedor', 'rimpe_popular'])
+        && (!('eSignature' in d) || d.eSignature is bool)
+        && (!('mandateAccepted' in d) || d.mandateAccepted is bool);
     }
 
     match /providers/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid
         && providerOk(uid, request.resource.data)
-        && !('catStatus' in request.resource.data) && !('strikes' in request.resource.data) && !('tester' in request.resource.data) && !('cashDebt' in request.resource.data) && !('fines' in request.resource.data)
+        && !('catStatus' in request.resource.data) && !('strikes' in request.resource.data) && !('tester' in request.resource.data) && !('cashDebt' in request.resource.data) && !('fines' in request.resource.data) && !('payoutBalance' in request.resource.data)
         && !('strikeLog' in request.resource.data) && !('suspendedUntil' in request.resource.data) && !('strikesResetAt' in request.resource.data) && !('ratingCheckAt' in request.resource.data)
         && request.resource.data.status == 'borrador'
         && request.resource.data.createdAt == request.time;
@@ -184,6 +193,7 @@ service cloud.firestore {
         && request.resource.data.get('tester', null) == resource.data.get('tester', null)
         && request.resource.data.get('cashDebt', null) == resource.data.get('cashDebt', null)
         && request.resource.data.get('fines', null) == resource.data.get('fines', null)
+        && request.resource.data.get('payoutBalance', null) == resource.data.get('payoutBalance', null)
         // Faltas y suspensiones: solo el servidor.
         && request.resource.data.get('strikeLog', null) == resource.data.get('strikeLog', null)
         && request.resource.data.get('suspendedUntil', null) == resource.data.get('suspendedUntil', null)
@@ -260,6 +270,18 @@ service cloud.firestore {
         && (!('photo' in request.resource.data) || (request.resource.data.photo is string && request.resource.data.photo.matches('https://firebasestorage[.]googleapis[.]com/.*')))
         && request.resource.data.at == request.time;
       allow update, delete: if false;
+    }
+
+    // Libro de movimientos de dinero y liquidaciones semanales: los escribe solo
+    // el servidor; cada profesional ve los suyos. HULUL los revisa en la consola
+    // (y luego en el panel de administración).
+    match /ledger/{entryId} {
+      allow read: if request.auth != null && resource.data.proId == request.auth.uid;
+      allow write: if false;
+    }
+    match /payouts/{payoutId} {
+      allow read: if request.auth != null && resource.data.proId == request.auth.uid;
+      allow write: if false;
     }
 
     // Reseñas públicas de los profesionales (las escribe el servidor al calificar).

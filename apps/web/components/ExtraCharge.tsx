@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { extraQuote, formatUSD, MAX_EXTRA, MIN_EXTRA } from '@hulul/shared';
+import { extraQuote, formatUSD, MAX_EXTRA, MIN_EXTRA, type TaxRegime } from '@hulul/shared';
 import { EXTRA_STATUS_LABEL, type ExtraAction, type ExtraCharge } from '@hulul/shared/firebase';
 
 async function run(data: ExtraAction) {
@@ -56,7 +56,7 @@ export function ExtraForClient({ id, extra, proName }: { id: string; extra?: Ext
 }
 
 /** Lo que ve el profesional: agregar un cobro adicional y confirmar el pago en efectivo. */
-export function ExtraForPro({ id, status, extra }: { id: string; status: string; extra?: ExtraCharge }) {
+export function ExtraForPro({ id, status, extra, taxRegime }: { id: string; status: string; extra?: ExtraCharge; taxRegime?: TaxRegime }) {
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -88,7 +88,7 @@ export function ExtraForPro({ id, status, extra }: { id: string; status: string;
   if (!canAdd) return null;
 
   const n = Number(amount.replace(',', '.'));
-  const q = Number.isFinite(n) && n > 0 ? extraQuote(n) : null;
+  const q = Number.isFinite(n) && n > 0 ? extraQuote(n, taxRegime) : null;
   const send = () => {
     if (!q || n < MIN_EXTRA || n > MAX_EXTRA) { setMsg(`Escribe un monto entre $${MIN_EXTRA} y $${MAX_EXTRA}.`); return; }
     if (description.trim().length < 10) { setMsg('Explica qué incluye el cobro (al menos 10 caracteres).'); return; }
@@ -112,7 +112,7 @@ export function ExtraForPro({ id, status, extra }: { id: string; status: string;
             <label htmlFor={`xd-${id}`}>¿Qué incluye?</label>
             <textarea id={`xd-${id}`} rows={2} maxLength={300} value={description} placeholder="Ej.: capacitor de 35 µF y 1 hora más de trabajo" onChange={(e) => setDescription(e.target.value)} />
           </div>
-          {q && <span className="muted" style={{ fontSize: 13.5 }}>El cliente paga {formatUSD(q.total)} (con IVA). Te queda {formatUSD(q.proPayout)}.</span>}
+          {q && <span className="muted" style={{ fontSize: 13.5 }}>El cliente paga {formatUSD(q.total)}{q.iva > 0 ? ' (con IVA)' : ''}. Te queda {formatUSD(q.proPayout)}.</span>}
           {msg && <p role="alert" className="form-error">{msg}</p>}
           <div className="row gap-8">
             <button type="button" className="btn btn-primary" disabled={busy} onClick={send}>{busy ? 'Enviando…' : 'Enviar al cliente'}</button>

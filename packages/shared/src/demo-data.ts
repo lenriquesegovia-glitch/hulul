@@ -2,6 +2,7 @@ import type { CategorySlug } from './categories';
 import { cities } from './cities';
 import type { Professional } from './models';
 import { CATEGORY_PRICING, clampRate } from './provider';
+import { regimeOf, type TaxRegime } from './tax';
 
 /**
  * Directorio de profesionales REALES.
@@ -35,6 +36,8 @@ export interface PublicPro {
   offHours?: number[];
   holidays?: boolean;
   surcharges?: { nocturno?: number; feriado?: number };
+  /** Régimen tributario (define si su visita lleva IVA). */
+  taxRegime?: TaxRegime;
 }
 
 /** Día de la semana en Ecuador (0 = domingo). */
@@ -73,6 +76,7 @@ export function toProfessional(p: PublicPro, category?: CategorySlug): Professio
     offHours: Array.isArray(p.offHours) ? p.offHours : [],
     holidays: !!p.holidays,
     surcharges: p.surcharges ?? {},
+    taxRegime: regimeOf(p.taxRegime),
   };
 }
 

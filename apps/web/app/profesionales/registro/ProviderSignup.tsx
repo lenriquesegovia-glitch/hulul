@@ -30,6 +30,9 @@ import {
   type ProviderDocSpec,
   type ProviderKind,
   type ProviderStatus,
+  TAX_REGIMES,
+  TAX_REGIME_LABEL,
+  type TaxRegime,
 } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { logout, useUser } from '@/lib/auth';
@@ -71,6 +74,10 @@ interface Draft {
   holidays: boolean;
   surcharges: Surcharges;
   docs: Partial<Record<DocKey, { path: string; name: string }>>;
+  /** Régimen tributario en el SRI ('' = aún no elige): define si su visita lleva IVA. */
+  taxRegime: TaxRegime | '';
+  /** Tiene firma electrónica (para emitir sus facturas desde HULUL). */
+  eSignature: boolean;
 }
 
 interface Bank {
@@ -85,6 +92,7 @@ const EMPTY: Draft = {
   kind: 'persona', firstName: '', lastName: '', businessName: '', cedula: '', ruc: '', phone: '', email: '',
   categories: [], services: {}, visitRates: {}, catEvidence: {}, years: 0, bio: '',
   cities: [], days: [1, 2, 3, 4, 5, 6], from: '08:00', to: '17:00', acceptsCash: true, offHours: [], holidays: false, surcharges: {}, docs: {},
+  taxRegime: '', eSignature: false,
 };
 const EMPTY_BANK: Bank = { bank: '', type: 'ahorros', number: '', holder: '', holderId: '' };
 
@@ -172,6 +180,8 @@ function Wizard({ user }: { user: User }) {
       catEvidence: Object.fromEntries(d.categories.filter((c) => d.catEvidence[c]).map((c) => [c, d.catEvidence[c]])),
       // Firestore no acepta campos vacíos: solo los recargos que puso.
       surcharges: Object.fromEntries(Object.entries(d.surcharges).filter(([, v]) => typeof v === 'number')),
+      // Firestore no acepta el régimen vacío: se omite hasta que lo elija.
+      taxRegime: d.taxRegime || fs.deleteField(),
       uid: user.uid,
       status: extra.status ?? status,
       step: nextStep,
@@ -220,6 +230,8 @@ function Wizard({ user }: { user: User }) {
         consentPrivacy: true,
         privacyVersion: PRIVACY_VERSION,
         termsAccepted: true,
+        // Mandato de cobro: HULUL cobra la visita en su nombre y le liquida cada semana.
+        mandateAccepted: true,
       }, STEPS.length - 1);
       setStatus('en_revision');
       setEditing(false);
@@ -299,6 +311,7 @@ function validate(step: number, d: Draft, bank: Bank): string {
     if (d.kind === 'persona' && d.ruc.slice(0, 10) !== d.cedula) return 'Tu RUC debe ser tu número de cédula seguido de 001.';
     if (!e164Ecuador(d.phone)) return 'Escribe tu celular de 10 dígitos (09XXXXXXXX).';
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) return 'Escribe un correo válido.';
+    if (!d.taxRegime) return 'Elige tu régimen en el SRI (lo ves en tu RUC). Si no lo sabes, revisa tu RUC en SRI en línea.';
   }
   if (step === 1) {
     if (!d.categories.length) return 'Elige al menos una categoría.';
@@ -375,6 +388,16 @@ function StepData({ d, set }: { d: Draft; set: SetField }) {
           <input id="em" type="email" autoComplete="email" value={d.email} maxLength={160} onChange={(e) => set('email', e.target.value.trim())} />
         </Field>
       </div>
+      <Field id="reg" label="Régimen en el SRI" hint={d.taxRegime ? TAX_REGIMES.find((r) => r.value === d.taxRegime)?.help : 'Aparece en tu RUC. Define si tu visita lleva IVA.'}>
+        <select id="reg" value={d.taxRegime} onChange={(e) => set('taxRegime', e.target.value as TaxRegime)}>
+          <option value="" disabled>Elige tu régimen</option>
+          {TAX_REGIMES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+        </select>
+      </Field>
+      <label className="check">
+        <input type="checkbox" checked={d.eSignature} onChange={(e) => set('eSignature', e.target.checked)} />
+        <span>Tengo firma electrónica. HULUL emitirá con ella la factura de cada visita a tu nombre, sin que hagas nada. Si no la tienes, puedes registrarte igual y sacarla después.</span>
+      </label>
     </section>
   );
 }
@@ -587,6 +610,7 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
         <Row k="Fuera de horario" v={d.offHours.length ? `${[...d.offHours].sort((a, b) => ((a + 6) % 24) - ((b + 6) % 24)).map((h) => `${String(h).padStart(2, '0')}:00`).join(' ')} · recargo $${d.surcharges.nocturno ?? 0}` : 'No'} />
         <Row k="Feriados" v={d.holidays ? `Sí · recargo $${d.surcharges.feriado ?? 0}` : 'No'} />
         <Row k="Efectivo" v={d.acceptsCash ? 'Acepta' : 'No acepta'} />
+        <Row k="Régimen SRI" v={d.taxRegime ? `${TAX_REGIME_LABEL[d.taxRegime]}${d.eSignature ? ' · con firma electrónica' : ''}` : 'Sin elegir'} />
         <Row k="Documentos" v={`${Object.keys(d.docs).length} subidos`} />
         <Row k="Cuenta" v={`${bank.bank} · ${bank.type} · ****${bank.number.slice(-4)}`} />
       </div>
@@ -594,7 +618,8 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
         <strong>Reglas del servicio que aceptas</strong>
         <ul className="stack gap-4" style={{ margin: 0, paddingLeft: 20, color: 'var(--text-2)', fontSize: 14 }}>
           <li>Cobras por visita: tu tarifa cubre ir, diagnosticar y arreglar lo que se resuelva en esa visita. Lo que haga falta después lo acuerdas con el cliente.</li>
-          <li>HULUL retiene una comisión del 15 % de tu tarifa por visita.</li>
+          <li>HULUL retiene una comisión del 15 % de tu tarifa por visita (más IVA) y te entrega la factura de esa comisión cada semana.</li>
+          <li>Autorizas a HULUL a cobrar en tu nombre lo que pagan los clientes con tarjeta y a emitir a tu nombre la factura de cada visita. Ese dinero es tuyo: HULUL lo retiene hasta que pasen las 48 horas para reclamos y te lo deposita cada semana, menos comisión, retenciones de ley, multas y lo que debas por cobros en efectivo.</li>
           <li>Acepta solo trabajos que sabes hacer. Al terminar dejas un resumen con fotos.</li>
           <li>Tolerancia de llegada: 15 minutos. Entre 15 y 30 minutos tarde, el cliente recibe un 10 % de descuento que se te descuenta.</li>
           <li>Más de 30 minutos tarde o cancelar con menos de 2 horas: multa de $5. No llegar sin avisar: multa de $10.</li>
