@@ -80,7 +80,8 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
         <Text style={[s.badge, b.status === 'pendiente' && s.badgeHot]}>{STATUS_LABEL[b.status] ?? b.status}</Text>
         <H1 style={{ fontSize: 24 }}>{cat?.name} · {first}</H1>
         <Text style={s.when}>{b.date === todayEc() ? 'Hoy' : shortDay(b.date)} · {b.slot}</Text>
-        <Body muted style={{ fontSize: 13.5 }}>{b.extra && !['propuesto', 'rechazado'].includes(b.extra.status) ? 'Visita + adicional' : 'Visita'}: te queda {formatUSD(earned(b))} · {b.paymentMethod === 'tarjeta' ? 'Tarjeta' : b.paymentMethod === 'transferencia' ? 'Transferencia' : 'DeUna'}{b.demo ? ' · prueba' : ''}</Body>
+        <Body muted style={{ fontSize: 13.5 }}>{b.extra && !['propuesto', 'rechazado'].includes(b.extra.status) ? 'Visita + adicional' : 'Visita'}{b.surcharge ? ` + ${b.surchargeKind === 'feriado' ? 'recargo de feriado' : 'recargo nocturno'} (${formatUSD(b.surcharge)})` : ''}: te queda {formatUSD(earned(b))} · {b.paymentMethod === 'tarjeta' ? 'Tarjeta' : b.paymentMethod === 'transferencia' ? 'Transferencia' : 'DeUna'}{b.demo ? ' · prueba' : ''}</Body>
+        {b.noiseAccepted && <Body muted style={{ fontSize: 12.5 }}>El cliente aceptó responder por el ruido ante vecinos y administración. Si no te dejan trabajar, espera y marca &quot;Cliente ausente&quot;.</Body>}
       </View>
 
       <Card style={{ gap: 10 }}>

@@ -32,6 +32,9 @@ export interface PublicPro {
   jobsDone: number;
   /** Profesional de pruebas: horario libre durante el periodo de prueba. */
   tester?: boolean;
+  offHours?: number[];
+  holidays?: boolean;
+  surcharges?: { nocturno?: number; feriado?: number };
 }
 
 /** Día de la semana en Ecuador (0 = domingo). */
@@ -67,6 +70,9 @@ export function toProfessional(p: PublicPro, category?: CategorySlug): Professio
     from: p.from || undefined,
     to: p.to || undefined,
     tester: !!p.tester,
+    offHours: Array.isArray(p.offHours) ? p.offHours : [],
+    holidays: !!p.holidays,
+    surcharges: p.surcharges ?? {},
   };
 }
 

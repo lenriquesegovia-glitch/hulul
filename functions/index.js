@@ -59,6 +59,36 @@ const rateRange = (c) => {
 };
 const clampRate = (c, r) => { const { min, max } = rateRange(c); return Math.min(max, Math.max(min, r)); };
 
+// Fuera de horario y feriados (igual que packages/shared/src/schedule.ts).
+// Horario normal 08:00–18:00. Fuera de él y en feriados atiende solo quien lo
+// activa, con su recargo en monto fijo (sin tope comercial).
+const NORMAL_START = 8;
+const NORMAL_END = 18;
+const MAX_SURCHARGE = 500;
+const OFF_HOURS = [18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7];
+const HOLIDAYS = {
+  '2026-11-02': 'Día de los Difuntos', '2026-11-03': 'Independencia de Cuenca', '2026-12-25': 'Navidad',
+  '2027-01-01': 'Año Nuevo', '2027-02-08': 'Carnaval', '2027-02-09': 'Carnaval', '2027-03-26': 'Viernes Santo',
+  '2027-07-25': 'Fundación de Guayaquil',
+};
+const SURCHARGE_NAMES = { nocturno: 'Recargo nocturno', feriado: 'Recargo de feriado' };
+const isOffHour = (slot) => { const h = Number(String(slot).split(':')[0]); return h < NORMAL_START || h >= NORMAL_END; };
+const validSurcharge = (n) => (typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= MAX_SURCHARGE ? Math.round(n * 100) / 100 : null);
+/** Recargo de una reserva según el perfil del profesional: el mayor entre nocturno y feriado. */
+function surchargeOf(p, date, slot) {
+  const night = isOffHour(slot) ? (validSurcharge(p?.surcharges?.nocturno) ?? 0) : -1;
+  const holiday = HOLIDAYS[date] ? (validSurcharge(p?.surcharges?.feriado) ?? 0) : -1;
+  if (night < 0 && holiday < 0) return { kind: null, amount: 0 };
+  return holiday > night ? { kind: 'feriado', amount: holiday } : { kind: 'nocturno', amount: night };
+}
+/** ¿El profesional atiende esa fecha y hora fuera de horario? '' si sí; si no, el motivo. */
+function offHoursRefusal(p, date, slot) {
+  const h = Number(String(slot).split(':')[0]);
+  if (isOffHour(slot) && !(Array.isArray(p?.offHours) && p.offHours.includes(h))) return `El profesional no atiende a las ${slot}.`;
+  if (HOLIDAYS[date] && p?.holidays !== true) return `${HOLIDAYS[date]} es feriado y el profesional no atiende feriados.`;
+  return '';
+}
+
 // Mismos textos que packages/shared/src/policy.ts y copy.ts.
 const TECNICO = ['climatizacion', 'plomeria', 'electricidad', 'electrodomesticos', 'piscinas', 'pintura', 'cerrajeria', 'carpinteria', 'albanileria', 'fumigacion', 'tecnologia'];
 const isTech = (cat) => TECNICO.includes(cat);
@@ -170,6 +200,8 @@ export function bookingEmails(b, id, { from, notifyTo }) {
     ['Profesional', esc(b.professionalName)],
     ['Fecha', esc(when)],
     ['Visita', usd(b.visit ?? b.subtotal)],
+    ...(Number(b.surcharge) > 0 ? [[SURCHARGE_NAMES[b.surchargeKind] ?? 'Recargo', usd(b.surcharge)]] : []),
+    ...(b.noiseAccepted ? [['Ruido', 'El cliente aceptó responder ante vecinos y administración']] : []),
     ['Dirección', esc(b.address)],
     ['Ubicación', mapRow(b.location)],
     ['Descripción', esc(b.notes)],
@@ -201,6 +233,7 @@ export function bookingEmails(b, id, { from, notifyTo }) {
         ['Dirección', esc(b.address)],
         ...(mapsUrl(b.location) ? [['Ubicación', mapRow(b.location)]] : []),
         ['Visita', usd(b.visit ?? b.subtotal)],
+        ...(Number(b.surcharge) > 0 ? [[SURCHARGE_NAMES[b.surchargeKind] ?? 'Recargo', usd(b.surcharge)]] : []),
         ['Total', `<strong>${usd(b.total)}</strong>`],
       ]) +
       `<p style="font-size:14px;color:#3F3A37;margin-top:16px">${esc(AFTER_VISIT_NOTE)}</p>` +
@@ -295,15 +328,24 @@ async function checkPrice(b) {
   const snap = await db().doc(`providers/${b.professionalId}`).get();
   if (!snap.exists) return { ok: true };
   const p = snap.data();
+  const pubDoc = (await db().doc(`pros/${b.professionalId}`).get()).data();
+  // Fuera de horario o feriado: solo si el profesional lo activó (los de prueba, libres).
+  const tester = p.tester === true;
+  const refusal = tester ? '' : offHoursRefusal(p, b.date, b.slot);
+  if (refusal && offHoursRefusal(pubDoc, b.date, b.slot)) return { ok: false, total: 0, reason: refusal };
+  const sc = tester ? { kind: null, amount: 0 } : surchargeOf(p, b.date, b.slot);
   const visit = r2(visitRateOf(p, b.category));
   const fee = 1.99;
-  const iva = r2((visit + fee) * IVA_RATE);
-  const total = r2(visit + fee + iva);
-  const near = (x, y) => Math.abs(Number(x) - y) < 0.02;
+  const totalOf = (v, s) => { const sub = r2(v + s); return r2(sub + fee + r2((sub + fee) * IVA_RATE)); };
+  const total = totalOf(visit, sc.amount);
+  const near = (x, y) => Math.abs(Number(x ?? 0) - y) < 0.02;
   // También vale la tarifa publicada en el directorio (por si cambió hace segundos).
-  const pub = (await db().doc(`pros/${b.professionalId}`).get()).data()?.visitRates?.[b.category];
-  const okFor = (v) => near(b.visit, v) && near(b.subtotal, v) && near(b.fee, fee) && near(b.iva, r2((v + fee) * IVA_RATE)) && near(b.total, r2(v + fee + r2((v + fee) * IVA_RATE)));
-  return { ok: okFor(visit) || (Number.isFinite(Number(pub)) && okFor(r2(Number(pub)))), total };
+  const pub = pubDoc?.visitRates?.[b.category];
+  const pubSc = tester ? sc : surchargeOf(pubDoc, b.date, b.slot);
+  const okFor = (v, s) => near(b.visit, v) && near(b.surcharge, s.amount) && (s.amount === 0 || b.surchargeKind === s.kind)
+    && near(b.subtotal, r2(v + s.amount)) && near(b.fee, fee) && near(b.iva, r2((r2(v + s.amount) + fee) * IVA_RATE)) && near(b.total, totalOf(v, s.amount));
+  const pubOk = Number.isFinite(Number(pub)) && (okFor(r2(Number(pub)), sc) || okFor(r2(Number(pub)), pubSc));
+  return { ok: okFor(visit, sc) || okFor(visit, pubSc) || pubOk, total };
 }
 
 export const avisoReserva = onDocumentCreated(
@@ -323,8 +365,8 @@ export const avisoReserva = onDocumentCreated(
       const priced = await checkPrice(b);
       if (!priced.ok) {
         await event.data.ref.update({ status: 'cancelada', cancelledBy: 'sistema', cancelledAt: FieldValue.serverTimestamp(), cancelFee: 0,
-          cancelReason: 'El precio de la reserva no coincide con la tarifa del profesional. Vuelve a reservar para ver el precio correcto.', expectedTotal: priced.total });
-        await pushTo(b.clientId, 'Revisa tu reserva', 'El precio no coincidía con la tarifa actual del profesional. Vuelve a reservar: no se te cobró nada.', { bookingId: event.params.id, to: 'cliente' }).catch(() => {});
+          cancelReason: priced.reason ? `${priced.reason} Elige otra hora: no se te cobró nada.` : 'El precio de la reserva no coincide con la tarifa del profesional. Vuelve a reservar para ver el precio correcto.', expectedTotal: priced.total });
+        await pushTo(b.clientId, 'Revisa tu reserva', priced.reason ? `${priced.reason} Vuelve a reservar: no se te cobró nada.` : 'El precio no coincidía con la tarifa actual del profesional. Vuelve a reservar: no se te cobró nada.', { bookingId: event.params.id, to: 'cliente' }).catch(() => {});
         const { from, notifyTo } = senders();
         await mail.sendMail({ from, to: notifyTo, subject: `Reserva anulada por precio ${code(event.params.id)}`,
           html: layout('Precio alterado o desactualizado', rows([['Código', code(event.params.id)], ['Cliente', esc(b.contactName)], ['Profesional', esc(b.professionalName)], ['Enviado', usd(b.total)], ['Correcto', usd(priced.total)]])) }).catch(() => {});
@@ -437,12 +479,17 @@ export function proBookingEmail(b, id, p, { from, notifyTo }) {
       ['Trabajo', esc(b.notes)],
       ...(Array.isArray(b.photos) && b.photos.length ? [['Fotos', b.photos.slice(0, 4).map((u, i) => `<a href="${esc(u)}" style="color:#7A1E2C">Foto ${i + 1}</a>`).join(' · ')]] : []),
       ['Pago', esc(PAYMENTS[b.paymentMethod] ?? b.paymentMethod)],
-      ['Te queda', `<strong>${usd((b.visit ?? b.subtotal ?? 0) * 0.85)}</strong> por la visita (menos la comisión)`],
+      ...(Number(b.surcharge) > 0 ? [[SURCHARGE_NAMES[b.surchargeKind] ?? 'Recargo', `${usd(b.surcharge)} (tu recargo)`]] : []),
+      ...(b.noiseAccepted ? [['Ruido', 'El cliente aceptó responder ante vecinos y administración. Si no te dejan trabajar, marca "Cliente ausente".']] : []),
+      ['Te queda', `<strong>${usd(((b.visit ?? b.subtotal ?? 0) + (Number(b.surcharge) || 0)) * 0.85)}</strong> por la visita${Number(b.surcharge) > 0 ? ' y el recargo' : ''} (menos la comisión)`],
     ]) +
     `<p style="font-size:14px;color:#3F3A37;margin-top:16px">Lee bien qué necesita el cliente y acepta solo si sabes hacerlo. Acéptala o recházala en tu agenda.</p>` +
     button('https://hululec.com/profesionales/agenda', 'Abrir mi agenda');
   return { from, to: p.email, replyTo: notifyTo, subject: `Reserva nueva ${code(id)} · ${cat} · ${when}`, html: layout('Tienes una reserva', body) };
 }
+
+/** Horas fuera de horario válidas, sin repetir. */
+const cleanOffHours = (xs) => (Array.isArray(xs) ? [...new Set(xs.map(Number).filter((h) => OFF_HOURS.includes(h)))] : []);
 
 /** Datos públicos de un profesional aprobado (nada de cédula, RUC, contacto ni banco). */
 export function publicPro(p, uid) {
@@ -454,6 +501,9 @@ export function publicPro(p, uid) {
     visitRates: Object.fromEntries(approvedCats(p).map((c) => [c, visitRateOf(p, c)])),
     cities: p.cities ?? [], years: Number(p.years ?? 0), bio: String(p.bio ?? ''),
     days: p.days ?? [], from: p.from ?? '', to: p.to ?? '', acceptsCash: !!p.acceptsCash,
+    // Fuera de horario y feriados: horas que activó y sus recargos (monto fijo).
+    offHours: cleanOffHours(p.offHours), holidays: p.holidays === true,
+    surcharges: { nocturno: validSurcharge(p.surcharges?.nocturno) ?? 0, feriado: validSurcharge(p.surcharges?.feriado) ?? 0 },
     // Profesional de pruebas (se marca a mano en la consola): horario libre en el periodo de prueba.
     tester: p.tester === true,
   };
@@ -954,6 +1004,24 @@ export const actualizarServicios = onCall(
       return { ok: true };
     }
 
+    if (action === 'horario') {
+      const offHours = cleanOffHours(req.data?.offHours);
+      const holidays = req.data?.holidays === true;
+      const nocturno = req.data?.surcharges?.nocturno;
+      const feriado = req.data?.surcharges?.feriado;
+      const sc = {};
+      for (const [k, v] of [['nocturno', nocturno], ['feriado', feriado]]) {
+        if (v === undefined || v === null || v === '') continue;
+        const n = validSurcharge(Number(v));
+        if (n === null) throw new HttpsError('invalid-argument', `El recargo debe ser un monto entre $0 y $${MAX_SURCHARGE}.`);
+        sc[k] = n;
+      }
+      if (offHours.length && sc.nocturno === undefined) throw new HttpsError('invalid-argument', 'Pon tu recargo nocturno (puede ser $0).');
+      if (holidays && sc.feriado === undefined) throw new HttpsError('invalid-argument', 'Pon tu recargo de feriado (puede ser $0).');
+      await ref.update({ offHours, holidays, surcharges: sc, updatedAt: FieldValue.serverTimestamp() });
+      return { ok: true };
+    }
+
     if (action === 'agregar') {
       const cat = String(req.data?.category ?? '');
       if (!SLUG.test(cat) || !CATEGORIES[cat]) throw new HttpsError('invalid-argument', 'Categoría no válida.');
@@ -1026,7 +1094,7 @@ export const reprogramarReserva = onCall(
       if (action === 'proponer') {
         const date = String(req.data?.date ?? '');
         const slot = String(req.data?.slot ?? '');
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(0[6-9]|1[0-9]|2[0-1]):(00|15|30|45)$/.test(slot)) throw new HttpsError('invalid-argument', 'Elige una fecha y una hora entre 06:00 y 21:45 (cada 15 minutos).');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01][0-9]|2[0-3]):(00|15|30|45)$/.test(slot)) throw new HttpsError('invalid-argument', 'Elige una fecha y una hora (cada 15 minutos).');
         const at = appointmentMs(date, slot);
         if (at < Date.now() + 15 * 60_000) throw new HttpsError('invalid-argument', 'La nueva hora debe ser al menos dentro de 15 minutos.');
         if (at > Date.now() + 31 * 86_400_000) throw new HttpsError('invalid-argument', 'La nueva fecha debe ser dentro de los próximos 30 días.');

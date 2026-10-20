@@ -24,7 +24,7 @@ const dayLabel = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
   return `${DAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${d}`;
 };
-const earned = (b: ProBooking) => (b.visit ?? b.subtotal ?? 0) * (1 - COMMISSION_RATE)
+const earned = (b: ProBooking) => ((b.visit ?? b.subtotal ?? 0) + (b.surcharge ?? 0)) * (1 - COMMISSION_RATE)
   + (b.extra && ['por_cobrar', 'pagado', 'efectivo_pendiente', 'pagado_efectivo'].includes(b.extra.status) ? b.extra.amount - b.extra.commission : 0);
 
 /**

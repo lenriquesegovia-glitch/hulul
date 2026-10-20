@@ -46,7 +46,7 @@ service cloud.firestore {
             'date', 'slot', 'hours', 'address', 'location', 'notes',
             'contactName', 'contactPhone', 'contactEmail', 'paymentMethod',
             'subtotal', 'fee', 'iva', 'total', 'consentMarketing', 'demo',
-            'pricing', 'visit', 'safetyAccepted', 'photos',
+            'pricing', 'visit', 'safetyAccepted', 'photos', 'surcharge', 'surchargeKind', 'noiseAccepted',
             'status', 'consentPrivacy', 'privacyVersion', 'createdAt'])
         && request.resource.data.source in ['web', 'app']
         // Desde la web solo se reserva con cuenta, y a nombre propio.
@@ -66,6 +66,10 @@ service cloud.firestore {
         && (!('pricing' in request.resource.data) || request.resource.data.pricing == 'visita')
         && (!('visit' in request.resource.data) || num(request.resource.data.visit, 1, 1000))
         && (!('safetyAccepted' in request.resource.data) || request.resource.data.safetyAccepted == true)
+        // Recargo nocturno o de feriado (el servidor lo vuelve a calcular) y aviso de ruido aceptado.
+        && (!('surcharge' in request.resource.data) || num(request.resource.data.surcharge, 0, 500))
+        && (!('surchargeKind' in request.resource.data) || request.resource.data.surchargeKind in ['nocturno', 'feriado'])
+        && (!('noiseAccepted' in request.resource.data) || request.resource.data.noiseAccepted == true)
         // Fotos opcionales del problema (enlaces de Storage).
         && (!('photos' in request.resource.data) || (request.resource.data.photos is list && request.resource.data.photos.size() <= 4))
         && str(request.resource.data.address, 8, 300)
@@ -140,7 +144,7 @@ service cloud.firestore {
       return d.keys().hasOnly([
         'uid', 'status', 'step', 'kind', 'firstName', 'lastName', 'businessName', 'cedula', 'ruc',
         'phone', 'email', 'categories', 'services', 'rates', 'minHours', 'visitRates', 'catEvidence', 'catStatus', 'strikes', 'tester', 'cashDebt', 'fines', 'years', 'bio',
-        'cities', 'days', 'from', 'to', 'acceptsCash', 'docs',
+        'cities', 'days', 'from', 'to', 'acceptsCash', 'docs', 'offHours', 'holidays', 'surcharges',
         'consentPrivacy', 'privacyVersion', 'termsAccepted', 'submittedAt', 'createdAt', 'updatedAt']);
     }
 
@@ -156,7 +160,11 @@ service cloud.firestore {
         && (!('catEvidence' in d) || d.catEvidence is map)
         && (!('bio' in d) || str(d.bio, 0, 500))
         && (!('cedula' in d) || str(d.cedula, 0, 10))
-        && (!('docs' in d) || d.docs is map);
+        && (!('docs' in d) || d.docs is map)
+        // Fuera de horario y feriados: horas que activa y recargos en monto fijo.
+        && (!('offHours' in d) || (d.offHours is list && d.offHours.size() <= 14))
+        && (!('holidays' in d) || d.holidays is bool)
+        && (!('surcharges' in d) || (d.surcharges is map && d.surcharges.keys().hasOnly(['nocturno', 'feriado'])));
     }
 
     match /providers/{uid} {

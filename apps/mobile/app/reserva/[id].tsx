@@ -154,7 +154,7 @@ function Detail({ b }: { b: ClientBooking }) {
             {b.photos.map((u) => <Pressable key={u} onPress={() => Linking.openURL(u)}><Image source={{ uri: u }} style={s.photo} accessibilityLabel="Tu foto" /></Pressable>)}
           </View>
         )}
-        <Body>{b.visit ? `Visita ${formatUSD(b.visit)} · ` : ''}Total: {formatUSD(b.total)} · Código {b.id.slice(0, 8).toUpperCase()}</Body>
+        <Body>{b.visit ? `Visita ${formatUSD(b.visit)} · ` : ''}{b.surcharge ? `${b.surchargeKind === 'feriado' ? 'Recargo de feriado' : 'Recargo nocturno'} ${formatUSD(b.surcharge)} · ` : ''}Total: {formatUSD(b.total)} · Código {b.id.slice(0, 8).toUpperCase()}</Body>
       </Card>
       <CancelBox row={b} onDone={() => {}} />
     </View>

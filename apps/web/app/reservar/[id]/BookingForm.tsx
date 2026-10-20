@@ -18,6 +18,9 @@ import {
   MAX_REQUEST_PHOTOS,
   leadMinutes,
   slotInWindow,
+  surchargeFor,
+  isOffHour,
+  SURCHARGE_LABEL,
   visitHours,
   visitLabel,
   nextDays,
@@ -203,7 +206,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
-  const q = quote(pro.visitRate);
+  // Recargo nocturno o de feriado del profesional (monto fijo), si aplica.
+  const sc = !tester && now && slot >= 0 ? surchargeFor(isoDay(now, day), slots[slot], pro) : { kind: null, amount: 0 };
+  const q = quote(pro.visitRate, sc.amount);
   const dayOk = (i: number) => !!now && slots.some((_, sIdx) => okWith(now, i, sIdx, hours));
   const check = !tester && now && slot >= 0 ? checkSlot({ category: pro.category, date: isoDay(now, day), slot: slots[slot], hours, pro }) : null;
   const [ack, setAck] = useState(false);
@@ -254,6 +259,8 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         hours,
         pricing: 'visita',
         visit: q.visit,
+        ...(sc.kind ? { surcharge: q.surcharge, surchargeKind: sc.kind } : {}),
+        ...(check?.noisy ? { noiseAccepted: true as const } : {}),
         safetyAccepted: true,
         ...(photos.length ? { photos } : {}),
         address: get('direccion'),
@@ -347,12 +354,19 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         <span className="muted" style={{ fontSize: 14, fontWeight: 700 }}>Hora de llegada</span>
         {tester && <p className="pill pill-warm" style={{ alignSelf: 'flex-start' }}>Modo prueba: cualquier hora, sin reglas de horario</p>}
         <div className="slot-grid" role="radiogroup" aria-label="Hora de llegada">
-          {slots.map((t, i) => (tester || slotInWindow(pro.category, t)) && (
+          {slots.map((t, i) => (tester || slotInWindow(pro.category, t, pro)) && (
             <button key={t} type="button" role="radio" aria-checked={i === slot}
               disabled={!now || !okWith(now, day, i, hours)}
-              className={`chip-slot ${i === slot ? 'on' : ''}`} onClick={() => setSlot(i)}>{t}</button>
+              aria-label={!tester && isOffHour(t) ? `${t}, fuera de horario` : t}
+              className={`chip-slot ${i === slot ? 'on' : ''}`} onClick={() => setSlot(i)}>{!tester && isOffHour(t) ? `🌙 ${t}` : t}</button>
           ))}
         </div>
+        {!tester && (pro.offHours?.length ?? 0) > 0 && (
+          <span className="muted" style={{ fontSize: 13.5 }}>🌙 Fuera de horario (antes de las 08:00 o desde las 18:00): recargo nocturno de {formatUSD(pro.surcharges?.nocturno ?? 0)}.</span>
+        )}
+        {sc.kind && sc.amount > 0 && (
+          <p className="notice" style={{ fontSize: 14 }}><strong>{SURCHARGE_LABEL[sc.kind]}: {formatUSD(sc.amount)}.</strong> Lo fija {pro.name.split(' ')[0]} para atender {sc.kind === 'feriado' ? 'en feriado' : 'fuera de horario'}. Ya está incluido en el total.</p>
+        )}
         {check && (
           <span className="muted" style={{ fontSize: 14 }}>
             {check.ok ? <>Llega a las <strong>{slots[slot]}</strong>. Una visita de {cat.name.toLowerCase()} suele tomar unas {minH} h.</> : check.reason}
@@ -431,6 +445,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
             <span>{pro.name.split(' ')[0]} <span className="muted" style={{ fontSize: 13 }}>({copy.priceCovers})</span></span>
             <span>{formatUSD(q.visit)}</span>
           </div>
+          {q.surcharge > 0 && sc.kind && (
+            <div className="row" style={{ justifyContent: 'space-between' }}><span>{SURCHARGE_LABEL[sc.kind]}</span><span>{formatUSD(q.surcharge)}</span></div>
+          )}
           <div className="row" style={{ justifyContent: 'space-between' }}><span>Cargo de plataforma HULUL</span><span>{formatUSD(q.fee)}</span></div>
           <div className="row" style={{ justifyContent: 'space-between' }}><span>IVA 15%</span><span>{formatUSD(q.iva)}</span></div>
           <div className="row" style={{ justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid var(--border)', fontWeight: 700, fontSize: 18 }}>

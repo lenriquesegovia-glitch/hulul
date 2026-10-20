@@ -94,6 +94,11 @@ export interface NewBooking {
   pricing: 'visita';
   /** Tarifa por visita del profesional. */
   visit: number;
+  /** Recargo nocturno o de feriado (monto fijo del profesional), si aplica. */
+  surcharge?: number;
+  surchargeKind?: 'nocturno' | 'feriado';
+  /** Trabajo con ruido fuera de horario: el cliente aceptó responder ante vecinos y administración. */
+  noiseAccepted?: true;
   /** El cliente aceptó el aviso de seguridad en el hogar. */
   safetyAccepted: true;
   /** Fotos del problema (enlaces de descarga), opcionales. */
@@ -122,7 +127,8 @@ export interface NewBooking {
  */
 export async function saveBooking({ location, ...b }: NewBooking): Promise<string> {
   const ref = await withTimeout(addDoc(collection(firestore(), 'bookings'), {
-    ...b,
+    // Sin campos vacíos (undefined): Firestore no los acepta.
+    ...Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined)),
     // Firestore no acepta campos vacíos (undefined): solo se envía si existe.
     ...(location ? { location: { lat: location.lat, lng: location.lng } } : {}),
     status: 'pendiente',
@@ -220,6 +226,9 @@ export interface ClientBooking {
   cancelledAt?: { toMillis(): number } | null;
   /** Tarifa por visita (reservas desde el 18-oct-2026). */
   visit?: number;
+  /** Recargo nocturno o de feriado. */
+  surcharge?: number;
+  surchargeKind?: 'nocturno' | 'feriado';
   subtotal?: number;
   outcome?: JobOutcome;
   diagnosis?: string;
@@ -507,7 +516,8 @@ export async function registerPushToken(token: string, platform: string): Promis
 
 export type ServicesUpdate =
   | { action: 'tarifas'; visitRates?: Partial<Record<CategorySlug, number>>; services?: Partial<Record<CategorySlug, string[]>> }
-  | { action: 'agregar'; category: CategorySlug; visitRate: number; services: string[]; evidence: CategoryEvidence };
+  | { action: 'agregar'; category: CategorySlug; visitRate: number; services: string[]; evidence: CategoryEvidence }
+  | { action: 'horario'; offHours: number[]; holidays: boolean; surcharges: { nocturno?: number; feriado?: number } };
 
 /** Un profesional aprobado cambia sus tarifas o suma una categoría (queda en revisión). */
 export async function updateServices(data: ServicesUpdate): Promise<void> {
@@ -578,6 +588,10 @@ export interface ProBooking {
   cancelledBy?: string;
   proposal?: Proposal;
   visit?: number;
+  /** Recargo nocturno o de feriado (va completo al profesional, menos la comisión). */
+  surcharge?: number;
+  surchargeKind?: 'nocturno' | 'feriado';
+  noiseAccepted?: boolean;
   outcome?: JobOutcome;
   diagnosis?: string;
   diagnosisPhotos?: string[];

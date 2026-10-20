@@ -1,19 +1,18 @@
 import type { CategorySlug } from './categories';
 
 /**
- * Horarios permitidos para agendar, por tipo de servicio.
+ * Horarios (decidido el 19-oct-2026).
  *
- * - Obra y ruido (aire, plomería, albañilería…): lunes a sábado, de 08:00 y
- *   terminando a más tardar 18:00. Domingos y feriados no: muchas
- *   urbanizaciones no dejan entrar proveedores ni hacer ruido.
- * - Hogar sin ruido (limpieza, clases, belleza…): todos los días de 08:00 a
- *   18:00; domingos y feriados con aviso (depende de la urbanización).
- * - Urgentes (cerrajería, salud): todos los días, también feriados, desde las
- *   07:00 y hasta las 20:00, con solo 30 minutos de anticipación.
- * - Mascotas (paseos al atardecer): como hogar, pero puede terminar hasta las 20:00.
- *
- * En todos: si el trabajo termina después de las 17:00 se avisa que HULUL no
- * responde si la urbanización no deja entrar al proveedor.
+ * - Horario normal: todos los días de 08:00 a 18:00 (la visita empieza y
+ *   termina dentro de ese horario). Sin recargo.
+ * - Fuera de horario (antes de las 08:00 o desde las 18:00) y feriados: solo
+ *   con profesionales que lo activan en su perfil. Cada uno elige a qué horas
+ *   atiende y fija su recargo en monto fijo (nocturno y feriado), sin tope. El
+ *   cliente lo ve antes de confirmar.
+ * - Trabajos con ruido (obra) en la noche, domingos o feriados: se pueden
+ *   reservar, pero el cliente acepta que responde ante vecinos, administración
+ *   o guardianía. Si no dejan trabajar al profesional, se cobra la visita como
+ *   "cliente ausente".
  */
 export type ScheduleGroup = 'obra' | 'hogar' | 'urgente';
 
@@ -24,25 +23,25 @@ export const CATEGORY_SCHEDULE: Record<CategorySlug, ScheduleGroup> = {
   salud: 'urgente', cerrajeria: 'urgente',
 };
 
-interface Rule {
-  label: string;
-  /** Días que se puede agendar (0 = domingo). */
-  days: number[];
-  /** Días que se pueden agendar pero con aviso. */
-  warnDays: number[];
-  holidays: 'no' | 'aviso' | 'si';
-  start: number;
-  /** Desde esta hora de fin se avisa por el ingreso a urbanizaciones. */
-  softEnd: number;
-  /** Hora máxima de fin del trabajo. */
-  hardEnd: number;
+/** Horario normal (horas enteras): desde START hasta END, sin recargo. */
+export const NORMAL_HOURS = { start: 8, end: 18 };
+
+/** Horas fuera de horario que un profesional puede activar (0–7 y 18–23). */
+export const OFF_HOURS = [18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7];
+
+/** Recargo máximo técnico (solo para evitar errores de tipeo; no es un tope comercial). */
+export const MAX_SURCHARGE = 500;
+
+/** ¿Esa hora de llegada es fuera de horario? */
+export function isOffHour(slot: string): boolean {
+  const h = Number(slot.split(':')[0]);
+  return h < NORMAL_HOURS.start || h >= NORMAL_HOURS.end;
 }
 
-export const SCHEDULE_RULES: Record<ScheduleGroup, Rule> = {
-  obra: { label: 'trabajos de obra o con ruido', days: [1, 2, 3, 4, 5, 6], warnDays: [], holidays: 'no', start: 8, softEnd: 17, hardEnd: 18 },
-  hogar: { label: 'trabajos del hogar', days: [0, 1, 2, 3, 4, 5, 6], warnDays: [0], holidays: 'aviso', start: 8, softEnd: 17, hardEnd: 18 },
-  urgente: { label: 'servicios urgentes', days: [0, 1, 2, 3, 4, 5, 6], warnDays: [], holidays: 'si', start: 7, softEnd: 17, hardEnd: 20 },
-};
+/** ¿El trabajo hace ruido? (obra: aire, plomería, albañilería…) */
+export function isNoisy(category: CategorySlug): boolean {
+  return CATEGORY_SCHEDULE[category] === 'obra';
+}
 
 /**
  * Feriados de descanso obligatorio en Ecuador (y de Guayaquil). Revisar cada
@@ -60,29 +59,51 @@ export const HOLIDAYS: Record<string, string> = {
   '2027-07-25': 'Fundación de Guayaquil',
 };
 
-/** Categorías que pueden terminar más tarde que su grupo. */
-export const HARD_END_OVERRIDE: Partial<Record<CategorySlug, number>> = { mascotas: 20 };
-
-/** Hora máxima de fin de una categoría. */
-export function hardEndFor(category: CategorySlug): number {
-  return HARD_END_OVERRIDE[category] ?? SCHEDULE_RULES[CATEGORY_SCHEDULE[category] ?? 'hogar'].hardEnd;
-}
-
 /** Anticipación mínima para reservar (minutos): urgentes 30, el resto 2 horas. */
 export function leadMinutes(category: CategorySlug): number {
   return CATEGORY_SCHEDULE[category] === 'urgente' ? 30 : 120;
 }
 
-/** ¿Esa hora de llegada entra en el horario de la categoría? (para no mostrar horas imposibles) */
-export function slotInWindow(category: CategorySlug, slot: string): boolean {
-  const rule = SCHEDULE_RULES[CATEGORY_SCHEDULE[category] ?? 'hogar'];
-  const [h] = slot.split(':').map(Number);
-  return h >= rule.start && h + 1 <= hardEndFor(category);
+/** Lo que el horario necesita saber del profesional. */
+export interface ProSchedule {
+  name: string;
+  workDays?: number[];
+  from?: string;
+  to?: string;
+  /** Horas fuera de horario en que acepta llegar (0–7, 18–23). */
+  offHours?: number[];
+  /** Atiende feriados. */
+  holidays?: boolean;
+  /** Recargos en monto fijo (USD). */
+  surcharges?: Surcharges;
 }
+
+export interface Surcharges { nocturno?: number; feriado?: number }
+export type SurchargeKind = 'nocturno' | 'feriado';
+
+/** ¿Se muestra esa hora de llegada para este profesional? (para no mostrar horas imposibles) */
+export function slotInWindow(_category: CategorySlug, slot: string, pro?: ProSchedule): boolean {
+  const h = Number(slot.split(':')[0]);
+  if (!isOffHour(slot)) return h + 1 <= NORMAL_HOURS.end;
+  return !!pro?.offHours?.includes(h);
+}
+
+/**
+ * Recargo que aplica a una reserva: nocturno si llega fuera de horario,
+ * feriado si es feriado. Si aplican los dos, se cobra solo el mayor.
+ */
+export function surchargeFor(date: string, slot: string, pro?: ProSchedule): { kind: SurchargeKind | null; amount: number } {
+  const night = isOffHour(slot) ? Math.max(0, Number(pro?.surcharges?.nocturno ?? 0)) : -1;
+  const holiday = HOLIDAYS[date] ? Math.max(0, Number(pro?.surcharges?.feriado ?? 0)) : -1;
+  if (night < 0 && holiday < 0) return { kind: null, amount: 0 };
+  return holiday > night ? { kind: 'feriado', amount: holiday } : { kind: 'nocturno', amount: night };
+}
+
+export const SURCHARGE_LABEL: Record<SurchargeKind, string> = { nocturno: 'Recargo nocturno', feriado: 'Recargo de feriado' };
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toMin = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + (m || 0); };
-const fmt = (min: number) => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
+const fmt = (min: number) => `${pad(Math.floor(min / 60) % 24)}:${pad(min % 60)}`;
 const WEEKDAY = ['domingos', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
 
 export interface SlotCheck {
@@ -93,7 +114,12 @@ export interface SlotCheck {
   warnings: string[];
   /** Hora de fin "HH:MM". */
   end: string;
+  /** Trabajo con ruido fuera de horario, domingo o feriado: el cliente acepta la responsabilidad. */
+  noisy?: boolean;
 }
+
+/** Aviso de ruido que el cliente acepta (también en los Términos). */
+export const NOISE_NOTICE = 'Es un trabajo que puede hacer ruido. Tú respondes ante tus vecinos, la administración o la guardianía. Si no dejan entrar o trabajar al profesional, se cobra la visita como "cliente ausente".';
 
 /** ¿Se puede agendar este servicio ese día, a esa hora y por esas horas? */
 export function checkSlot(input: {
@@ -101,9 +127,8 @@ export function checkSlot(input: {
   date: string;
   slot: string;
   hours: number;
-  pro?: { name: string; workDays?: number[]; from?: string; to?: string };
+  pro?: ProSchedule;
 }): SlotCheck {
-  const rule = SCHEDULE_RULES[CATEGORY_SCHEDULE[input.category] ?? 'hogar'];
   const [y, m, d] = input.date.split('-').map(Number);
   const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
   const start = toMin(input.slot);
@@ -112,24 +137,37 @@ export function checkSlot(input: {
   const warnings: string[] = [];
   const no = (reason: string): SlotCheck => ({ ok: false, reason, warnings, end });
   const holiday = HOLIDAYS[input.date];
-  const first = input.pro?.name.split(' ')[0];
+  const pro = input.pro;
+  const first = pro?.name.split(' ')[0] ?? 'El profesional';
+  const off = isOffHour(input.slot);
+  const h = Math.floor(start / 60);
 
-  if (holiday && rule.holidays === 'no') return no(`${holiday} es feriado: los ${rule.label} no se agendan en feriados.`);
-  if (!rule.days.includes(wd)) return no(`Los ${WEEKDAY[wd]} no se agendan ${rule.label}: muchas urbanizaciones no permiten el ingreso ni el ruido.`);
-  if (input.pro?.workDays?.length && !input.pro.workDays.includes(wd)) return no(`${first} no atiende los ${WEEKDAY[wd]}.`);
-  if (start < rule.start * 60) return no(`Este servicio empieza desde las ${pad(rule.start)}:00.`);
-  if (input.pro?.from && start < toMin(input.pro.from)) return no(`${first} empieza a atender a las ${input.pro.from}.`);
-  const hardEnd = hardEndFor(input.category);
-  if (endMin > hardEnd * 60) return no(`Terminaría a las ${end}. Este servicio debe terminar a más tardar a las ${pad(hardEnd)}:00: elige una hora más temprano.`);
-  if (input.pro?.to && endMin > toMin(input.pro.to)) return no(`Terminaría a las ${end} y ${first} atiende hasta las ${input.pro.to}: elige una hora más temprano.`);
+  if (pro?.workDays?.length && !pro.workDays.includes(wd)) return no(`${first} no atiende los ${WEEKDAY[wd]}.`);
+  if (holiday && !pro?.holidays) return no(`${holiday} es feriado y ${first} no atiende feriados.`);
+  if (off) {
+    if (!pro?.offHours?.includes(h)) return no(`${first} no atiende a las ${input.slot}. El horario normal es de ${pad(NORMAL_HOURS.start)}:00 a ${pad(NORMAL_HOURS.end)}:00.`);
+  } else {
+    if (pro?.from && start < toMin(pro.from)) return no(`${first} empieza a atender a las ${pro.from}.`);
+    if (endMin > NORMAL_HOURS.end * 60) return no(`Terminaría a las ${end}. En horario normal la visita debe terminar a más tardar a las ${pad(NORMAL_HOURS.end)}:00: elige una hora más temprano${pro?.offHours?.includes(NORMAL_HOURS.end) ? ' o desde las 18:00 (con recargo)' : ''}.`);
+    if (pro?.to && endMin > toMin(pro.to)) return no(`Terminaría a las ${end} y ${first} atiende hasta las ${pro.to}: elige una hora más temprano.`);
+  }
 
-  if (endMin > rule.softEnd * 60) warnings.push(`El trabajo terminaría a las ${end}. Algunas urbanizaciones no permiten el ingreso de proveedores después de las ${pad(rule.softEnd)}:00; HULUL no se hace responsable si no le permiten entrar.`);
-  if (holiday && rule.holidays === 'aviso') warnings.push(`${holiday} es feriado. Algunas urbanizaciones no permiten trabajos en feriados; la reserva queda bajo tu responsabilidad.`);
-  if (rule.warnDays.includes(wd)) warnings.push('Es domingo. Algunas urbanizaciones no permiten trabajos los domingos; revisa las reglas de la tuya antes de reservar.');
-  return { ok: true, warnings, end };
+  const noisy = isNoisy(input.category) && (off || !!holiday || wd === 0);
+  if (noisy) warnings.push(NOISE_NOTICE);
+  if (off || holiday || wd === 0) warnings.push('Algunas urbanizaciones y edificios no permiten el ingreso de proveedores de noche, en domingos o en feriados. Revisa las reglas de la tuya: la reserva queda bajo tu responsabilidad.');
+  return { ok: true, warnings, end, noisy };
 }
 
-/** Hora máxima de fin para un profesional en una categoría (para su registro). */
-export function maxEndHour(category: CategorySlug): number {
-  return hardEndFor(category);
+/** Hora máxima de fin en horario normal (para el registro). */
+export function maxEndHour(_category?: CategorySlug): number {
+  return NORMAL_HOURS.end;
+}
+
+/** Revisa los datos de fuera de horario de un profesional. Devuelve el problema o ''. */
+export function offHoursProblem(p: { offHours?: number[]; holidays?: boolean; surcharges?: Surcharges }): string {
+  const ok = (n: unknown) => n === undefined || (typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= MAX_SURCHARGE);
+  if (!ok(p.surcharges?.nocturno) || !ok(p.surcharges?.feriado)) return `El recargo debe ser un monto entre $0 y $${MAX_SURCHARGE}.`;
+  if (p.offHours?.length && p.surcharges?.nocturno === undefined) return 'Pon tu recargo nocturno (puede ser $0).';
+  if (p.holidays && p.surcharges?.feriado === undefined) return 'Pon tu recargo de feriado (puede ser $0).';
+  return '';
 }

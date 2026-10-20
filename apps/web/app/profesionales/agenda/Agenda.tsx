@@ -48,7 +48,7 @@ function dayTitle(iso: string): string {
 }
 
 /** Lo que gana: la visita y el cobro adicional aceptado, menos la comisión. */
-const earnings = (b: ProBooking) => (b.visit ?? b.subtotal ?? 0) * (1 - COMMISSION_RATE)
+const earnings = (b: ProBooking) => ((b.visit ?? b.subtotal ?? 0) + (b.surcharge ?? 0)) * (1 - COMMISSION_RATE)
   + (b.extra && ['por_cobrar', 'pagado', 'efectivo_pendiente', 'pagado_efectivo'].includes(b.extra.status) ? b.extra.amount - b.extra.commission : 0);
 
 export function Agenda() {
@@ -301,7 +301,8 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
 
       <div className="row gap-12" style={{ justifyContent: 'space-between', flexWrap: 'wrap', fontSize: 14 }}>
         <span className="muted">{PAY[b.paymentMethod] ?? b.paymentMethod}{b.demo ? ' · prueba' : ''}</span>
-        <span>{b.extra && b.extra.status !== 'propuesto' && b.extra.status !== 'rechazado' ? 'Visita + adicional' : 'Visita'}: te queda <strong>{formatUSD(earnings(b))}</strong></span>
+        <span>{b.extra && b.extra.status !== 'propuesto' && b.extra.status !== 'rechazado' ? 'Visita + adicional' : 'Visita'}{b.surcharge ? ` + ${b.surchargeKind === 'feriado' ? 'recargo de feriado' : 'recargo nocturno'} (${formatUSD(b.surcharge)})` : ''}: te queda <strong>{formatUSD(earnings(b))}</strong></span>
+        {b.noiseAccepted && <span className="muted" style={{ fontSize: 13 }}>El cliente aceptó responder por el ruido ante vecinos y administración. Si no te dejan trabajar, espera y marca &ldquo;Cliente ausente&rdquo;.</span>}
       </div>
 
       {b.outcome && <VisitReport outcome={b.outcome} diagnosis={b.diagnosis} photos={b.diagnosisPhotos} category={b.category} title={`Tu ${serviceCopy(b.category).reportTitle.toLowerCase()}`} />}

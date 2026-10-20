@@ -32,7 +32,7 @@ export const STATUS_LABEL: Record<string, string> = {
 };
 
 /** Lo que gana: visita + cobro adicional aceptado, menos la comisión. */
-export const earned = (b: ProBooking) => (b.visit ?? b.subtotal ?? 0) * (1 - COMMISSION_RATE)
+export const earned = (b: ProBooking) => ((b.visit ?? b.subtotal ?? 0) + (b.surcharge ?? 0)) * (1 - COMMISSION_RATE)
   + (b.extra && ['por_cobrar', 'pagado', 'efectivo_pendiente', 'pagado_efectivo'].includes(b.extra.status) ? b.extra.amount - b.extra.commission : 0);
 
 /** Hoy en Ecuador (AAAA-MM-DD). */

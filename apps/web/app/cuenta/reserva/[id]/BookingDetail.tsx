@@ -143,7 +143,7 @@ export function BookingDetail({ id }: { id: string }) {
             ))}
           </div>
         )}
-        <span>{b.visit ? <>Visita {formatUSD(b.visit)} · </> : null}Total: <strong>{formatUSD(b.total)}</strong> · Código {b.id.slice(0, 8).toUpperCase()}</span>
+        <span>{b.visit ? <>Visita {formatUSD(b.visit)} · </> : null}{b.surcharge ? <>{b.surchargeKind === 'feriado' ? 'Recargo de feriado' : 'Recargo nocturno'} {formatUSD(b.surcharge)} · </> : null}Total: <strong>{formatUSD(b.total)}</strong> · Código {b.id.slice(0, 8).toUpperCase()}</span>
         {b.professionalId && <Link href={`/profesional/${b.professionalId}?c=${b.category}`}>Ver perfil de {first}</Link>}
       </div>
 

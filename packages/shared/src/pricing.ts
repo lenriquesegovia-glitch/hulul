@@ -19,6 +19,8 @@ import type { CategorySlug } from './categories';
 export interface Quote {
   /** Tarifa por visita del profesional. */
   visit: number;
+  /** Recargo nocturno o de feriado del profesional (monto fijo, 0 si no aplica). */
+  surcharge: number;
   subtotal: number;
   fee: number;
   iva: number;
@@ -34,15 +36,18 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * plataforma + IVA. La visita cubre traslado, diagnóstico y el trabajo que se
  * pueda resolver en ella. Lo que haga falta después (repuestos, más trabajo)
  * lo acuerdan directamente el cliente y el profesional.
+ * Fuera de horario o en feriado se suma el recargo fijo del profesional; la
+ * comisión de HULUL aplica sobre visita + recargo.
  */
-export function quote(visitRate: number): Quote {
+export function quote(visitRate: number, surchargeAmount = 0): Quote {
   const visit = round2(visitRate);
-  const subtotal = visit;
+  const surcharge = round2(Math.max(0, surchargeAmount || 0));
+  const subtotal = round2(visit + surcharge);
   const fee = PROTECTION_FEE;
   const iva = round2((subtotal + fee) * IVA);
   const total = round2(subtotal + fee + iva);
   const proPayout = round2(subtotal * (1 - COMMISSION_RATE));
-  return { visit, subtotal, fee, iva, total, proPayout };
+  return { visit, surcharge, subtotal, fee, iva, total, proPayout };
 }
 
 /**

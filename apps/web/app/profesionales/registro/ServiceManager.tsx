@@ -6,17 +6,21 @@ import {
   CATEGORY_REVIEW_LABEL,
   evidenceProblem,
   getCategory,
+  isNoisy,
+  offHoursProblem,
   type CategoryEvidence,
   type CategoryReview,
   type CategorySlug,
 } from '@hulul/shared';
 import { EvidenceEditor, RateField, rateProblem, ServicesPicker } from './ServiceBits';
+import { OffHoursEditor, type OffHoursValue } from './OffHoursEditor';
 
 interface ProviderServices {
   categories: CategorySlug[];
   catStatus?: Partial<Record<CategorySlug, CategoryReview>>;
   visitRates: Partial<Record<CategorySlug, number>>;
   services: Partial<Record<CategorySlug, string[]>>;
+  off: OffHoursValue;
 }
 
 const errMsg = (e: unknown) => (e as { message?: string }).message || 'No pudimos guardar. Revisa tu conexión e inténtalo de nuevo.';
@@ -34,6 +38,10 @@ export function ServiceManager({ uid }: { uid: string }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [off, setOff] = useState<OffHoursValue>({ offHours: [], holidays: false, surcharges: {} });
+  const [offMsg, setOffMsg] = useState('');
+  const [offErr, setOffErr] = useState('');
+  const [offBusy, setOffBusy] = useState(false);
 
   const load = useCallback(async () => {
     const [{ firestore }, fs] = await Promise.all([import('@hulul/shared/firebase'), import('firebase/firestore')]);
@@ -44,10 +52,16 @@ export function ServiceManager({ uid }: { uid: string }) {
       catStatus: data.catStatus,
       visitRates: data.visitRates ?? {},
       services: data.services ?? {},
+      off: {
+        offHours: Array.isArray((data as { offHours?: number[] }).offHours) ? (data as { offHours: number[] }).offHours : [],
+        holidays: (data as { holidays?: boolean }).holidays === true,
+        surcharges: (data as { surcharges?: OffHoursValue['surcharges'] }).surcharges ?? {},
+      },
     };
     setP(next);
     setRates(next.visitRates);
     setServices(next.services);
+    setOff(next.off);
   }, [uid]);
 
   useEffect(() => { load().catch(() => setErr('No pudimos cargar tus servicios.')); }, [load]);
@@ -78,6 +92,23 @@ export function ServiceManager({ uid }: { uid: string }) {
       setErr(errMsg(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const saveOff = async () => {
+    setOffErr(''); setOffMsg('');
+    const problem = offHoursProblem(off);
+    if (problem) { setOffErr(problem); return; }
+    setOffBusy(true);
+    try {
+      const { updateServices } = await import('@hulul/shared/firebase');
+      await updateServices({ action: 'horario', offHours: off.offHours, holidays: off.holidays, surcharges: off.surcharges });
+      setOffMsg('Listo: tu horario fuera de horario y tus recargos quedaron guardados. Las reservas ya hechas mantienen su precio.');
+      await load();
+    } catch (e) {
+      setOffErr(errMsg(e));
+    } finally {
+      setOffBusy(false);
     }
   };
 
@@ -118,6 +149,13 @@ export function ServiceManager({ uid }: { uid: string }) {
           {busy ? 'Guardando…' : 'Guardar tarifas y trabajos'}
         </button>
       )}
+
+      <OffHoursEditor value={off} onChange={(v) => { setOff(v); setOffMsg(''); setOffErr(''); }} noisy={p.categories.some(isNoisy)} />
+      {offErr && <p role="alert" className="form-error">{offErr}</p>}
+      {offMsg && <p role="status" className="notice">{offMsg}</p>}
+      <button type="button" className="btn btn-secondary" style={{ alignSelf: 'flex-start' }} disabled={offBusy} onClick={saveOff}>
+        {offBusy ? 'Guardando…' : 'Guardar horario y recargos'}
+      </button>
 
       {adding
         ? <AddCategory uid={uid} p={p} onCancel={() => setAdding(false)} onDone={async () => { setAdding(false); setMsg('Enviamos tu nueva categoría a revisión. Te avisamos por correo cuando la aprobemos.'); await load(); }} />

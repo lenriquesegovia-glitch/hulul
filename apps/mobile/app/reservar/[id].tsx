@@ -9,7 +9,7 @@ import { ClientGate } from '@/components/ClientGate';
 import { Icon } from '@/components/Icon';
 import { MapPicker } from '@/components/MapPicker';
 import type { ClientProfile } from '@hulul/shared/firebase';
-import { serviceCopy, HOME_SAFETY_ACCEPT, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, TEST_SLOTS, testPeriodOpen, timeAvailable, MAX_REQUEST_PHOTOS, type PaymentMethod } from '@hulul/shared';
+import { serviceCopy, HOME_SAFETY_ACCEPT, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, surchargeFor, isOffHour, SURCHARGE_LABEL, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, TEST_SLOTS, testPeriodOpen, timeAvailable, MAX_REQUEST_PHOTOS, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
@@ -139,7 +139,9 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
     );
   }
 
-  const q = quote(pro.visitRate);
+  // Recargo nocturno o de feriado del profesional (monto fijo), si aplica.
+  const sc = !tester && slot >= 0 ? surchargeFor(isoAt(day), slots[slot], pro) : { kind: null, amount: 0 };
+  const q = quote(pro.visitRate, sc.amount);
 
   /** Día sin horas libres (por anticipación, horario del servicio o del profesional). */
   const dayOff = (i: number) => (!tester && !dayAvailable(i, now, lead)) || !slots.some((_, k) => okWith(i, k, hours));
@@ -195,6 +197,8 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
         hours,
         pricing: 'visita',
         visit: q.visit,
+        ...(sc.kind ? { surcharge: q.surcharge, surchargeKind: sc.kind } : {}),
+        ...(check?.noisy ? { noiseAccepted: true as const } : {}),
         safetyAccepted: true,
         address: address.trim(),
         location: location ?? undefined,
@@ -260,16 +264,22 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             {tester && <Body style={{ fontSize: 12.5, color: c.copper }}>Modo prueba: cualquier hora, sin reglas de horario.</Body>}
             <View style={s.slots}>
               {slots.map((t, i) => {
-                if (!tester && !slotInWindow(pro.category, t)) return null;
+                if (!tester && !slotInWindow(pro.category, t, pro)) return null;
                 const on = i === slot;
                 const off = !okWith(day, i, hours);
                 return (
                   <Pressable key={t} disabled={off} accessibilityRole="button" accessibilityState={{ selected: on, disabled: off }} onPress={() => setSlot(i)} style={[s.slot, on && s.on, off && s.off]}>
-                    <Text style={[s.slotText, on && s.onText, off && { textDecorationLine: 'line-through' }]}>{t}</Text>
+                    <Text style={[s.slotText, on && s.onText, off && { textDecorationLine: 'line-through' }]}>{!tester && isOffHour(t) ? `🌙 ${t}` : t}</Text>
                   </Pressable>
                 );
               })}
             </View>
+            {!tester && (pro.offHours?.length ?? 0) > 0 && (
+              <Body muted style={{ fontSize: 12.5 }}>🌙 Fuera de horario (antes de las 08:00 o desde las 18:00): recargo nocturno de {formatUSD(pro.surcharges?.nocturno ?? 0)}.</Body>
+            )}
+            {sc.kind && sc.amount > 0 && (
+              <Body style={{ fontSize: 13, color: c.copper }}>{SURCHARGE_LABEL[sc.kind]}: {formatUSD(sc.amount)}. Lo fija {pro.name.split(' ')[0]} para atender {sc.kind === 'feriado' ? 'en feriado' : 'fuera de horario'}; ya está incluido en el total.</Body>
+            )}
           </View>
 
           {check ? (
@@ -417,6 +427,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
           <View style={s.summary}>
             <Row label={`${pro.name.split(' ')[0]} (${copy.priceCovers})`} value={formatUSD(q.visit)} />
+            {sc.kind && q.surcharge > 0 && <Row label={SURCHARGE_LABEL[sc.kind]} value={formatUSD(q.surcharge)} />}
             <Row label="Cargo de plataforma HULUL" value={formatUSD(q.fee)} />
             <Row label="IVA 15%" value={formatUSD(q.iva)} />
             <View style={s.totalRow}>

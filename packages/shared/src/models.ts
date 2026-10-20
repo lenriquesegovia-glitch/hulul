@@ -36,6 +36,12 @@ export interface Professional {
   to?: string;
   /** Profesional de pruebas: horario libre durante el periodo de prueba. */
   tester?: boolean;
+  /** Horas fuera de horario (0–7, 18–23) en que acepta llegar. */
+  offHours?: number[];
+  /** Atiende feriados. */
+  holidays?: boolean;
+  /** Recargos en monto fijo (USD) para noche y feriado. */
+  surcharges?: { nocturno?: number; feriado?: number };
 }
 
 export type BookingStatus =

@@ -20,7 +20,9 @@ import {
   validRuc,
   TRADE_NAME,
   maxEndHour,
-  CATEGORY_SCHEDULE,
+  isNoisy,
+  offHoursProblem,
+  type Surcharges,
   WEEKDAY_NAMES,
   type CategoryEvidence,
   type CategoryReview,
@@ -34,6 +36,7 @@ import { logout, useUser } from '@/lib/auth';
 import { SignIn } from '@/components/SignIn';
 import { EvidenceEditor, Field, RateField, rateProblem, ServicesPicker } from './ServiceBits';
 import { ServiceManager } from './ServiceManager';
+import { OffHoursEditor } from './OffHoursEditor';
 
 /* ------------------------------------------------------------------ */
 /* Datos del registro                                                  */
@@ -63,6 +66,10 @@ interface Draft {
   from: string;
   to: string;
   acceptsCash: boolean;
+  /** Fuera de horario: horas en que acepta llegar (0–7, 18–23), feriados y recargos fijos. */
+  offHours: number[];
+  holidays: boolean;
+  surcharges: Surcharges;
   docs: Partial<Record<DocKey, { path: string; name: string }>>;
 }
 
@@ -77,7 +84,7 @@ interface Bank {
 const EMPTY: Draft = {
   kind: 'persona', firstName: '', lastName: '', businessName: '', cedula: '', ruc: '', phone: '', email: '',
   categories: [], services: {}, visitRates: {}, catEvidence: {}, years: 0, bio: '',
-  cities: [], days: [1, 2, 3, 4, 5, 6], from: '08:00', to: '17:00', acceptsCash: true, docs: {},
+  cities: [], days: [1, 2, 3, 4, 5, 6], from: '08:00', to: '17:00', acceptsCash: true, offHours: [], holidays: false, surcharges: {}, docs: {},
 };
 const EMPTY_BANK: Bank = { bank: '', type: 'ahorros', number: '', holder: '', holderId: '' };
 
@@ -163,6 +170,8 @@ function Wizard({ user }: { user: User }) {
       // Sin guardar categorías que ya no eligió.
       visitRates: Object.fromEntries(d.categories.filter((c) => d.visitRates[c]).map((c) => [c, d.visitRates[c]])),
       catEvidence: Object.fromEntries(d.categories.filter((c) => d.catEvidence[c]).map((c) => [c, d.catEvidence[c]])),
+      // Firestore no acepta campos vacíos: solo los recargos que puso.
+      surcharges: Object.fromEntries(Object.entries(d.surcharges).filter(([, v]) => typeof v === 'number')),
       uid: user.uid,
       status: extra.status ?? status,
       step: nextStep,
@@ -308,6 +317,8 @@ function validate(step: number, d: Draft, bank: Bank): string {
     if (!d.days.length) return 'Elige al menos un día de trabajo.';
     if (d.from >= d.to) return 'La hora de inicio debe ser antes de la hora de fin.';
     if (d.to > maxTo(d)) return `Tu horario debe terminar a más tardar a las ${maxTo(d)}.`;
+    const off = offHoursProblem(d);
+    if (off) return off;
   }
   if (step === 3) {
     const missing = requiredDocs(d.categories).filter((k) => !d.docs[k]);
@@ -462,10 +473,10 @@ function StepZones({ d, set }: { d: Draft; set: SetField }) {
         </Field>
       </div>
       <div className="notice" style={{ fontSize: 13.5 }}>
-        <strong>Horarios de HULUL.</strong> Los trabajos deben <strong>terminar</strong> a más tardar a las 18:00 (mascotas, cerrajería y salud, 20:00).
-        {d.categories.some((c) => CATEGORY_SCHEDULE[c] === 'obra') && ' Los trabajos de obra o con ruido (aire, plomería, electricidad, albañilería, pintura…) no se agendan domingos ni feriados, porque muchas urbanizaciones no lo permiten.'}
-        {' '}Si un trabajo termina después de las 17:00, el cliente recibe un aviso por el ingreso a urbanizaciones.
+        <strong>Horario normal de HULUL: 08:00 a 18:00.</strong> Las visitas en horario normal deben terminar a más tardar a las 18:00. Si quieres trabajar de noche o en feriados, actívalo abajo con tu recargo.
       </div>
+      <OffHoursEditor value={{ offHours: d.offHours, holidays: d.holidays, surcharges: d.surcharges }} noisy={d.categories.some(isNoisy)}
+        onChange={(v) => { set('offHours', v.offHours); set('holidays', v.holidays); set('surcharges', v.surcharges); }} />
       <p className="muted" style={{ fontSize: 13.5 }}>Este es tu horario base. En la app podrás bloquear días puntuales, y al terminar cada trabajo marcarás &ldquo;Trabajo terminado&rdquo; para volver a estar disponible.</p>
       <label className="check">
         <input type="checkbox" checked={d.acceptsCash} onChange={(e) => set('acceptsCash', e.target.checked)} />
@@ -573,6 +584,8 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
         <Row k="Servicios" v={d.categories.map((x) => `${getCategory(x)?.name} ($${d.visitRates[x]} por visita)`).join(' · ')} />
         <Row k="Ciudades" v={d.cities.map((x) => cities.find((y) => y.slug === x)?.name).join(', ')} />
         <Row k="Horario" v={`${d.days.map((i) => WEEKDAY_NAMES[i].slice(0, 3)).join(' ')} · ${d.from} a ${d.to}`} />
+        <Row k="Fuera de horario" v={d.offHours.length ? `${[...d.offHours].sort((a, b) => ((a + 6) % 24) - ((b + 6) % 24)).map((h) => `${String(h).padStart(2, '0')}:00`).join(' ')} · recargo $${d.surcharges.nocturno ?? 0}` : 'No'} />
+        <Row k="Feriados" v={d.holidays ? `Sí · recargo $${d.surcharges.feriado ?? 0}` : 'No'} />
         <Row k="Efectivo" v={d.acceptsCash ? 'Acepta' : 'No acepta'} />
         <Row k="Documentos" v={`${Object.keys(d.docs).length} subidos`} />
         <Row k="Cuenta" v={`${bank.bank} · ${bank.type} · ****${bank.number.slice(-4)}`} />
