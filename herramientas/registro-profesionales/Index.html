@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HULUL · Registro de profesionales</title>
-<meta name="description" content="Registro de profesionales y empresas proveedoras de HULUL, servicios del hogar en Ecuador.">
+<title>Registro de profesionales</title>
+<meta name="description" content="Registro de profesionales y empresas de servicios.">
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#FAF7F2;--surface:#FFFFFF;--warm:#F6EDE6;--border:#E7DFD5;--text:#1C1A1A;--text2:#3F3A37;--muted:#6B6560;
-  --primary:#7A1E2C;--primaryDark:#5C1622;--copper:#9A5B34;--copperSoft:#F3E6DC;--ok:#1F7A4A;--okSoft:#E3F2E8;--danger:#B42318;--dangerSoft:#FDECEA;
+  --bg:#F5F6F8;--surface:#FFFFFF;--warm:#EEF1F5;--border:#DDE2E8;--text:#16191D;--text2:#363C44;--muted:#646C76;
+  --primary:#1F3A5F;--primaryDark:#162A45;--copper:#4A5A6E;--copperSoft:#E7ECF2;--ok:#1F7A4A;--okSoft:#E3F2E8;--danger:#B42318;--dangerSoft:#FDECEA;
   --r:14px;--h:48px;
 }
 *{box-sizing:border-box}
@@ -25,9 +25,7 @@ p{margin:0 0 .8em}
 a{color:var(--primary)}
 .wrap{max-width:720px;margin:0 auto;padding:0 16px 64px}
 header.top{display:flex;align-items:center;justify-content:space-between;padding:18px 0}
-.logo{font-family:Montserrat;font-weight:800;font-size:1.45rem;letter-spacing:.14em;color:var(--primary);text-decoration:none}
-.logo small{display:block;font:600 .68rem Manrope;letter-spacing:.06em;color:var(--copper);text-transform:uppercase}
-.pill{font-size:.78rem;font-weight:700;color:var(--copper);background:var(--copperSoft);padding:4px 10px;border-radius:99px}
+.logo{font-family:Montserrat;font-weight:700;font-size:1.05rem;color:var(--primary);text-decoration:none}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin:0 0 16px}
 .muted{color:var(--muted)}
 .small{font-size:.88rem}
@@ -54,7 +52,7 @@ label.f>span,.lbl{display:block;font-weight:700;font-size:.93rem;margin-bottom:6
 input[type=text],input[type=email],input[type=tel],input[type=number],select,textarea{
   width:100%;min-height:var(--h);padding:10px 14px;border:1.5px solid var(--border);border-radius:12px;background:#fff;color:var(--text);font:inherit}
 textarea{min-height:96px;resize:vertical}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(122,30,44,.12)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(31,58,95,.14)}
 .row{display:grid;gap:0 12px}
 @media(min-width:560px){.row.two{grid-template-columns:1fr 1fr}.row.three{grid-template-columns:1fr 1fr 1fr}}
 .seg{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
@@ -62,7 +60,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary)
 .seg input,.chip input{position:absolute;opacity:0;pointer-events:none}
 .seg span,.chip span{display:inline-flex;align-items:center;min-height:40px;padding:8px 14px;border:1.5px solid var(--border);border-radius:99px;background:#fff;font-size:.92rem;font-weight:600;color:var(--text2);transition:all .12s}
 .seg input:checked+span,.chip input:checked+span{border-color:var(--primary);background:var(--primary);color:#fff}
-.seg input:focus-visible+span,.chip input:focus-visible+span{box-shadow:0 0 0 3px rgba(122,30,44,.25)}
+.seg input:focus-visible+span,.chip input:focus-visible+span{box-shadow:0 0 0 3px rgba(31,58,95,.28)}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .chip.sm span{min-height:34px;padding:5px 11px;font-size:.85rem}
 .check{display:flex;gap:10px;align-items:flex-start;margin:0 0 12px;cursor:pointer;font-size:.93rem;color:var(--text2)}
@@ -96,37 +94,25 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary)
 @media(min-width:560px){.nav .btn{flex:0 0 auto}}
 .alert{border-radius:12px;padding:12px 14px;margin:0 0 14px;font-size:.92rem}
 .alert.err{background:var(--dangerSoft);color:var(--danger);font-weight:600}
-.alert.info{background:var(--copperSoft);color:#5a3a24}
+.alert.info{background:var(--copperSoft);color:#2B3A4D}
 .alert.ok{background:var(--okSoft);color:var(--ok)}
-.demo{background:#1C1A1A;color:#fff;font-size:.82rem;text-align:center;padding:8px 12px}
 .summary dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0;font-size:.92rem}
 .summary dt{color:var(--muted)}
 .summary dd{margin:0;font-weight:600}
 .progress{height:8px;background:var(--border);border-radius:9px;overflow:hidden;margin:10px 0}
 .progress i{display:block;height:100%;background:var(--primary);width:0;transition:width .2s}
 .hp{position:absolute;left:-5000px}
-footer{font-size:.8rem;color:var(--muted);text-align:center;padding:28px 0 0}
 </style>
 </head>
 <body>
-<div id="demoBar"></div>
 <div class="wrap">
-  <header class="top">
-    <a class="logo" href="#" data-go="inicio">HULUL<small>Servicios del hogar</small></a>
-    <span class="pill">Profesionales</span>
-  </header>
-  <main id="app" aria-live="polite"></main>
-  <footer>HULUL es una marca de Corporación Coffeeport Cía. Ltda. · Guayaquil, Ecuador</footer>
+  <div style="height:20px"></div>
+  <main id="app" aria-live="polite"><p class="muted">Cargando…</p></main>
 </div>
 
 <script>
-/* =====================================================================
-   CONFIGURACIÓN
-   ENDPOINT: pega aquí la URL de la aplicación web de Apps Script
-   (termina en /exec). Si queda vacío, el formulario funciona en modo
-   demostración y no envía nada.
-   ===================================================================== */
-const ENDPOINT = '';
+/* Lo envía el servidor (Code.gs → CONFIG) al abrir la página. */
+let CFG = { controller:'', contact:'', url:'' };
 const CONSENT_VERSION = 'preregistro-2026-10-21';
 
 /* Datos tomados de packages/shared/src (categories.ts, provider.ts, cities.ts, tax.ts) */
@@ -160,10 +146,10 @@ const DOCS = [
 ];
 const STEPS = ['Tus datos','Servicios','Zonas y horario','Documentos','Cobros','Enviar'];
 const MAX_MB = 10, MIN_EXP_PHOTOS = 2, MAX_EV_FILES = 6;
-const DRAFT_KEY = 'hulul-prereg-v1';
+const DRAFT_KEY = 'registro-pro-v1';
 
 /* ------------------------------ Estado ------------------------------ */
-const ref = new URLSearchParams(location.search).get('ref') || '';
+let ref = new URLSearchParams(location.search).get('ref') || '';
 const EMPTY = () => ({
   kind:'persona', firstName:'', lastName:'', businessName:'', cedula:'', ruc:'', rucPending:false, phone:'', email:'',
   years:'', bio:'', categories:[], services:{}, otherServices:{}, visitRates:{}, catEvidence:{},
@@ -179,7 +165,7 @@ let error = '';
 
 try { const saved = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); if (saved && saved.d) { S.d = Object.assign(EMPTY(), saved.d); S.id = saved.id || ''; if (ref && !S.d.referredBy) S.d.referredBy = ref; } } catch(e){}
 function persist(){ try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ id:S.id, d:S.d })); } catch(e){} }
-function newId(){ const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; const r=crypto.getRandomValues(new Uint8Array(8)); r.forEach(n=>s+=a[n%a.length]); return 'HP-'+s; }
+function newId(){ const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; const r=crypto.getRandomValues(new Uint8Array(8)); r.forEach(n=>s+=a[n%a.length]); return 'RP-'+s; }
 
 /* ------------------------------ Utilidades ------------------------------ */
 const $ = (s,el=document)=>el.querySelector(s);
@@ -203,7 +189,6 @@ const hourLabel = h => String(h).padStart(2,'0')+':00';
 
 /* ------------------------------ Vistas ------------------------------ */
 function render(){
-  $('#demoBar').innerHTML = ENDPOINT ? '' : '<div class="demo">Modo demostración: falta configurar el envío. Nada de lo que llenes se guarda.</div>';
   const v = S.view;
   $('#app').innerHTML = v==='inicio' ? viewHome() : v==='pro' ? viewPro() : v==='enviando' ? viewSending() : viewThanks();
   afterRender();
@@ -213,18 +198,11 @@ function viewHome(){
   const resume = S.d.firstName || S.d.categories.length;
   return `
   <section class="hero">
-    <h1>Trabaja con HULUL</h1>
-    <p class="lead">Estamos por lanzar la app de servicios del hogar en Guayaquil, Samborondón y Daule. Regístrate ahora como profesional o como empresa proveedora y recibe trabajos desde el primer día.</p>
+    <h1>Registro de profesionales</h1>
+    <p class="lead">Si ofreces servicios para el hogar en Guayaquil, Samborondón o Daule, como profesional independiente o como empresa, déjanos tus datos y te contactaremos.</p>
   </section>
   <div class="card">
-    <h3>Lo que te ofrece HULUL</h3>
-    <ul class="benefits">
-      <li>Tú pones tu tarifa por visita y eliges tus zonas y tu horario.</li>
-      <li>Clientes nuevos sin pagar publicidad; cobro con tarjeta o efectivo.</li>
-      <li>Pago semanal a tu cuenta bancaria, menos la comisión de HULUL.</li>
-      <li>Los primeros aprobados aparecen primero cuando abramos.</li>
-    </ul>
-    <p class="small muted" style="margin:14px 0 0">Te toma unos 10 minutos. Ten a mano tu cédula, tu certificado de antecedentes penales, tu RUC y los datos de tu cuenta bancaria.</p>
+    <p class="small muted" style="margin:0">Te toma unos 10 minutos. Ten a mano tu cédula, tu certificado de antecedentes penales, tu RUC y los datos de tu cuenta bancaria.</p>
   </div>
   <div class="nav"><button class="btn primary" data-go="pro">${resume?'Continuar mi registro':'Empezar mi registro'}</button></div>`;
 }
@@ -331,7 +309,7 @@ function viewPro(){
     const salud = d.categories.includes('salud');
     body = `
       <h2>Documentos</h2>
-      <p class="muted small">Fotos claras o PDF, hasta ${MAX_MB} MB cada uno. Solo el equipo de HULUL los ve para verificar tu identidad.</p>
+      <p class="muted small">Fotos claras o PDF, hasta ${MAX_MB} MB cada uno. Solo los usamos para verificar tu identidad.</p>
       ${DOCS.map(x=>fileRow('doc_'+x.key,x.label,x.help,x.accept,{required: x.key==='titulo'?salud : x.key==='ruc'?!d.rucPending : true, capture:x.capture})).join('')}`;
   }
   if (st===4) {
@@ -345,7 +323,7 @@ function viewPro(){
       ${check('eSignature','Tengo firma electrónica (archivo .p12) para emitir facturas.')}
       <div class="card">
         <h3>Cuenta para recibir tus pagos <span class="req">*</span></h3>
-        <p class="small muted">HULUL te paga cada semana a esta cuenta. Debe estar a tu nombre o al de tu empresa.</p>
+        <p class="small muted">Aquí recibirás tus pagos. Debe estar a tu nombre o al de tu empresa.</p>
         <label class="f"><span>Banco</span><select data-bind="bank.bank"><option value="">Elegir…</option>${BANKS.map(b=>`<option ${d.bank.bank===b?'selected':''}>${b}</option>`).join('')}</select></label>
         ${seg('bank.type',[{value:'ahorros',label:'Ahorros'},{value:'corriente',label:'Corriente'}],{rerender:false})}
         <div class="row two">
@@ -371,11 +349,11 @@ function viewPro(){
         <dt>Documentos</dt><dd>${docsN} subidos</dd>
       </dl></div>
       <label class="f"><span>¿Quién te invitó? <span class="muted small">(opcional)</span></span><input type="text" data-bind="referredBy" value="${esc(d.referredBy)}" placeholder="Nombre o código"></label>
-      <label class="f"><span>¿Cómo te enteraste de HULUL?</span><select data-bind="heardFrom"><option value="">Elegir…</option>${['WhatsApp','Facebook','Instagram','TikTok','Un amigo o colega','Un cliente','Volante o afiche','Otro'].map(o=>`<option ${d.heardFrom===o?'selected':''}>${o}</option>`).join('')}</select></label>
-      ${check('consentPrivacy','Autorizo a Corporación Coffeeport Cía. Ltda. (HULUL) a tratar mis datos personales y documentos para verificar mi identidad, evaluar mi afiliación y crear mi perfil de profesional, conforme a la Ley Orgánica de Protección de Datos Personales. Puedo pedir que los corrijan o eliminen escribiendo a reservas@hululec.com. <span class="req">*</span>')}
+      <label class="f"><span>¿Cómo te enteraste de este registro?</span><select data-bind="heardFrom"><option value="">Elegir…</option>${['WhatsApp','Facebook','Instagram','TikTok','Un amigo o colega','Un cliente','Volante o afiche','Otro'].map(o=>`<option ${d.heardFrom===o?'selected':''}>${o}</option>`).join('')}</select></label>
+      ${check('consentPrivacy',`Autorizo a ${esc(CFG.controller)} a tratar mis datos personales y documentos para verificar mi identidad y evaluar mi registro, conforme a la Ley Orgánica de Protección de Datos Personales. Puedo pedir que los corrijan o eliminen${CFG.contact?' escribiendo a '+esc(CFG.contact):''}. <span class="req">*</span>`)}
       ${check('consentTruth','Declaro que los datos y documentos son verdaderos y míos. <span class="req">*</span>')}
-      ${check('consentMarketing','Quiero recibir novedades del lanzamiento por WhatsApp o correo.')}
-      <p class="small muted">Este pre-registro no es un contrato. Cuando activemos tu cuenta en la app aceptarás los términos y condiciones de HULUL.</p>`;
+      ${check('consentMarketing','Acepto que me contacten por WhatsApp o correo.')}
+      <p class="small muted">Este registro no es un contrato ni garantiza trabajo. Te contactaremos para continuar.</p>`;
   }
   return `${stepper()}<div class="card">${err()}${body}</div>${nav(st===STEPS.length-1)}<input class="hp" tabindex="-1" autocomplete="off" id="hp" aria-hidden="true">`;
 }
@@ -391,7 +369,7 @@ function catBox(slug){
     ${field(`otherServices.${slug}`,'Otros trabajos de esta categoría (opcional)',{ph:'Sepáralos con comas'})}
     <label class="f"><span>Tu tarifa por visita</span>
       <div class="rate"><b>$</b><input type="number" inputmode="decimal" min="${r.min}" max="${r.max}" step="1" data-bind="visitRates.${slug}" value="${esc(d.visitRates[slug]??'')}" placeholder="${c.suggested}"></div>
-      <small class="help">Entre $${r.min} y $${r.max}. El cliente paga además el cargo de plataforma; HULUL te descuenta 15 % de comisión.</small></label>
+      <small class="help">Lo que cobras por ir al domicilio, diagnosticar y hacer el arreglo si se resuelve en la visita. Entre $${r.min} y $${r.max}.</small></label>
     <span class="lbl">¿Cómo demuestras que sabes hacerlo?</span>
     <div class="seg">
       <label><input type="radio" name="ev_${slug}" value="certificado" data-bind="catEvidence.${slug}.kind" data-rerender ${ev.kind==='certificado'?'checked':''}><span>Tengo certificado o título</span></label>
@@ -414,13 +392,13 @@ function viewSending(){
   return `<div class="card"><h2>Enviando tu registro…</h2><p class="muted small">${esc(sendState.label)}</p><div class="progress"><i style="width:${pct}%"></i></div><p class="small muted">No cierres esta página.</p></div>`;
 }
 function viewThanks(){
-  const link = location.origin + location.pathname + '?ref=' + encodeURIComponent(S.id);
-  const msg = `Me registré como profesional en HULUL, la nueva app de servicios del hogar. Regístrate tú también: ${link}`;
+  const link = (CFG.url || '') + '?ref=' + encodeURIComponent(S.id);
+  const msg = `Me registré como profesional. Si ofreces servicios para el hogar, regístrate aquí: ${link}`;
   return `<div class="card">
     <div class="alert ok">¡Listo! Recibimos tu registro.</div>
     <h2>Gracias, ${esc(S.d.firstName.split(' ')[0])}</h2>
-    <p>Tu código es <b>${esc(S.id)}</b>. Revisaremos tus documentos y te escribiremos por WhatsApp antes del lanzamiento para activar tu cuenta en la app.</p>
-    <p class="small muted">Si algo cambia, escríbenos a reservas@hululec.com con tu código.</p>
+    <p>Tu código es <b>${esc(S.id)}</b>. Revisaremos tus datos y documentos y te escribiremos por WhatsApp.</p>
+    ${CFG.contact?`<p class="small muted">Si algo cambia, escríbenos a ${esc(CFG.contact)} con tu código.</p>`:''}
     <h3 style="margin-top:18px">¿Conoces a otros buenos profesionales?</h3>
     <p class="small muted">Comparte tu enlace; queda registrado que vienen de tu parte.</p>
     <div class="nav" style="justify-content:flex-start">
@@ -513,12 +491,16 @@ async function readFile(file){
 }
 
 /* ------------------------------ Envío ------------------------------ */
-async function post(body){
-  if (!ENDPOINT) { await new Promise(r=>setTimeout(r,250)); return { ok:true, demo:true }; }
-  const res = await fetch(ENDPOINT, { method:'POST', body: JSON.stringify(body) });
-  const j = await res.json().catch(()=>({ ok:false, error:'Respuesta inválida del servidor.' }));
-  if (!j.ok) throw new Error(j.error || 'No se pudo guardar.');
-  return j;
+/* Envío al servidor (Google Apps Script). Abierta fuera de Apps Script, no guarda nada. */
+const GS = typeof google !== 'undefined' && google.script && google.script.run;
+function post(body){
+  if (!GS) return new Promise(r=>setTimeout(()=>r({ ok:true, demo:true }),250));
+  return new Promise((resolve,reject)=>{
+    google.script.run
+      .withSuccessHandler(j => j && j.ok ? resolve(j) : reject(new Error((j && j.error) || 'No se pudo guardar.')))
+      .withFailureHandler(e => reject(new Error((e && e.message) || 'No se pudo conectar.')))
+      .api(body);
+  });
 }
 function cleanData(){
   const d = JSON.parse(JSON.stringify(S.d));
@@ -602,8 +584,12 @@ document.addEventListener('click', e=>{
 });
 window.addEventListener('beforeunload', e=>{ if (S.view==='enviando' || (S.view==='pro' && Object.keys(FILES).length)) { e.preventDefault(); e.returnValue=''; } });
 
-if (ref) S.d.referredBy = S.d.referredBy || ref;
-render();
+function start(){ if (ref) S.d.referredBy = S.d.referredBy || ref; render(); }
+if (GS) {
+  google.script.url.getLocation(loc => { ref = (loc.parameter && loc.parameter.ref) || ref;
+    google.script.run.withSuccessHandler(c => { CFG = Object.assign(CFG, c || {}); start(); }).withFailureHandler(start).config();
+  });
+} else { CFG = { controller:'el responsable del registro', contact:'', url:location.origin+location.pathname }; start(); }
 </script>
 </body>
 </html>

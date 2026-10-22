@@ -1,7 +1,7 @@
 /**
- * HULUL · Registro de profesionales y empresas proveedoras
- * Servidor en Google Apps Script: recibe el formulario (preregistro.html),
- * escribe en Google Sheets y guarda los documentos en Google Drive.
+ * Registro de profesionales y empresas proveedoras (Google Apps Script).
+ * Sirve la página (Index.html), escribe en Google Sheets y guarda los
+ * documentos en Google Drive. La página no muestra ninguna marca.
  *
  * Cada profesional queda con:
  *  - una fila en la hoja "Profesionales" (y una por categoría en "Categorías"),
@@ -10,17 +10,20 @@
  *    campos de Firestore providers/{uid}, listo para migrar),
  *  - su cuenta bancaria (obligatoria): una fila en "Banco (privado)" y banco.json.
  *
- * Instalación: ver LEEME.md. Resumen: pegar este archivo, ejecutar setup()
- * una vez, Implementar → Aplicación web (Ejecutar como: yo · Acceso: cualquier
- * usuario) y pegar la URL /exec en ENDPOINT de preregistro.html.
+ * Instalación: ver LEEME.md. Resumen: crear Code.gs e Index.html en un
+ * proyecto de Apps Script, ejecutar setup() una vez e implementar como
+ * Aplicación web (Ejecutar como: yo · Acceso: cualquier usuario).
  */
 
 const CONFIG = {
+  /** Responsable del tratamiento de datos que se nombra en la autorización (LOPDP). */
+  CONTROLLER: 'Corporación Coffeeport Cía. Ltda.',
+  /** Correo que ve el profesional para dudas o para pedir que borren sus datos (vacío = no se muestra). */
+  CONTACT_EMAIL: '',
   /** A quién avisar de cada registro nuevo (vacío = la cuenta dueña del script). */
   NOTIFY_EMAIL: '',
-  /** Enviar un correo de confirmación al profesional. */
-  CONFIRM_TO_APPLICANT: true,
-  REPLY_TO: 'reservas@hululec.com',
+  /** Correo de confirmación al profesional (sale desde la cuenta dueña del script). */
+  CONFIRM_TO_APPLICANT: false,
   MAX_FILE_MB: 12,
 };
 
@@ -38,7 +41,7 @@ const HEADERS = {
     'Años exp.', 'Presentación', 'Categorías', 'Tarifas', 'Ciudades', 'Zonas', 'Días', 'Desde', 'Hasta', 'Efectivo',
     'Horas fuera de horario', 'Feriados', 'Recargo nocturno', 'Recargo feriado', 'Régimen SRI', 'Firma electrónica', 'Cuenta bancaria',
     'Documentos', 'Faltan', 'Carpeta', 'Invitado por', 'Cómo se enteró', 'Acepta novedades', 'Consentimiento', 'Posible duplicado',
-    'Notas HULUL', 'Migrado a Firebase'],
+    'Notas', 'Migrado a Firebase'],
   'Categorías': ['Fecha', 'Código', 'Profesional', 'Cédula', 'Celular', 'Ciudades', 'Categoría', 'Trabajos', 'Tarifa', 'Validación', 'Detalle', 'Referencia', 'Archivos', 'Estado'],
   'Banco (privado)': ['Fecha', 'Código', 'Profesional', 'Banco', 'Tipo', 'Número', 'Titular', 'Cédula/RUC titular'],
 };
@@ -53,9 +56,9 @@ function setup() {
       '\nCarpeta: ' + DriveApp.getFolderById(props.getProperty('ROOT_ID')).getUrl());
     return;
   }
-  const root = DriveApp.createFolder('HULUL · Pre-registro');
+  const root = DriveApp.createFolder('Registro de profesionales');
   const pros = root.createFolder('Profesionales');
-  const ss = SpreadsheetApp.create('HULUL · Pre-registro');
+  const ss = SpreadsheetApp.create('Registro de profesionales');
   DriveApp.getFileById(ss.getId()).moveTo(root);
   Object.keys(HEADERS).forEach((name, i) => {
     const sh = i === 0 ? ss.getSheets()[0].setName(name) : ss.insertSheet(name);
@@ -73,19 +76,27 @@ function setup() {
 /* ================================ Web app ================================ */
 
 function doGet() {
-  return json({ ok: true, servicio: 'HULUL pre-registro' });
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Registro de profesionales')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-function doPost(e) {
+/** Datos que la página necesita al abrir. */
+function config() {
+  return { controller: CONFIG.CONTROLLER, contact: CONFIG.CONTACT_EMAIL, url: ScriptApp.getService().getUrl() };
+}
+
+/** Única entrada desde la página (google.script.run.api). */
+function api(req) {
   try {
-    const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    if (req.hp) return json({ ok: true }); // trampa para robots
-    if (req.action === 'archivo') return json(saveFile(req));
-    if (req.action === 'profesional') return json(saveProvider(req));
-    return json({ ok: false, error: 'Acción desconocida.' });
+    req = req || {};
+    if (req.hp) return { ok: true }; // trampa para robots
+    if (req.action === 'archivo') return saveFile(req);
+    if (req.action === 'profesional') return saveProvider(req);
+    return { ok: false, error: 'Acción desconocida.' };
   } catch (err) {
     console.error(err);
-    return json({ ok: false, error: err && err.userMessage ? err.userMessage : 'Error del servidor. Inténtalo otra vez.' });
+    return { ok: false, error: err && err.userMessage ? err.userMessage : 'Error del servidor. Inténtalo otra vez.' };
   }
 }
 
@@ -174,7 +185,7 @@ function saveProvider(req) {
     docs: docs, eSignature: !!d.eSignature,
     status: 'en_revision',
     consentPrivacy: true, consentMarketing: !!d.consentMarketing,
-    // Solo del pre-registro (no existen en la app; útiles para la migración).
+    // Solo de este registro (no existen en Firestore; útiles para la migración).
     preregistro: {
       id: req.id, createdAt: new Date().toISOString(), consentVersion: String(req.consentVersion || ''),
       rucPending: !!d.rucPending, taxRegimeAnswer: d.taxRegime, zones: d.zones || [],
@@ -292,27 +303,25 @@ function notifyOwner(id, p, folderUrl, duplicate) {
   try {
     MailApp.sendEmail({
       to: to,
-      subject: 'HULUL · Nuevo profesional: ' + p.firstName + ' ' + p.lastName + ' (' + p.categories.map(s => CATS[s].name).join(', ') + ')',
+      subject: 'Registro · Nuevo profesional: ' + p.firstName + ' ' + p.lastName + ' (' + p.categories.map(s => CATS[s].name).join(', ') + ')',
       htmlBody: '<p><b>' + esc(p.firstName + ' ' + p.lastName) + '</b> · ' + id + '</p>' +
         '<p>' + esc(cats) + '<br>' + esc(p.cities.map(c => CITIES[c]).join(', ')) + '<br>Cel. ' + p.phone + ' · ' + esc(p.email) + '</p>' +
         (duplicate ? '<p style="color:#B42318"><b>Posible duplicado:</b> ' + esc(duplicate) + '</p>' : '') +
         '<p><a href="' + folderUrl + '">Abrir carpeta</a> · <a href="https://wa.me/593' + p.phone.slice(1) + '">WhatsApp</a></p>',
     });
-  } catch (e) { console.error('Aviso a HULUL', e); }
+  } catch (e) { console.error('Aviso de registro', e); }
 }
 
 function confirmApplicant(id, p) {
   try {
     MailApp.sendEmail({
-      to: p.email, name: 'HULUL', replyTo: CONFIG.REPLY_TO,
-      subject: 'HULUL · Recibimos tu registro (' + id + ')',
-      htmlBody: '<div style="font-family:Arial,sans-serif;color:#1C1A1A;max-width:520px">' +
-        '<h2 style="color:#7A1E2C;letter-spacing:.1em">HULUL</h2>' +
+      to: p.email,
+      subject: 'Recibimos tu registro (' + id + ')',
+      htmlBody: '<div style="font-family:Arial,sans-serif;color:#16191D;max-width:520px">' +
         '<p>Hola ' + esc(p.firstName.split(' ')[0]) + ',</p>' +
-        '<p>Recibimos tu registro como profesional de HULUL. Tu código es <b>' + id + '</b>.</p>' +
-        '<p>Vamos a revisar tus documentos y te escribiremos por WhatsApp antes del lanzamiento para activar tu cuenta en la app.</p>' +
-        '<p>Si necesitas corregir algo, responde a este correo con tu código.</p>' +
-        '<p style="color:#6B6560;font-size:12px">HULUL es una marca de Corporación Coffeeport Cía. Ltda.</p></div>',
+        '<p>Recibimos tu registro como profesional. Tu código es <b>' + id + '</b>.</p>' +
+        '<p>Vamos a revisar tus datos y documentos y te escribiremos por WhatsApp.</p>' +
+        '<p>Si necesitas corregir algo, responde a este correo con tu código.</p></div>',
     });
   } catch (e) { console.error('Confirmación', e); }
 }
@@ -338,7 +347,7 @@ function rateRange(slug) {
   return { min: Math.max(MIN_RATE, Math.floor(s * (1 - RATE_BAND))), max: Math.ceil(s * (1 + RATE_BAND)) };
 }
 function num(x) { const n = Number(x); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; }
-function checkId(id) { if (!/^HP-[A-Z0-9]{8}$/.test(String(id))) fail('Código de registro inválido.'); }
+function checkId(id) { if (!/^RP-[A-Z0-9]{8}$/.test(String(id))) fail('Código de registro inválido.'); }
 function prop(k) { const v = PropertiesService.getScriptProperties().getProperty(k); if (!v) fail('Falta ejecutar setup().'); return v; }
 function writeJson(folder, name, obj) {
   const old = folder.getFilesByName(name);
@@ -347,4 +356,3 @@ function writeJson(folder, name, obj) {
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function fail(msg) { const e = new Error(msg); e.userMessage = msg; throw e; }
-function json(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
