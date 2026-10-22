@@ -74,7 +74,7 @@ Cada pestaña es una parte de Firestore y cada columna se llama exactamente igua
 | `consentPrivacy`, `consentMarketing` | Autorizaciones | TRUE · TRUE |
 | `preregistro` | Datos solo de este registro (código, RUC en trámite, zonas, invitado por, cómo se enteró) | {"rucPending":false,…} |
 
-**Pestaña `providers.catStatus`** → campo `catStatus` del profesional. Una fila por profesional y categoría. Aquí **apruebas cada categoría** cambiando `catStatus` (en_revision, observado, aprobado, rechazado). Columnas: `_codigo`, `_nombre`, `category`, `catStatus`, `visitRate`, `services`, `evidenceKind`, `evidenceNote`, `evidenceReference`, `evidenceFiles`, `_carpeta`.
+**Pestaña `providers.catStatus`** → campo `catStatus` del profesional. Una fila por profesional y categoría. Aquí **apruebas cada categoría** cambiando `catStatus` (en_revision, observado, aprobado, rechazado). Columnas: `_codigo`, `_nombre`, `category`, `catStatus`, `visitRate`, `services`, `evidenceKind`, `evidenceNote`, `evidenceReference`, `evidenceFiles`, `_carpeta`, `_categoria` (nombre visible de la categoría).
 
 **Pestaña `providers.private.banco`** → documento `providers/{uid}/private/banco`. Columnas: `_codigo`, `_nombre`, `bank`, `type`, `number`, `holder`, `holderId`. No compartas esta pestaña.
 
@@ -89,6 +89,7 @@ Por cada registro te llega un correo con el resumen, la carpeta y el WhatsApp de
 ## Detalles del formulario
 
 - Los mismos pasos del registro de la app: datos (profesional independiente o empresa), servicios con tarifa por visita libre (sin rango mínimo ni máximo) y validación por categoría, zonas y horario (incluye noche y feriados con recargo), documentos, cobros y envío.
+- **Categorías y subcategorías:** elige de la lista y marca las subcategorías (trabajos) que hace; puede sumar subcategorías propias. Si su oficio no está, toca **+ Otra categoría** y escribe el nombre y sus subcategorías. Esas quedan con `category` = `otra-1`, `otra-2`… y su nombre en `_categoria` y en `preregistro.customNames`; al migrar se asignan a una categoría de la app (o se crea la categoría nueva).
 - Valida cédula y RUC con el dígito verificador. Permite marcar **"RUC en trámite"** (queda en la columna **Faltan**).
 - La cuenta bancaria es **obligatoria** y debe estar a nombre del profesional o de su empresa.
 - Las fotos se reducen en el celular antes de subir.

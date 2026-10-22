@@ -54,7 +54,7 @@ const HEADERS = {
     'status', 'kind', 'firstName', 'lastName', 'businessName', 'cedula', 'ruc', 'phone', 'email', 'years', 'bio',
     'categories', 'services', 'visitRates', 'catEvidence', 'cities', 'days', 'from', 'to', 'acceptsCash',
     'offHours', 'holidays', 'surcharges', 'taxRegime', 'eSignature', 'docs', 'consentPrivacy', 'consentMarketing', 'preregistro'],
-  'providers.catStatus': ['_codigo', '_nombre', 'category', 'catStatus', 'visitRate', 'services', 'evidenceKind', 'evidenceNote', 'evidenceReference', 'evidenceFiles', '_carpeta'],
+  'providers.catStatus': ['_codigo', '_nombre', 'category', 'catStatus', 'visitRate', 'services', 'evidenceKind', 'evidenceNote', 'evidenceReference', 'evidenceFiles', '_carpeta', '_categoria'],
   'providers.private.banco': ['_codigo', '_nombre', 'bank', 'type', 'number', 'holder', 'holderId'],
 };
 /** Columnas que deben quedar como texto (ceros a la izquierda). */
@@ -126,7 +126,7 @@ function api(req) {
 
 function saveFile(req) {
   checkId(req.id);
-  if (!/^(doc_(cedulaFrente|cedulaReverso|selfie|antecedentes|ruc|titulo)|ev_[a-z]+_\d{1,2})$/.test(String(req.key))) fail('Archivo no reconocido.');
+  if (!/^(doc_(cedulaFrente|cedulaReverso|selfie|antecedentes|ruc|titulo)|ev_[a-z]+(-\d{1,2})?_\d{1,2})$/.test(String(req.key))) fail('Archivo no reconocido.');
   if (MIMES.indexOf(req.mime) < 0) fail('Solo se aceptan fotos o PDF.');
   const bytes = Utilities.base64Decode(String(req.data || ''));
   if (!bytes.length) fail('El archivo llegó vacío.');
@@ -166,7 +166,7 @@ function saveProvider(req) {
   const it = folder.getFiles();
   while (it.hasNext()) {
     const f = it.next();
-    const m = /^(doc_\w+|ev_[a-z]+_\d+)\./.exec(f.getName());
+    const m = /^(doc_\w+|ev_[a-z]+(?:-\d+)?_\d+)\./.exec(f.getName());
     if (m && !f.isTrashed()) files[m[1]] = { driveId: f.getId(), name: f.getName(), url: f.getUrl() };
   }
 
@@ -194,6 +194,8 @@ function saveProvider(req) {
     visitRates[s] = Math.round(Number(d.visitRates[s]) * 100) / 100;
     catStatus[s] = 'en_revision';
   });
+  const customNames = {};
+  d.categories.forEach(s => { if (!CATS[s]) customNames[s] = String(d.customNames[s]).trim().slice(0, 60); });
   const surcharges = {};
   if (d.offHours.length) surcharges.nocturno = num(d.surcharges.nocturno);
   if (d.holidays) surcharges.feriado = num(d.surcharges.feriado);
@@ -212,6 +214,8 @@ function saveProvider(req) {
       id: req.id, createdAt: new Date().toISOString(), consentVersion: String(req.consentVersion || ''),
       rucPending: !!d.rucPending, taxRegimeAnswer: d.taxRegime, zones: d.zones || [],
       referredBy: String(d.referredBy || '').slice(0, 80), heardFrom: String(d.heardFrom || '').slice(0, 40),
+      // Categorías nuevas que propuso el profesional (otra-1 → nombre). Al migrar se asignan a una categoría de la app.
+      customNames: customNames,
     },
   };
   if (['general', 'rimpe_emprendedor', 'rimpe_popular'].indexOf(d.taxRegime) >= 0) profile.taxRegime = d.taxRegime;
@@ -242,7 +246,7 @@ function saveProvider(req) {
     d.categories.forEach(s => {
       const ev = catEvidence[s];
       appendObj(cs, { _codigo: req.id, _nombre: fullName, category: s, catStatus: 'en_revision', visitRate: visitRates[s],
-        services: services[s], evidenceKind: ev.kind, evidenceNote: ev.note, evidenceReference: ev.reference || '', evidenceFiles: ev.files, _carpeta: folder.getUrl() });
+        services: services[s], evidenceKind: ev.kind, evidenceNote: ev.note, evidenceReference: ev.reference || '', evidenceFiles: ev.files, _carpeta: folder.getUrl(), _categoria: catName(s, d) });
     });
     const b = req.bank;
     appendObj(ss.getSheetByName(TAB.bank), { _codigo: req.id, _nombre: fullName, bank: b.bank, type: b.type === 'corriente' ? 'corriente' : 'ahorros',
@@ -266,11 +270,12 @@ function validateProvider(d) {
   if (!Array.isArray(d.categories) || !d.categories.length) return 'Elige al menos una categoría.';
   for (let i = 0; i < d.categories.length; i++) {
     const s = d.categories[i];
-    if (!CATS[s]) return 'Categoría no reconocida.';
+    if (!CATS[s] && !(/^otra-\d{1,2}$/.test(s) && String((d.customNames || {})[s] || '').trim().length >= 3)) return 'Categoría no reconocida.';
+    if (!CATS[s] && !String((d.otherServices || {})[s] || '').trim()) return catName(s, d) + ': faltan las subcategorías.';
     const rate = Number((d.visitRates || {})[s]);
-    if (!(rate > 0)) return CATS[s].name + ': falta la tarifa por visita.';
+    if (!(rate > 0)) return catName(s, d) + ': falta la tarifa por visita.';
     const ev = (d.catEvidence || {})[s] || {};
-    if (['certificado', 'experiencia'].indexOf(ev.kind) < 0) return CATS[s].name + ': falta la validación.';
+    if (['certificado', 'experiencia'].indexOf(ev.kind) < 0) return catName(s, d) + ': falta la validación.';
     if (s === 'salud' && ev.kind !== 'certificado') return 'Salud exige título registrado en la SENESCYT.';
   }
   if (!Array.isArray(d.cities) || !d.cities.length || d.cities.some(c => !CITIES[c])) return 'Elige al menos una ciudad.';
@@ -317,6 +322,10 @@ function ensureTabs(ss) {
     if (sh.getLastRow() === 0) {
       sh.getRange(1, 1, 1, HEADERS[name].length).setValues([HEADERS[name]]).setFontWeight('bold');
       sh.setFrozenRows(1);
+    } else if (sh.getLastColumn() < HEADERS[name].length) {
+      // Columnas nuevas: se agregan al final del encabezado.
+      const from = sh.getLastColumn();
+      sh.getRange(1, from + 1, 1, HEADERS[name].length - from).setValues([HEADERS[name].slice(from)]).setFontWeight('bold');
     }
   });
 }
@@ -389,11 +398,11 @@ function exportarFirestore() {
 function notifyOwner(id, p, folderUrl, duplicate) {
   const to = CONFIG.NOTIFY_EMAIL || Session.getEffectiveUser().getEmail();
   if (!to) return;
-  const cats = p.categories.map(s => CATS[s].name + ' $' + p.visitRates[s]).join(', ');
+  const cats = p.categories.map(s => catName(s, p.preregistro) + ' $' + p.visitRates[s]).join(', ');
   try {
     MailApp.sendEmail({
       to: to,
-      subject: 'Registro · Nuevo profesional: ' + p.firstName + ' ' + p.lastName + ' (' + p.categories.map(s => CATS[s].name).join(', ') + ')',
+      subject: 'Registro · Nuevo profesional: ' + p.firstName + ' ' + p.lastName + ' (' + p.categories.map(s => catName(s, p.preregistro)).join(', ') + ')',
       htmlBody: '<p><b>' + esc(p.firstName + ' ' + p.lastName) + '</b> · ' + id + '</p>' +
         '<p>' + esc(cats) + '<br>' + esc(p.cities.map(c => CITIES[c]).join(', ')) + '<br>Cel. ' + p.phone + ' · ' + esc(p.email) + '</p>' +
         (duplicate ? '<p style="color:#B42318"><b>Posible duplicado:</b> ' + esc(duplicate) + '</p>' : '') +
@@ -432,6 +441,8 @@ function validRuc(r) {
   const t = Number(r[2]);
   return t < 6 ? validCedula(r.slice(0, 10)) : (t === 6 || t === 9);
 }
+/** Nombre visible de una categoría (de la lista o agregada por el profesional). */
+function catName(s, d) { return CATS[s] ? CATS[s].name : String(((d || {}).customNames || {})[s] || s).trim(); }
 function num(x) { const n = Number(x); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; }
 function checkId(id) { if (!/^RP-[A-Z0-9]{8}$/.test(String(id))) fail('Código de registro inválido.'); }
 function writeJson(folder, name, obj) {

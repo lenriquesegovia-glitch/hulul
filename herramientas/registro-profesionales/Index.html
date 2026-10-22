@@ -151,7 +151,7 @@ const DRAFT_KEY = 'registro-pro-v1';
 let ref = new URLSearchParams(location.search).get('ref') || '';
 const EMPTY = () => ({
   kind:'persona', firstName:'', lastName:'', businessName:'', cedula:'', ruc:'', rucPending:false, phone:'', email:'',
-  years:'', bio:'', categories:[], services:{}, otherServices:{}, visitRates:{}, catEvidence:{},
+  years:'', bio:'', categories:[], services:{}, otherServices:{}, customNames:{}, visitRates:{}, catEvidence:{},
   cities:[], zones:[], days:[1,2,3,4,5,6], from:'08:00', to:'17:00', acceptsCash:true,
   offHours:[], holidays:false, surcharges:{ nocturno:'', feriado:'' },
   taxRegime:'', eSignature:false,
@@ -169,7 +169,8 @@ function newId(){ const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; const r=
 /* ------------------------------ Utilidades ------------------------------ */
 const $ = (s,el=document)=>el.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const catBy = slug => CATS.find(c=>c.slug===slug);
+const isCustom = slug => /^otra-\d+$/.test(slug);
+const catBy = slug => CATS.find(c=>c.slug===slug) || { slug, name:(S.d.customNames[slug]||'').trim() || 'Nueva categoría', servicios:[], custom:true };
 function getPath(o,p){ return p.split('.').reduce((x,k)=>x==null?undefined:x[k],o); }
 function setPath(o,p,v){ const ks=p.split('.'); let x=o; ks.slice(0,-1).forEach(k=>{ if(x[k]==null||typeof x[k]!=='object') x[k]={}; x=x[k]; }); x[ks.at(-1)]=v; }
 
@@ -272,8 +273,10 @@ function viewPro(){
   if (st===1) {
     body = `
       <h2>¿Qué servicios ofreces?</h2>
-      <p class="muted small">Elige todas las categorías que haces. En cada una pones tu tarifa por visita (incluye traslado, diagnóstico y el arreglo si se resuelve en la visita) y demuestras que sabes hacerlo.</p>
+      <p class="muted small">Elige todas las categorías que haces y, en cada una, sus subcategorías (los trabajos que haces). Si tu oficio no está en la lista, agrégalo con "Otra categoría".</p>
+      <span class="lbl">Categorías</span>
       ${chips('categories', CATS.map(c=>({value:c.slug,label:c.name})), {rerender:true})}
+      <button type="button" class="btn secondary small" data-act="addcat" style="margin:-4px 0 16px">+ Otra categoría</button>
       ${d.categories.map(catBox).join('')}`;
   }
   if (st===2) {
@@ -361,10 +364,13 @@ function catBox(slug){
   const ev = d.catEvidence[slug] || (d.catEvidence[slug] = { kind:'', note:'', reference:'' });
   const evFiles = Object.keys(FILES).filter(k=>k.startsWith(`ev_${slug}_`));
   return `<div class="catbox">
-    <h3>${esc(c.name)}</h3>
-    <span class="lbl">Trabajos que haces</span>
-    ${chips(`services.${slug}`, c.servicios.map(s=>({value:s,label:s})), {sm:true})}
-    ${field(`otherServices.${slug}`,'Otros trabajos de esta categoría (opcional)',{ph:'Sepáralos con comas'})}
+    ${c.custom ? `<h3>Otra categoría <button type="button" class="btn secondary small" data-act="rmcat" data-slug="${slug}">Quitar</button></h3>
+      ${field(`customNames.${slug}`,'Nombre de la categoría',{ph:'Ej.: Herrería, Vidriería, Tapicería'})}
+      ${field(`otherServices.${slug}`,'Subcategorías (trabajos que haces)',{ph:'Ej.: Puertas de hierro, Rejas, Soldadura',help:'Sepáralas con comas.'})}`
+    : `<h3>${esc(c.name)}</h3>
+      <span class="lbl">Subcategorías (trabajos que haces)</span>
+      ${chips(`services.${slug}`, c.servicios.map(s=>({value:s,label:s})), {sm:true})}
+      ${field(`otherServices.${slug}`,'Otras subcategorías que haces (opcional)',{ph:'Sepáralas con comas'})}`}
     <label class="f"><span>Tu tarifa por visita</span>
       <div class="rate"><b>$</b><input type="number" inputmode="decimal" min="0" step="0.01" data-bind="visitRates.${slug}" value="${esc(d.visitRates[slug]??'')}" placeholder="Ej.: 20"></div>
       <small class="help">Lo que cobras por ir al domicilio, diagnosticar y hacer el arreglo si se resuelve en la visita.</small></label>
@@ -425,7 +431,8 @@ function validate(step){
     if (!d.categories.length) return 'Elige al menos una categoría.';
     for (const s of d.categories) {
       const c = catBy(s), ev = d.catEvidence[s] || {};
-      if (!(d.services[s]||[]).length && !(d.otherServices[s]||'').trim()) return `${c.name}: marca al menos un trabajo que haces.`;
+      if (c.custom && (d.customNames[s]||'').trim().length<3) return 'Escribe el nombre de la categoría que agregaste.';
+      if (!(d.services[s]||[]).length && !(d.otherServices[s]||'').trim()) return `${c.name}: ${c.custom?'escribe':'marca'} al menos una subcategoría.`;
       const v = +d.visitRates[s];
       if (!(v > 0)) return `${c.name}: escribe tu tarifa por visita.`;
       if (!ev.kind) return `${c.name}: elige cómo demuestras que sabes hacerlo.`;
@@ -503,7 +510,7 @@ function post(body){
 function cleanData(){
   const d = JSON.parse(JSON.stringify(S.d));
   const keep = o => Object.fromEntries(Object.entries(o).filter(([k])=>d.categories.includes(k)));
-  d.services = keep(d.services); d.otherServices = keep(d.otherServices); d.visitRates = keep(d.visitRates); d.catEvidence = keep(d.catEvidence);
+  d.services = keep(d.services); d.otherServices = keep(d.otherServices); d.customNames = keep(d.customNames); d.visitRates = keep(d.visitRates); d.catEvidence = keep(d.catEvidence);
   d.phone = localPhone(d.phone); d.cedula = d.cedula.trim(); d.ruc = d.rucPending ? '' : d.ruc.trim(); d.email = d.email.trim().toLowerCase();
   const bank = d.bank; delete d.bank;
   bank.number = bank.number.trim(); bank.holderId = bank.holderId.trim(); bank.holder = bank.holder.trim();
@@ -575,6 +582,8 @@ document.addEventListener('click', e=>{
   const a = e.target.closest('[data-act]'); if (!a) return;
   const act = a.dataset.act;
   if (act==='home') { S.view='inicio'; error=''; render(); scrollTo(0,0); }
+  if (act==='addcat') { let n=1; while (S.d.categories.includes('otra-'+n)) n++; S.d.categories.push('otra-'+n); S.d.customNames['otra-'+n]=''; persist(); render(); return; }
+  if (act==='rmcat') { const s=a.dataset.slug; S.d.categories=S.d.categories.filter(x=>x!==s); Object.keys(FILES).filter(k=>k.startsWith(`ev_${s}_`)).forEach(k=>delete FILES[k]); persist(); render(); return; }
   if (act==='back') { S.step--; error=''; render(); scrollTo(0,0); }
   if (act==='next') { const m = validate(S.step); if (m) return fail(m); S.step++; error=''; render(); scrollTo(0,0); }
   if (act==='submit') { for (let i=0;i<STEPS.length;i++){ const m=validate(i); if(m){ S.step=i; return fail(m); } } error=''; submitPro(); }
