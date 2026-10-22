@@ -77,7 +77,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary)
 .file .thumb{flex:0 0 52px;height:52px;border-radius:10px;background:var(--warm) center/cover no-repeat;display:grid;place-items:center;font:700 .7rem Montserrat;color:var(--copper)}
 .file .info{flex:1;min-width:0}
 .file .info b{display:block;font-size:.93rem}
-.file .info small{display:block;color:var(--muted);font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file .info small{display:block;color:var(--muted);font-size:.8rem;overflow-wrap:anywhere}
 .file .req{color:var(--primary);font-weight:700}
 .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
 .thumbs div{position:relative;width:64px;height:64px;border-radius:10px;background:var(--warm) center/cover no-repeat;display:grid;place-items:center;font:700 .65rem Montserrat;color:var(--copper)}
@@ -102,12 +102,29 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary)
 .progress{height:8px;background:var(--border);border-radius:9px;overflow:hidden;margin:10px 0}
 .progress i{display:block;height:100%;background:var(--primary);width:0;transition:width .2s}
 .hp{position:absolute;left:-5000px}
+.file.busy{border-style:solid;border-color:var(--copper);background:var(--copperSoft)}
+.file.warn{border-style:solid;border-color:#B7791F;background:#FDF6E7}
+.file.bad{border-style:solid;border-color:var(--danger);background:var(--dangerSoft)}
+.file .st{display:block;font-size:.82rem;font-weight:600;margin-top:2px;white-space:normal}
+.file.done .st{color:var(--ok)} .file.warn .st{color:#8A5A0B} .file.bad .st{color:var(--danger)} .file.busy .st{color:var(--copper)}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:4px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.btn[aria-disabled=true]{opacity:.5;pointer-events:none}
+.cam{position:fixed;inset:0;z-index:50;background:#0B0E12;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px}
+.cam-box{position:relative;width:min(80vw,340px);aspect-ratio:3/4;border-radius:20px;overflow:hidden;background:#000}
+.cam-box video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.cam-oval{position:absolute;inset:10% 14%;border:3px solid rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.35)}
+.cam-msg{font:700 1.05rem Manrope,sans-serif;text-align:center;min-height:1.5em;margin:0}
+.cam-steps{display:flex;gap:8px}.cam-steps i{width:28px;height:6px;border-radius:9px;background:rgba(255,255,255,.25)}.cam-steps i.on{background:#4ADE80}
+.cam .btn.secondary{background:transparent;color:#fff;border-color:rgba(255,255,255,.6)}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div style="height:20px"></div>
   <main id="app" aria-live="polite"><p class="muted">Cargando…</p></main>
+  <!-- Selector de archivos fijo: no se borra cuando la página se redibuja mientras la persona elige un archivo. -->
+  <input type="file" id="picker" hidden>
 </div>
 
 <script>
@@ -137,11 +154,11 @@ const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const HOURS = Array.from({length:16},(_,i)=>String(6+i).padStart(2,'0')+':00');
 const OFF_HOURS = [18,19,20,21,22,23,0,1,2,3,4,5,6,7];
 const DOCS = [
-  { key:'cedulaFrente', label:'Cédula (frente)', help:'Foto clara, sin reflejos, que se lean todos los datos.', accept:'image/*' },
+  { key:'cedulaFrente', label:'Cédula (frente)', help:'Foto clara, sin reflejos, que se lean tu número, tu nombre y se vea tu rostro.', accept:'image/*' },
   { key:'cedulaReverso', label:'Cédula (reverso)', help:'Foto del lado de atrás.', accept:'image/*' },
-  { key:'selfie', label:'Foto de tu rostro', help:'De frente, con buena luz y sin lentes oscuros. La comparamos con tu cédula.', accept:'image/*', capture:'user' },
-  { key:'antecedentes', label:'Certificado de antecedentes penales', help:'Gratis en la web del Ministerio del Interior. Con menos de 3 meses.', accept:'image/*,application/pdf' },
-  { key:'ruc', label:'Certificado del RUC', help:'Gratis en SRI en línea (sri.gob.ec).', accept:'image/*,application/pdf' },
+  { key:'selfie', label:'Selfie en vivo', help:'Con la cámara: te pediremos girar la cabeza. La comparamos con la foto de tu cédula.', accept:'image/*', capture:'user' },
+  { key:'antecedentes', label:'Certificado de antecedentes penales', help:'El PDF que descargas gratis en la web del Ministerio del Interior. Con menos de 3 meses.', accept:'image/*,application/pdf' },
+  { key:'ruc', label:'Certificado del RUC', help:'El PDF que descargas gratis en SRI en línea (sri.gob.ec).', accept:'image/*,application/pdf' },
   { key:'titulo', label:'Título o certificado profesional', help:'Obligatorio para Salud (registrado en la SENESCYT). Opcional en otros oficios: suma confianza.', accept:'image/*,application/pdf' },
 ];
 const STEPS = ['Tus datos','Servicios','Zonas y horario','Documentos','Cobros','Enviar'];
@@ -233,13 +250,22 @@ function chips(path,opts,{sm=false,rerender=false,num=false}={}){
 function check(path,html,{rerender=false}={}){
   return `<label class="check"><input type="checkbox" data-bind="${path}" ${getPath(S.d,path)?'checked':''} ${rerender?'data-rerender':''}><span>${html}</span></label>`;
 }
-function fileRow(key,label,help,accept,{required=false,capture=''}={}){
-  const f = FILES[key];
-  const thumb = f ? (f.preview ? `style="background-image:url(${f.preview})"` : '') : '';
-  return `<div class="file ${f?'done':''}">
+function fileRow(key,label,help,accept,{required=false,capture='',action='',disabled=false,disabledMsg=''}={}){
+  const f = FILES[key], v = f && f.v;
+  const cls = !f ? '' : !v ? 'done' : v.status==='verificando' ? 'busy' : v.status==='ok' ? 'done' : v.status==='revisar' ? 'warn' : 'bad';
+  const st = !f ? '' : !v ? '' : v.status==='verificando' ? `<span class="spin"></span>${esc(v.msg||'Verificando…')}`
+    : v.status==='ok' ? '✓ Verificado' : v.status==='revisar' ? '⚠ '+esc(v.msg||'Lo revisaremos a mano.') : '✗ '+esc(v.msg||'No pasó la verificación.');
+  const thumb = f && f.preview ? `style="background-image:url(${f.preview})"` : '';
+  const again = f && v && (v.status==='rechazado' || v.status==='error');
+  const lbl = !f ? (action?'Tomar selfie':'Subir') : again ? 'Repetir' : 'Cambiar';
+  const busy = v && v.status==='verificando';
+  const btn = action
+    ? `<button type="button" class="btn ${again||!f?'primary':'secondary'} small" data-act="${action}" ${disabled||busy?'aria-disabled="true"':''}>${lbl}</button>`
+    : `<button type="button" class="btn ${again?'primary':'secondary'} small" ${busy?'aria-disabled="true"':''} data-pick="${key}" data-accept="${accept}" ${capture?`data-capture="${capture}"`:''}>${lbl}</button>`;
+  return `<div class="file ${cls}">
     <div class="thumb" ${thumb}>${f && !f.preview ? 'PDF' : f ? '' : '+'}</div>
-    <div class="info"><b>${esc(label)} ${required?'<span class="req">*</span>':''}</b><small>${f?esc(f.name)+' · '+(f.size/1048576).toFixed(1)+' MB':esc(help)}</small></div>
-    <label class="btn secondary small">${f?'Cambiar':'Subir'}<input type="file" hidden accept="${accept}" ${capture?`capture="${capture}"`:''} data-file="${key}"></label>
+    <div class="info"><b>${esc(label)} ${required?'<span class="req">*</span>':''}</b><small>${f?esc(f.name):esc(disabled&&disabledMsg?disabledMsg:help)}</small>${st?`<span class="st">${st}</span>`:''}</div>
+    ${btn}
   </div>`;
 }
 
@@ -314,8 +340,14 @@ function viewPro(){
     const salud = d.categories.includes('salud');
     body = `
       <h2>Documentos</h2>
-      <p class="muted small">Fotos claras o PDF, hasta ${MAX_MB} MB cada uno. Solo los usamos para verificar tu identidad.</p>
-      ${DOCS.map(x=>fileRow('doc_'+x.key,x.label,x.help,x.accept,{required: x.key==='titulo'?salud : x.key==='ruc'?!d.rucPending : true, capture:x.capture})).join('')}`;
+      <p class="muted small">Verificamos cada documento apenas lo subes: que sea el documento correcto, que sea tuyo y que esté vigente. Tu selfie se compara con la foto de tu cédula. Solo los usamos para verificar tu identidad.</p>
+      ${DOCS.map(x=>{
+        const req = x.key==='titulo'?salud : x.key==='ruc'?!d.rucPending : true;
+        if (x.key!=='selfie') return fileRow('doc_'+x.key,x.label,x.help,x.accept,{required:req});
+        const ced = FILES.doc_cedulaFrente, ready = !!(V.cedulaDesc && ced && ced.v && (ced.v.status==='ok'||ced.v.status==='revisar'));
+        return fileRow('doc_selfie',x.label,x.help,x.accept,{required:true,action:'selfie',disabled:!ready,disabledMsg:'Primero sube el frente de tu cédula.'})
+          + (V.fallback ? `<p class="small" style="margin:-4px 0 12px"><button type="button" class="btn secondary small" data-pick="selfie-foto" data-accept="image/*" data-capture="user">Tomar foto</button> <span class="muted">Sin cámara en vivo: la revisaremos a mano.</span></p>` : '');
+      }).join('')}`;
   }
   if (st===4) {
     body = `
@@ -394,7 +426,7 @@ function catBox(slug){
       ${ev.kind==='experiencia'?field(`catEvidence.${slug}.reference`,'Nombre y celular de alguien que te recomiende',{ph:'Ej.: María Pérez · 0991234567'}):''}
       <span class="lbl">${ev.kind==='certificado'?'Foto o PDF del certificado':`Fotos de trabajos que hiciste (mínimo ${MIN_EXP_PHOTOS})`}</span>
       <div class="thumbs">${evFiles.map(k=>`<div style="${FILES[k].preview?`background-image:url(${FILES[k].preview})`:''}">${FILES[k].preview?'':'PDF'}<button type="button" data-rmfile="${k}" aria-label="Quitar">×</button></div>`).join('')}</div>
-      ${evFiles.length<MAX_EV_FILES?`<label class="btn secondary small">Agregar ${ev.kind==='certificado'?'archivo':'fotos'}<input type="file" hidden multiple accept="image/*${ev.kind==='certificado'?',application/pdf':''}" data-evfiles="${slug}"></label>`:''}
+      ${evFiles.length<MAX_EV_FILES?`<button type="button" class="btn secondary small" data-pick="ev:${slug}" data-multiple="1" data-accept="image/*${ev.kind==='certificado'?',application/pdf':''}">Agregar ${ev.kind==='certificado'?'archivo':'fotos'}</button>`:''}
     ` : ''}
   </div>`;
 }
@@ -465,7 +497,13 @@ function validate(step){
   if (step===3) {
     for (const x of DOCS) {
       const req = x.key==='titulo' ? d.categories.includes('salud') : x.key==='ruc' ? !d.rucPending : true;
-      if (req && !FILES['doc_'+x.key]) return `Falta: ${x.label}.`;
+      const f = FILES['doc_'+x.key];
+      if (!f) { if (req) return `Falta: ${x.label}.`; continue; }
+      if (!f.v) continue; // modo de prueba
+      if (f.v.status==='verificando') return 'Espera a que terminemos de verificar tus documentos.';
+      if (f.v.status==='rechazado') return `${x.label}: ${f.v.msg}`;
+      if (f.v.status==='error') return `${x.label}: no se pudo verificar (${f.v.msg}). Vuelve a subirlo.`;
+      if (f.v.expect && f.v.expect!==expectKey()) return `Cambiaste tus datos personales: vuelve a subir ${x.label}.`;
     }
   }
   if (step===4) {
@@ -520,6 +558,197 @@ function post(body){
       .api(body);
   });
 }
+/* ======================= Verificación de identidad ======================= */
+/* Rostro: @vladmandic/face-api corre en el celular (no envía la cara a terceros). */
+const FACE_LIB = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js';
+const FACE_MODELS = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model/';
+const V = { cedulaDesc:null, selfieTries:0 };
+const faceCfg = () => Object.assign({ ok:0.42, reject:0.5 }, CFG.face || {});
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+let faceReady = null;
+function loadFace(){
+  if (faceReady) return faceReady;
+  faceReady = (window.faceapi ? Promise.resolve() : new Promise((res,rej)=>{
+      const s=document.createElement('script'); s.src=FACE_LIB; s.onload=res;
+      s.onerror=()=>rej(new Error('No se pudo cargar el verificador de rostro. Revisa tu conexión e inténtalo otra vez.'));
+      document.head.appendChild(s);
+    }))
+    .then(async ()=>{
+      // WebGL (rápido); si el equipo no lo tiene, el procesador.
+      const tf = faceapi.tf;
+      let ok = false;
+      try { ok = await tf.setBackend('webgl'); } catch(e) {}
+      if (!ok) await tf.setBackend('cpu');
+      await tf.ready();
+    })
+    .then(()=>Promise.all([
+      faceapi.nets.ssdMobilenetv1.loadFromUri(FACE_MODELS),
+      faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODELS),
+      faceapi.nets.faceLandmark68Net.loadFromUri(FACE_MODELS),
+      faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODELS),
+    ]))
+    .catch(e=>{ faceReady=null; throw new Error(e && e.message && /verificador/.test(e.message) ? e.message : 'No se pudo preparar el verificador de rostro. Revisa tu conexión e inténtalo otra vez.'); });
+  return faceReady;
+}
+function loadImg(src){ return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error('No se pudo abrir la imagen.')); i.src=src; }); }
+/** Rostros de una imagen (de mayor a menor). */
+async function facesIn(src){
+  await loadFace();
+  const img = typeof src==='string' ? await loadImg(src) : src;
+  const r = await faceapi.detectAllFaces(img, new faceapi.SsdMobilenetv1Options({ minConfidence:0.45 })).withFaceLandmarks().withFaceDescriptors();
+  return r.sort((a,b)=>b.detection.box.area-a.detection.box.area);
+}
+function thumbOf(canvas){
+  const tv=document.createElement('canvas'), k=120/Math.max(canvas.width,canvas.height);
+  tv.width=Math.round(canvas.width*k); tv.height=Math.round(canvas.height*k); tv.getContext('2d').drawImage(canvas,0,0,tv.width,tv.height);
+  return tv.toDataURL('image/jpeg',0.7);
+}
+/** Datos personales con los que se verifican los documentos. */
+function expectNow(){
+  const d=S.d;
+  return { cedula:d.cedula.trim(), ruc:d.rucPending?'':d.ruc.trim(), firstName:d.firstName.trim(), lastName:d.lastName.trim(), businessName:d.businessName.trim(), kind:d.kind };
+}
+const expectKey = () => JSON.stringify(expectNow());
+
+/** Sube un documento y lo verifica en el servidor. */
+async function uploadDoc(key){
+  const f = FILES[key]; if (!f) return;
+  if (!S.id) { S.id = newId(); persist(); }
+  f.v = { status:'verificando' }; render();
+  try {
+    const r = await post({ action:'archivo', id:S.id, key, name:f.name, mime:f.mime, data:f.data, expect:expectNow(), face:f.face, hp:$('#hp')?.value||'' });
+    if (FILES[key]!==f) return; // lo cambió mientras se verificaba
+    f.uploaded = true;
+    f.v = Object.assign({ status:'ok', msg:'' }, r.verify || {}, { expect:expectKey() });
+  } catch(e) {
+    if (FILES[key]!==f) return;
+    f.v = { status:'error', msg:e.message||'No se pudo verificar.' };
+  }
+  render();
+}
+
+/** Documento elegido: se prepara, se revisa en el celular (rostro en la cédula) y se verifica en el servidor. */
+async function processDoc(key, file){
+  let f;
+  try { f = await readFile(file); } catch(e){ error = e.message; render(); return; }
+  FILES[key] = f;
+  if (key==='doc_cedulaFrente') {
+    V.cedulaDesc = null;
+    if (FILES.doc_selfie) delete FILES.doc_selfie; // hay que volver a compararla con la nueva cédula
+    f.v = { status:'verificando', msg:'Buscando el rostro en tu cédula…' }; render();
+    if (f.mime!=='image/jpeg' || !f.data) { f.v = { status:'rechazado', msg:'Sube una foto (no PDF) del frente de tu cédula.' }; render(); return; }
+    try {
+      const faces = await facesIn('data:image/jpeg;base64,'+f.data);
+      if (FILES[key]!==f) return;
+      if (!faces.length) { f.v = { status:'rechazado', msg:'No encontramos el rostro en la foto de tu cédula. Tómala de cerca, con buena luz y sin reflejos sobre la foto.' }; render(); return; }
+      V.cedulaDesc = faces[0].descriptor;
+    } catch(e) { f.v = { status:'error', msg:e.message }; render(); return; }
+  }
+  await uploadDoc(key);
+}
+
+/* ---------- Selfie con cámara en vivo y prueba de vida ---------- */
+async function openSelfie(){
+  if (!V.cedulaDesc) return fail('Primero sube la foto del frente de tu cédula: con ella comparamos tu rostro.');
+  const ov = document.createElement('div'); ov.className='cam';
+  ov.innerHTML = `<div class="cam-box"><video playsinline muted autoplay></video><div class="cam-oval"></div></div>
+    <p class="cam-msg" aria-live="polite">Preparando la cámara…</p>
+    <div class="cam-steps"><i></i><i></i><i></i></div>
+    <button type="button" class="btn secondary" data-cam="cancel">Cancelar</button>`;
+  document.body.appendChild(ov);
+  let stream=null, stop=false;
+  const msg = t => { const m=ov.querySelector('.cam-msg'); if (m.textContent!==t) m.textContent=t; };
+  const dots = n => ov.querySelectorAll('.cam-steps i').forEach((x,i)=>x.classList.toggle('on', i<n));
+  const close = () => { stop=true; if (stream) stream.getTracks().forEach(t=>t.stop()); ov.remove(); };
+  ov.querySelector('[data-cam=cancel]').onclick = close;
+  try { await loadFace(); } catch(e){ close(); return fail(e.message); }
+  if (stop) return;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ ideal:720 }, height:{ ideal:960 } }, audio:false });
+  } catch(e) { close(); return selfieFallback(); }
+  if (stop) { stream.getTracks().forEach(t=>t.stop()); return; }
+  const video = ov.querySelector('video'); video.srcObject = stream;
+  try { await video.play(); } catch(e) {}
+  const opts = new faceapi.TinyFaceDetectorOptions({ inputSize:320, scoreThreshold:0.5 });
+  // Prueba de vida: postura inicial → girar la cabeza → volver. El giro se mide respecto a la postura
+  // inicial de cada persona (no exige un frente perfecto). Una foto o pantalla fija no puede girar.
+  let phase=0, base=null; const t0=Date.now(); const shots=[], first=[];
+  while (!stop) {
+    if (Date.now()-t0 > 90000) { close(); return fail('Se acabó el tiempo para la selfie. Busca buena luz y vuelve a intentarlo.'); }
+    if (!video.videoWidth) { await sleep(100); continue; }
+    const r = await faceapi.detectAllFaces(video, opts).withFaceLandmarks();
+    if (stop) return;
+    if (r.length!==1) { msg(r.length ? 'Que solo aparezca tu rostro en la cámara.' : 'Pon tu rostro dentro del óvalo.'); first.length=0; await sleep(120); continue; }
+    const yaw = faceYaw(r[0].landmarks.positions);
+    if (r[0].detection.box.width / video.videoWidth < 0.18) { msg('Acércate un poco más a la cámara.'); first.length=0; await sleep(120); continue; }
+    if (phase===0) {
+      msg('Mira de frente a la cámara y quédate quieto…');
+      if (Math.abs(yaw) > 0.25) { first.length=0; }
+      else {
+        first.push(yaw);
+        if (first.length>=4) {
+          const mn=Math.min(...first), mx=Math.max(...first);
+          if (mx-mn < 0.06) { base = first.reduce((a,b)=>a+b,0)/first.length; phase=1; } else first.shift();
+        }
+      }
+    } else if (phase===1) {
+      msg('Ahora gira la cabeza despacio hacia un lado…');
+      if (Math.abs(yaw-base) > 0.2) phase=2;
+    } else {
+      msg('¡Bien! Vuelve a mirar de frente…');
+      if (Math.abs(yaw-base) < 0.07) { shots.push(grab(video)); if (shots.length>=3) break; } else shots.length=0;
+    }
+    dots(phase);
+    await sleep(80);
+  }
+  if (stop) return;
+  dots(3); msg('Comparando con tu cédula…');
+  close();
+  await finishSelfie(shots, { liveness:true, mode:'camara' });
+}
+/** Si el navegador no deja usar la cámara en vivo: foto con la cámara del celular (queda para revisión manual). */
+function selfieFallback(){
+  fail('No pudimos abrir la cámara en vivo. Da permiso de cámara a esta página y vuelve a intentarlo, o toma la selfie con el botón "Tomar foto" (la revisaremos a mano).');
+  V.fallback = true; render();
+}
+/** Giro horizontal de la cabeza: posición de la nariz respecto al centro de los ojos (0 = de frente). */
+function faceYaw(p){ const eL=p[36], eR=p[45], nose=p[30]; return (nose.x - (eL.x+eR.x)/2) / Math.max(1, eR.x-eL.x); }
+function grab(video){ const cv=document.createElement('canvas'); cv.width=video.videoWidth; cv.height=video.videoHeight; cv.getContext('2d').drawImage(video,0,0); return cv; }
+async function selfieFromFile(file){
+  let img;
+  try { img = await loadImg(URL.createObjectURL(file)); } catch(e){ return fail('No se pudo abrir la foto.'); }
+  const k = Math.min(1, 1280/Math.max(img.naturalWidth,img.naturalHeight));
+  const cv=document.createElement('canvas'); cv.width=Math.round(img.naturalWidth*k); cv.height=Math.round(img.naturalHeight*k); cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+  await finishSelfie([cv], { liveness:false, mode:'foto' });
+}
+/** Compara de 1 a 3 cuadros de la selfie con la cédula y usa la distancia mediana. */
+async function finishSelfie(canvases, meta){
+  const canvas = canvases[canvases.length-1];
+  const url = canvas.toDataURL('image/jpeg', 0.85);
+  const busy = { name:'selfie.jpg', mime:'image/jpeg', data:url.split(',')[1], size:Math.round(url.length*0.75), preview:thumbOf(canvas), v:{ status:'verificando', msg:'Comparando con tu cédula…' } };
+  FILES.doc_selfie = busy; render();
+  const dists = [];
+  V.selfieTries++;
+  for (const c of canvases) {
+    let faces;
+    try { faces = await facesIn(c); } catch(e){ busy.v = { status:'error', msg:e.message }; render(); return; }
+    if (faces.length>1) { busy.v = { status:'rechazado', msg:'Aparece más de un rostro. Toma la selfie solo tú.' }; render(); return; }
+    if (faces.length===1) dists.push(faceapi.euclideanDistance(faces[0].descriptor, V.cedulaDesc));
+  }
+  if (!dists.length) { busy.v = { status:'rechazado', msg:'No se ve bien tu rostro. Busca buena luz y vuelve a intentarlo.' }; render(); return; }
+  dists.sort((a,b)=>a-b);
+  const dist = dists[Math.floor(dists.length/2)];
+  const face = { distance:Math.round(dist*1000)/1000, liveness:!!meta.liveness, mode:meta.mode, tries:V.selfieTries };
+  busy.face = face;
+  if (dist < 0.15 && !meta.liveness) { busy.v = { status:'rechazado', msg:'La selfie debe ser de tu rostro, no una foto de tu cédula.' }; render(); return; }
+  if (dist > faceCfg().reject) {
+    busy.v = { status:'rechazado', msg:'Tu rostro no coincide con la foto de tu cédula. Verifica que la cédula sea tuya y que su foto se vea nítida; luego repite la selfie con buena luz, sin gorra ni lentes.' };
+    render(); return;
+  }
+  await uploadDoc('doc_selfie');
+}
+
 function cleanData(){
   const d = JSON.parse(JSON.stringify(S.d));
   const keep = o => Object.fromEntries(Object.entries(o).filter(([k])=>d.categories.includes(k)));
@@ -537,6 +766,7 @@ async function submitPro(){
   try {
     for (const k of keys) {
       const f = FILES[k];
+      if (f.uploaded && f.v && f.v.expect===expectKey()) { sendState.done++; continue; } // ya subido y verificado
       sendState.label = `Subiendo ${f.name}…`; render();
       await post({ action:'archivo', id:S.id, key:k, name:f.name, mime:f.mime, data:f.data, hp:$('#hp')?.value||'' });
       sendState.done++; render();
@@ -555,7 +785,10 @@ async function submitPro(){
 function fail(m){ error=m; render(); $('.alert.err')?.scrollIntoView({behavior:'smooth',block:'center'}); }
 
 /* ------------------------------ Eventos ------------------------------ */
-function afterRender(){}
+function afterRender(){
+  // En el paso de documentos se prepara el verificador de rostro (unos MB) mientras la persona sube lo demás.
+  if (S.view==='pro' && S.step===3) loadFace().catch(()=>{});
+}
 document.addEventListener('input', e=>{
   const t = e.target;
   if (t.dataset.bind && t.type!=='radio' && t.type!=='checkbox') { setPath(S.d, t.dataset.bind, t.value); persist(); if (t.hasAttribute('data-rerender')) render(); }
@@ -571,12 +804,17 @@ document.addEventListener('change', e=>{
     setPath(S.d, t.dataset.multi, arr);
     if (t.dataset.multi==='cities') S.d.zones = S.d.zones.filter(z=>arr.includes(z.split(':')[0]));
   }
-  else if (t.dataset.file) { handleFiles(t, [t.dataset.file]); return; }
-  else if (t.dataset.evfiles) {
-    const slug = t.dataset.evfiles; const used = Object.keys(FILES).filter(k=>k.startsWith(`ev_${slug}_`));
-    const free = MAX_EV_FILES - used.length; const files = [...t.files].slice(0,free);
-    let n = 1; const keys = files.map(()=>{ while (FILES[`ev_${slug}_${n}`]) n++; return `ev_${slug}_${n++}`; });
-    handleFiles({ files }, keys); return;
+  else if (t.id==='picker') {
+    const target = t.dataset.target, files = [...t.files];
+    if (!files.length) return;
+    if (target==='selfie-foto') { selfieFromFile(files[0]); return; }
+    if (target.startsWith('ev:')) {
+      const slug = target.slice(3); const used = Object.keys(FILES).filter(k=>k.startsWith(`ev_${slug}_`));
+      const take = files.slice(0, MAX_EV_FILES - used.length);
+      let n = 1; const keys = take.map(()=>{ while (FILES[`ev_${slug}_${n}`]) n++; return `ev_${slug}_${n++}`; });
+      handleFiles({ files:take }, keys); return;
+    }
+    handleFiles({ files:[files[0]] }, [target]); return;
   }
   else return;
   persist(); error='';
@@ -584,13 +822,22 @@ document.addEventListener('change', e=>{
 });
 async function handleFiles(input, keys){
   const files = [...input.files];
+  if (keys.length===1 && keys[0].startsWith('doc_')) { error=''; await processDoc(keys[0], files[0]); return; }
   for (let i=0;i<files.length;i++) {
     try { FILES[keys[i]] = await readFile(files[i]); } catch(e){ error = e.message; }
   }
   render();
 }
-document.addEventListener('click', e=>{
+document.addEventListener('click', async e=>{
   const go = e.target.closest('[data-go]'); if (go) { e.preventDefault(); S.view = go.dataset.go; error=''; render(); scrollTo(0,0); return; }
+  const pk = e.target.closest('[data-pick]');
+  if (pk) {
+    if (pk.getAttribute('aria-disabled')==='true') return;
+    const inp = $('#picker'); inp.value = ''; inp.accept = pk.dataset.accept || '';
+    inp.multiple = !!pk.dataset.multiple; inp.dataset.target = pk.dataset.pick;
+    if (pk.dataset.capture) inp.setAttribute('capture', pk.dataset.capture); else inp.removeAttribute('capture');
+    inp.click(); return;
+  }
   const rm = e.target.closest('[data-rmfile]'); if (rm) { delete FILES[rm.dataset.rmfile]; render(); return; }
   const a = e.target.closest('[data-act]'); if (!a) return;
   const act = a.dataset.act;
@@ -598,7 +845,17 @@ document.addEventListener('click', e=>{
   if (act==='addcat') { let n=1; while (S.d.categories.includes('otra-'+n)) n++; S.d.categories.push('otra-'+n); S.d.customNames['otra-'+n]=''; persist(); render(); const el=document.querySelector(`[data-bind="customNames.otra-${n}"]`); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.focus(); } return; }
   if (act==='rmcat') { const s=a.dataset.slug; S.d.categories=S.d.categories.filter(x=>x!==s); Object.keys(FILES).filter(k=>k.startsWith(`ev_${s}_`)).forEach(k=>delete FILES[k]); persist(); render(); return; }
   if (act==='back') { S.step--; error=''; render(); scrollTo(0,0); }
-  if (act==='next') { const m = validate(S.step); if (m) return fail(m); S.step++; error=''; render(); scrollTo(0,0); }
+  if (act==='selfie') { error=''; openSelfie(); return; }
+  if (act==='next') {
+    const m = validate(S.step); if (m) return fail(m);
+    if (S.step===0 && GS && CFG.verify) {
+      // Cédula ya registrada y RUC en el SRI, antes de pedir documentos.
+      a.disabled = true; a.textContent = 'Verificando…';
+      try { await post({ action:'preverificar', id:S.id, data:expectNow() }); }
+      catch(err) { a.disabled = false; a.textContent = 'Continuar'; return fail(err.message); }
+    }
+    S.step++; error=''; render(); scrollTo(0,0);
+  }
   if (act==='submit') { for (let i=0;i<STEPS.length;i++){ const m=validate(i); if(m){ S.step=i; return fail(m); } } error=''; submitPro(); }
   if (act==='copy') { navigator.clipboard?.writeText(a.dataset.link).then(()=>{ a.textContent='¡Copiado!'; }); }
 });

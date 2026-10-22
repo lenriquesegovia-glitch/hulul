@@ -24,6 +24,7 @@ Usa la cuenta de Google que quieras que sea dueña de los datos.
    - `CONTROLLER`: quién aparece como responsable de los datos en la autorización. Está **Corporación Coffeeport Cía. Ltda.** (no menciona HULUL). La Ley de Protección de Datos exige nombrar a alguien.
    - `CONTACT_EMAIL`: un correo para que el profesional pida corregir o borrar sus datos. Vacío = no se muestra. Conviene uno neutro (no @hululec.com).
    - `CONFIRM_TO_APPLICANT`: si es `true`, el profesional recibe un correo de confirmación sin marca, enviado desde tu cuenta de Google. Está en `false`.
+4b. **Activa el lector de documentos:** en el menú de la izquierda, junto a "Servicios", toca **+**, elige **Drive API** y toca **Agregar**. Sin esto, nadie puede pasar la verificación de documentos (el formulario dirá que el verificador no está activo).
 5. Arriba, en la lista de funciones, elige **setup** y toca **Ejecutar**. Acepta los permisos (Drive, Sheets y correo). Si sale "Google no verificó esta app", toca *Configuración avanzada → Ir a Registro de profesionales*.
    - Usa la hoja y la carpeta ya definidas en `CONFIG` (`SHEET_ID` y `FOLDER_ID`) y crea en la hoja las pestañas **Profesionales**, **Categorías** y **Banco (privado)**. No borra nada de lo que la hoja ya tenga.
    - Haz la instalación con una cuenta que pueda **editar** esa hoja y esa carpeta.
@@ -85,6 +86,31 @@ Puedes corregir cualquier celda a mano (por ejemplo un nombre mal escrito): lo q
 Dentro de **RESPALDO DE PROVEEDORES**, una carpeta por profesional (`Apellido Nombre · cédula · RP-XXXXXXXX`) con sus documentos (`doc_…`), certificados o fotos de trabajos (`ev_…`), `datos.json` y `banco.json` (respaldo de lo que envió).
 
 Por cada registro te llega un correo con el resumen, la carpeta y el WhatsApp del profesional.
+
+## Verificación de identidad y documentos
+
+Cada documento se verifica **apenas se sube**, y si no pasa, no deja continuar. El servidor lo vuelve a exigir al enviar, así que no se puede saltar manipulando la página.
+
+| Documento | Qué se comprueba | Se rechaza si… |
+|---|---|---|
+| Cédula (frente) | Que tenga un rostro (en el celular) y, leyendo el texto, tu número de cédula y tu apellido | No hay rostro, es la cédula de otra persona, está caducada o no se lee nada |
+| Cédula (reverso) | Que sea el reverso de una cédula (padres, instrucción, código dactilar o la franja de lectura) | Es otra cosa o la cédula está caducada |
+| Selfie en vivo | Cámara en vivo con **prueba de vida** (mirar de frente, girar la cabeza y volver). Se comparan 3 cuadros con la foto de la cédula | El rostro no coincide, hay más de una persona o no se ve la cara |
+| Antecedentes penales | Que sea el certificado, con tu número de cédula y emitido hace menos de 3 meses | Es otro documento, es de otra persona o tiene más de 3 meses |
+| RUC | Que sea el certificado, con tu RUC; además se consulta el **SRI**: que exista, esté activo y esté a tu nombre | Es de otro RUC, no existe, está suspendido o a nombre de otra persona |
+| Título | Que tenga tu nombre | Nunca se rechaza: si no se lee tu nombre, queda para revisión |
+| Cédula repetida | Al terminar el paso 1 | Ya hay un registro con esa cédula |
+
+Hay casos que pasan pero quedan marcados para **revisión manual**: parecido dudoso con la cédula, selfie sin cámara en vivo, el certificado dice que **registra antecedentes**, fechas o nombres que no se pudieron leer. Aparecen en la columna `_alertas` de la hoja y en el correo de aviso. El detalle de cada verificación (por ejemplo, la distancia entre rostros) queda en `_verificacion`.
+
+**Ajustes** (en `CONFIG`): `VERIFY` (activar o desactivar todo), `FACE_OK` y `FACE_REJECT` (umbrales del rostro: 0,42 y 0,50), `ANTECEDENTES_MAX_DAYS` (90) y `SRI_CHECK`.
+
+**Límites:**
+- El reconocimiento facial es gratuito y corre en el celular. En pruebas, dos mujeres distintas pero parecidas, fotografiadas de lado, dieron una distancia de 0,48–0,53: por eso los umbrales son estrictos y los casos dudosos van a revisión. No es de nivel bancario.
+- No se consulta el Registro Civil: no existe un acceso público. Para eso hace falta un proveedor de verificación de identidad (pago por cada verificación).
+- No se valida el código del certificado de antecedentes en la web del Ministerio. Revísalo en los casos marcados.
+- La primera vez, el celular descarga el verificador de rostro (unos 12 MB).
+- Si la página no puede abrir la cámara en vivo, ofrece tomar la foto con la cámara del celular; esa selfie queda para revisión manual.
 
 ## Detalles del formulario
 

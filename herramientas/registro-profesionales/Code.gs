@@ -29,7 +29,22 @@ const CONFIG = {
   /** Correo de confirmación al profesional (sale desde la cuenta dueña del script). */
   CONFIRM_TO_APPLICANT: false,
   MAX_FILE_MB: 12,
+  /** Verificar documentos y rostro antes de dejar continuar (requiere activar el servicio Drive API). */
+  VERIFY: true,
+  /**
+   * Distancia entre rostros (0 = idénticos). Hasta FACE_OK coincide; hasta FACE_REJECT pasa
+   * con revisión manual; más, se rechaza. En pruebas, personas distintas pero parecidas dieron
+   * 0,48–0,52: no subir FACE_REJECT por encima de 0,5.
+   */
+  FACE_OK: 0.42,
+  FACE_REJECT: 0.5,
+  /** Antigüedad máxima del certificado de antecedentes penales (días). */
+  ANTECEDENTES_MAX_DAYS: 90,
+  /** Consultar el RUC en el SRI (si el SRI no responde, se usa solo el certificado). */
+  SRI_CHECK: true,
 };
+
+const DOC_LABEL = { cedulaFrente: 'Cédula (frente)', cedulaReverso: 'Cédula (reverso)', selfie: 'Selfie', antecedentes: 'Certificado de antecedentes', ruc: 'Certificado del RUC', titulo: 'Título' };
 
 /* Igual que packages/shared/src (categories.ts y provider.ts). */
 const CATS = {climatizacion: { name: 'Climatización', suggested: 25 }, plomeria: { name: 'Plomería', suggested: 20 }, electricidad: { name: 'Electricidad', suggested: 20 }, electrodomesticos: { name: 'Electrodomésticos', suggested: 20 }, limpieza: { name: 'Limpieza', suggested: 25 }, jardineria: { name: 'Jardinería', suggested: 20 }, piscinas: { name: 'Piscinas', suggested: 20 }, pintura: { name: 'Pintura', suggested: 25 }, belleza: { name: 'Belleza', suggested: 15 }, mascotas: { name: 'Mascotas', suggested: 12 }, clases: { name: 'Clases', suggested: 12 }, salud: { name: 'Salud', suggested: 20 }, cerrajeria: { name: 'Cerrajería', suggested: 20 }, carpinteria: { name: 'Carpintería', suggested: 20 }, albanileria: { name: 'Albañilería', suggested: 25 }, fumigacion: { name: 'Fumigación', suggested: 30 }, mudanzas: { name: 'Mudanzas', suggested: 40 }, tecnologia: { name: 'Tecnología', suggested: 20 }};
@@ -53,7 +68,7 @@ const HEADERS = {
   'providers': ['_codigo', '_fecha', '_seguimiento', '_duplicado', '_carpeta', '_whatsapp', '_notas', '_uid',
     'status', 'kind', 'firstName', 'lastName', 'businessName', 'cedula', 'ruc', 'phone', 'email', 'years', 'bio',
     'categories', 'services', 'visitRates', 'catEvidence', 'cities', 'days', 'from', 'to', 'acceptsCash',
-    'offHours', 'holidays', 'surcharges', 'taxRegime', 'eSignature', 'docs', 'consentPrivacy', 'consentMarketing', 'preregistro'],
+    'offHours', 'holidays', 'surcharges', 'taxRegime', 'eSignature', 'docs', 'consentPrivacy', 'consentMarketing', 'preregistro', '_alertas', '_verificacion'],
   'providers.catStatus': ['_codigo', '_nombre', 'category', 'catStatus', 'visitRate', 'services', 'evidenceKind', 'evidenceNote', 'evidenceReference', 'evidenceFiles', '_carpeta', '_categoria'],
   'providers.private.banco': ['_codigo', '_nombre', 'bank', 'type', 'number', 'holder', 'holderId'],
 };
@@ -91,6 +106,9 @@ function setup() {
   Object.keys(HEADERS).forEach(name => HEADERS[name].forEach((h, i) => {
     if (TEXT_COLS.indexOf(h) >= 0) ss.getSheetByName(name).getRange(2, i + 1, ss.getSheetByName(name).getMaxRows() - 1).setNumberFormat('@');
   }));
+  if (CONFIG.VERIFY && typeof Drive === 'undefined') {
+    Logger.log('ATENCIÓN: falta activar el servicio "Drive API" (menú izquierdo → Servicios → + → Drive API → Agregar). Sin eso, nadie podrá pasar la verificación de documentos.');
+  }
   Logger.log('Listo.\nHoja: ' + ss.getUrl() + '\nCarpeta de archivos: ' + folder.getUrl());
 }
 const HEADERS_FIRST = TAB.pro;
@@ -105,7 +123,8 @@ function doGet() {
 
 /** Datos que la página necesita al abrir. */
 function config() {
-  return { controller: CONFIG.CONTROLLER, contact: CONFIG.CONTACT_EMAIL, url: ScriptApp.getService().getUrl() };
+  return { controller: CONFIG.CONTROLLER, contact: CONFIG.CONTACT_EMAIL, url: ScriptApp.getService().getUrl(),
+    verify: CONFIG.VERIFY, face: { ok: CONFIG.FACE_OK, reject: CONFIG.FACE_REJECT } };
 }
 
 /** Única entrada desde la página (google.script.run.api). */
@@ -115,6 +134,7 @@ function api(req) {
     if (req.hp) return { ok: true }; // trampa para robots
     if (req.action === 'archivo') return saveFile(req);
     if (req.action === 'profesional') return saveProvider(req);
+    if (req.action === 'preverificar') return preVerify(req);
     return { ok: false, error: 'Acción desconocida.' };
   } catch (err) {
     console.error(err);
@@ -137,7 +157,15 @@ function saveFile(req) {
   while (it.hasNext()) { const f = it.next(); if (f.getName().indexOf(req.key + '.') === 0) f.setTrashed(true); }
   const ext = req.mime === 'application/pdf' ? 'pdf' : (req.mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
   const file = folder.createFile(Utilities.newBlob(bytes, req.mime, req.key + '.' + ext));
-  file.setDescription('Original: ' + String(req.name || '').slice(0, 120));
+  const meta = { original: String(req.name || '').slice(0, 120) };
+  file.setDescription(JSON.stringify(meta));
+  if (/^doc_/.test(req.key)) {
+    // Se verifica en el momento: el resultado vuelve a la página y queda guardado en el archivo.
+    meta.expect = cleanExpect(req.expect);
+    meta.verify = verifyDoc(req.key, file, meta.expect, req.face);
+    file.setDescription(JSON.stringify(meta).slice(0, 4000));
+    return { ok: true, fileId: file.getId(), verify: { status: meta.verify.status, msg: meta.verify.msg } };
+  }
   return { ok: true, fileId: file.getId() };
 }
 
@@ -175,7 +203,23 @@ function saveProvider(req) {
   if (!d.rucPending) required.push('ruc');
   if (d.categories.indexOf('salud') >= 0) required.push('titulo');
   const missingDocs = required.filter(k => !files['doc_' + k]);
-  if (missingDocs.length) fail('Faltan documentos: ' + missingDocs.join(', ') + '. Vuelve a subirlos.');
+  if (missingDocs.length) fail('Faltan documentos: ' + missingDocs.map(k => DOC_LABEL[k]).join(', ') + '. Vuelve a subirlos.');
+
+  // Todos los documentos deben haber pasado la verificación, con los datos que envía ahora.
+  const verificacion = {}, alertas = [];
+  if (CONFIG.VERIFY) {
+    const toCheck = required.concat(files.doc_titulo && required.indexOf('titulo') < 0 ? ['titulo'] : []);
+    toCheck.forEach(k => {
+      const meta = fileMeta(files['doc_' + k].driveId), v = meta.verify, ex = meta.expect || {};
+      if (!v) fail(DOC_LABEL[k] + ': falta verificarlo. Vuelve a subirlo.');
+      if (v.status !== 'ok' && v.status !== 'revisar') fail(DOC_LABEL[k] + ': ' + (v.msg || 'no pasó la verificación.') + (k === 'selfie' ? ' Vuelve a tomar la selfie.' : ' Vuelve a subirlo.'));
+      if (String(ex.cedula) !== String(d.cedula) || normText(ex.lastName) !== normText(d.lastName) || (k === 'ruc' && String(ex.ruc) !== String(d.ruc))) {
+        fail(DOC_LABEL[k] + ': cambiaste tus datos después de subirlo. Vuelve a subirlo.');
+      }
+      verificacion[k] = { status: v.status, checks: v.checks };
+      if (v.status === 'revisar') alertas.push(DOC_LABEL[k] + ': ' + (v.flag || v.msg));
+    });
+  }
 
   const fullName = (d.lastName + ' ' + d.firstName).trim();
   folder.setName(fullName + ' · ' + d.cedula + ' · ' + req.id);
@@ -239,11 +283,16 @@ function saveProvider(req) {
     const sh = ss.getSheetByName(TAB.pro);
     // Si reintenta el envío con el mismo código, se reemplaza lo anterior.
     [TAB.pro, TAB.cat, TAB.bank].forEach(n => removeRows(ss.getSheetByName(n), req.id));
+    if (readObjs(sh).some(r => String(r.cedula) === String(d.cedula) && r._codigo !== req.id)) {
+      fail('Ya existe un registro con esta cédula. Si necesitas corregir tus datos, comunícate con nosotros.');
+    }
     duplicate = findDuplicate(sh, d.cedula, d.phone, req.id);
+    if (duplicate) alertas.push('Mismo celular que ' + duplicate);
     const { catStatus: _omit, ...fields } = profile;
     appendObj(sh, Object.assign({}, fields, {
       _codigo: req.id, _fecha: now, _seguimiento: 'nuevo', _duplicado: duplicate, _carpeta: folder.getUrl(),
       _whatsapp: 'https://wa.me/593' + d.phone.slice(1),
+      _alertas: alertas.join(' · '), _verificacion: verificacion,
     }));
     const cs = ss.getSheetByName(TAB.cat);
     d.categories.forEach(s => {
@@ -256,7 +305,7 @@ function saveProvider(req) {
       number: String(b.number), holder: String(b.holder).trim(), holderId: String(b.holderId) });
   } finally { lock.releaseLock(); }
 
-  notifyOwner(req.id, profile, folder.getUrl(), duplicate);
+  notifyOwner(req.id, profile, folder.getUrl(), alertas.join(' · '));
   if (CONFIG.CONFIRM_TO_APPLICANT) confirmApplicant(req.id, profile);
   return { ok: true, id: req.id };
 }
@@ -398,7 +447,7 @@ function exportarFirestore() {
 
 /* ================================ Correos ================================ */
 
-function notifyOwner(id, p, folderUrl, duplicate) {
+function notifyOwner(id, p, folderUrl, alerts) {
   const to = CONFIG.NOTIFY_EMAIL || Session.getEffectiveUser().getEmail();
   if (!to) return;
   const cats = p.categories.map(s => catName(s, p.preregistro) + ' $' + p.visitRates[s]).join(', ');
@@ -408,7 +457,7 @@ function notifyOwner(id, p, folderUrl, duplicate) {
       subject: 'Registro · Nuevo profesional: ' + p.firstName + ' ' + p.lastName + ' (' + p.categories.map(s => catName(s, p.preregistro)).join(', ') + ')',
       htmlBody: '<p><b>' + esc(p.firstName + ' ' + p.lastName) + '</b> · ' + id + '</p>' +
         '<p>' + esc(cats) + '<br>' + esc(p.cities.map(c => CITIES[c]).join(', ')) + '<br>Cel. ' + p.phone + ' · ' + esc(p.email) + '</p>' +
-        (duplicate ? '<p style="color:#B42318"><b>Posible duplicado:</b> ' + esc(duplicate) + '</p>' : '') +
+        (alerts ? '<p style="color:#B42318"><b>Revisar:</b> ' + esc(alerts) + '</p>' : '<p style="color:#1F7A4A">Documentos y rostro verificados.</p>') +
         '<p><a href="' + folderUrl + '">Abrir carpeta</a> · <a href="https://wa.me/593' + p.phone.slice(1) + '">WhatsApp</a></p>',
     });
   } catch (e) { console.error('Aviso de registro', e); }
@@ -428,6 +477,269 @@ function confirmApplicant(id, p) {
   } catch (e) { console.error('Confirmación', e); }
 }
 
+/* ============================== Verificación ============================== */
+/*
+ * Cada documento se verifica apenas se sube (antes de dejar continuar):
+ *  - Se lee el texto del archivo con el OCR de Google Drive (servicio avanzado
+ *    "Drive API", hay que activarlo en el editor: Servicios → Drive API).
+ *  - Se comprueba que el documento sea el que dice ser y que sea de esta
+ *    persona (número de cédula / RUC, apellido, fechas).
+ *  - La selfie la compara el navegador contra la foto de la cédula (rostro y
+ *    prueba de vida); aquí se aplican los mismos umbrales.
+ * Resultado: ok · revisar (pasa, pero queda marcado para revisión manual) ·
+ * rechazado (no deja continuar) · error (no se pudo verificar: no deja continuar).
+ * Al enviar el registro, el servidor vuelve a exigir que todo esté ok o revisar.
+ */
+
+function verifyDoc(key, file, ex, face) {
+  if (!CONFIG.VERIFY) return { status: 'ok', msg: '', checks: { verificacion: 'desactivada' } };
+  ex = ex || {};
+  const k = key.replace(/^doc_/, '');
+  if (k === 'selfie') return verifySelfie(face);
+  const text = ocrText(file); // si falla, lanza el error y no deja continuar
+  const t = normText(text);
+  const r = { status: 'ok', msg: '', checks: { chars: t.length } };
+  const set = (status, msg) => { r.status = status; r.msg = msg; return r; };
+  if (t.length < 15) return set('rechazado', 'No pudimos leer nada en el archivo. ' + TIP[k]);
+
+  const ced = String(ex.cedula || ''), ruc = String(ex.ruc || '');
+  const others = foreignIds(t, [ced, ruc.slice(0, 10)]);
+  const sur = surnameFound(t, ex.lastName), name = nameFound(t, ex.firstName);
+  r.checks.apellido = sur; r.checks.nombre = name;
+
+  if (k === 'cedulaFrente' || k === 'cedulaReverso') {
+    const numOk = hasNumber(t, ced);
+    const isId = /ECUADOR|IDENTIDAD|CEDULA|CIUDADANIA|REGISTRO CIVIL|NUI|IDECU|I<ECU/.test(t);
+    const back = /PADRE|MADRE|INSTRUCCION|PROFESION|OCUPACION|DACTILAR|EXPEDICION|IDECU|I<ECU|<<</.test(t);
+    r.checks.numero = numOk; r.checks.esCedula = isId;
+    const exp = dateAfter(t, /EXPIRACION|VENCIMIENTO|CADUCIDAD|EXPIRA/);
+    if (exp) {
+      r.checks.caduca = iso(exp);
+      if (exp < today()) return set('rechazado', 'Tu cédula está caducada (venció el ' + human(exp) + '). Necesitamos una cédula vigente.');
+    }
+    if (others.length && !numOk) return set('rechazado', 'La cédula de la foto no es la tuya (tiene otro número). Sube la foto de tu propia cédula.');
+    if (k === 'cedulaFrente') {
+      if (numOk && sur) return r;
+      if (numOk || (sur && isId)) return set('revisar', 'Leímos solo parte de tus datos; lo revisaremos a mano.');
+      return set('rechazado', 'En la foto no se lee tu número de cédula ni tu apellido. ' + TIP[k]);
+    }
+    // Reverso: debe verse como el reverso de una cédula.
+    if (!back && !isId) return set('rechazado', 'Esta foto no parece el reverso de una cédula. ' + TIP[k]);
+    if (!back) return set('revisar', 'No pudimos confirmar que sea el reverso; lo revisaremos a mano.');
+    return r;
+  }
+
+  if (k === 'antecedentes') {
+    const isCert = /ANTECEDENTES/.test(t);
+    const numOk = hasNumber(t, ced);
+    r.checks.numero = numOk; r.checks.esCertificado = isCert;
+    if (!isCert) return set('rechazado', 'Este archivo no es un certificado de antecedentes penales. ' + TIP[k]);
+    if (!numOk) {
+      if (others.length) return set('rechazado', 'El certificado es de otra persona (tiene otro número de cédula).');
+      return set('rechazado', 'No encontramos tu número de cédula en el certificado. ' + TIP[k]);
+    }
+    const issued = latestDate(t);
+    if (issued) {
+      r.checks.emitido = iso(issued);
+      const days = Math.floor((today() - issued) / 86400000);
+      if (days > CONFIG.ANTECEDENTES_MAX_DAYS) {
+        return set('rechazado', 'Tu certificado es del ' + human(issued) + ' y tiene más de ' + Math.round(CONFIG.ANTECEDENTES_MAX_DAYS / 30) + ' meses. Descarga uno nuevo (es gratis).');
+      }
+    }
+    const clean = /NO\s+(SE\s+)?REGISTRA|NO\s+TIENE\s+ANTECEDENTES|NO\s+POSEE\s+ANTECEDENTES/.test(t);
+    const record = !clean && /(SI|SÍ)\s+REGISTRA|REGISTRA\s+ANTECEDENTES|POSEE\s+ANTECEDENTES/.test(t);
+    r.checks.registra = record ? 'si' : clean ? 'no' : 'no se pudo leer';
+    if (record) { r.flag = 'Registra antecedentes'; return set('revisar', 'Recibido. Lo revisaremos a mano.'); }
+    if (!issued) return set('revisar', 'No pudimos leer la fecha del certificado; lo revisaremos a mano.');
+    if (!clean) return set('revisar', 'Recibido. Lo revisaremos a mano.');
+    return r;
+  }
+
+  if (k === 'ruc') {
+    const isRuc = /CONTRIBUYENTE|REGISTRO UNICO|RENTAS INTERNAS|\bRUC\b|\bSRI\b/.test(t);
+    const numOk = hasNumber(t, ruc);
+    r.checks.numero = numOk; r.checks.esRuc = isRuc;
+    if (!isRuc) return set('rechazado', 'Este archivo no es un certificado del RUC. ' + TIP[k]);
+    if (!numOk) {
+      if (foreignRucs(t, ruc).length) return set('rechazado', 'El certificado es de otro RUC. Sube el certificado de tu RUC.');
+      return set('rechazado', 'No encontramos tu número de RUC en el certificado. ' + TIP[k]);
+    }
+    const holderOk = ex.kind === 'empresa' ? companyFound(t, ex.businessName) : sur;
+    r.checks.titular = holderOk;
+    const sri = CONFIG.SRI_CHECK ? sriLookup(ruc) : { checked: false };
+    r.checks.sri = sri;
+    if (sri.checked && !sri.exists) return set('rechazado', 'Ese RUC no existe en el SRI. Revisa el número.');
+    if (sri.checked && sri.exists) {
+      if (!/ACTIV/.test(normText(sri.state))) return set('rechazado', 'Tu RUC está ' + String(sri.state || 'inactivo').toLowerCase() + ' en el SRI. Actívalo para poder facturar y vuelve a intentarlo.');
+      const sriName = normText(sri.name);
+      const sriOk = ex.kind === 'empresa' ? companyFound(sriName, ex.businessName) : surnameFound(sriName, ex.lastName);
+      r.checks.sriTitular = sriOk;
+      if (!sriOk) return set('rechazado', 'Según el SRI, ese RUC está a nombre de otra persona.');
+    } else if (/SUSPENDID|PASIVO|CANCELAD|CERRAD/.test(t) && !/ACTIVO/.test(t)) {
+      return set('revisar', 'Tu RUC podría no estar activo; lo revisaremos a mano.');
+    }
+    if (!holderOk) return set('revisar', 'No encontramos tu nombre en el certificado; lo revisaremos a mano.');
+    return r;
+  }
+
+  if (k === 'titulo') {
+    if (!sur) return set('revisar', 'No encontramos tu nombre en el título; lo revisaremos a mano.');
+    return r;
+  }
+  return r;
+}
+
+const TIP = {
+  cedulaFrente: 'Toma la foto de cerca, con buena luz, sin reflejos y que se vea la cédula completa.',
+  cedulaReverso: 'Toma la foto de cerca, con buena luz, sin reflejos y que se vea la cédula completa.',
+  antecedentes: 'Sube el PDF original que descargaste del Ministerio del Interior (no una foto de la pantalla).',
+  ruc: 'Sube el PDF del certificado del RUC que descargas en SRI en línea.',
+  titulo: '',
+};
+
+/** Selfie: la comparación de rostros la hace el navegador; aquí se aplican los umbrales. */
+function verifySelfie(face) {
+  if (!CONFIG.VERIFY) return { status: 'ok', msg: '', checks: {} };
+  const f = face || {};
+  const dist = Number(f.distance);
+  const checks = { distancia: isFinite(dist) ? dist : null, pruebaDeVida: !!f.liveness, modo: String(f.mode || ''), intentos: Number(f.tries) || 1 };
+  if (!isFinite(dist)) return { status: 'rechazado', msg: 'Falta comparar tu selfie con la foto de tu cédula. Vuelve a tomarla.', checks: checks };
+  if (dist > CONFIG.FACE_REJECT) return { status: 'rechazado', msg: 'Tu rostro no coincide con la foto de tu cédula.', checks: checks };
+  if (dist > CONFIG.FACE_OK) return { status: 'revisar', msg: 'El parecido con tu cédula no es claro; lo revisaremos a mano.', checks: checks };
+  if (!f.liveness) return { status: 'revisar', msg: 'Selfie sin prueba de vida; la revisaremos a mano.', checks: checks };
+  return { status: 'ok', msg: '', checks: checks };
+}
+
+/** Texto del archivo con el OCR de Google Drive (servicio avanzado Drive API, v2 o v3). */
+function ocrText(file) {
+  if (typeof Drive === 'undefined') fail('El verificador de documentos no está activo todavía. Inténtalo más tarde.');
+  const blob = file.getBlob();
+  let id;
+  if (Drive.Files.create) {
+    id = Drive.Files.create({ name: 'ocr-temporal', mimeType: MimeType.GOOGLE_DOCS }, blob, { ocrLanguage: 'es' }).id;
+  } else {
+    id = Drive.Files.insert({ title: 'ocr-temporal', mimeType: MimeType.GOOGLE_DOCS }, blob, { ocr: true, ocrLanguage: 'es' }).id;
+  }
+  try {
+    return DocumentApp.openById(id).getBody().getText();
+  } finally {
+    try { DriveApp.getFileById(id).setTrashed(true); } catch (e) { console.error('No se pudo borrar el OCR temporal', e); }
+  }
+}
+
+/** Consulta pública del SRI (si no responde, no bloquea: se usa solo el certificado). */
+function sriLookup(ruc) {
+  try {
+    const res = UrlFetchApp.fetch('https://srienlinea.sri.gob.ec/sri-catastro-sujeto-servicio-internet/rest/ConsolidadoContribuyente/obtenerPorNumerosRuc?&ruc=' + encodeURIComponent(ruc),
+      { muteHttpExceptions: true, headers: { Accept: 'application/json' } });
+    const code = res.getResponseCode();
+    if (code !== 200) return { checked: false, note: 'SRI respondió ' + code };
+    const body = res.getContentText();
+    if (!body || body === '[]' || body === 'null') return { checked: true, exists: false };
+    const j = JSON.parse(body);
+    const c = Array.isArray(j) ? j[0] : j;
+    if (!c || !c.numeroRuc) return { checked: false, note: 'Respuesta del SRI sin datos' };
+    return { checked: true, exists: true, name: String(c.razonSocial || ''), state: String(c.estadoContribuyenteRuc || '') };
+  } catch (e) {
+    return { checked: false, note: String(e && e.message || e).slice(0, 120) };
+  }
+}
+
+/** Antes de los documentos: cédula ya registrada y RUC en el SRI. */
+function preVerify(req) {
+  const d = req.data || {};
+  if (!validCedula(String(d.cedula))) fail('La cédula no es válida.');
+  const ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  ensureTabs(ss);
+  const dup = readObjs(ss.getSheetByName(TAB.pro)).filter(r => String(r.cedula) === String(d.cedula) && r._codigo !== req.id);
+  if (dup.length) fail('Ya existe un registro con esta cédula. Si necesitas corregir tus datos, comunícate con nosotros.');
+  if (CONFIG.VERIFY && CONFIG.SRI_CHECK && !d.rucPending && validRuc(String(d.ruc))) {
+    const sri = sriLookup(String(d.ruc));
+    if (sri.checked && !sri.exists) fail('Ese RUC no existe en el SRI. Revisa el número o marca que lo estás sacando.');
+    if (sri.checked && sri.exists) {
+      if (!/ACTIV/.test(normText(sri.state))) fail('Tu RUC está ' + String(sri.state || 'inactivo').toLowerCase() + ' en el SRI. Actívalo para poder facturar.');
+      const n = normText(sri.name);
+      const ok = d.kind === 'empresa' ? companyFound(n, d.businessName) : surnameFound(n, d.lastName);
+      if (!ok) fail('Según el SRI, ese RUC está a nombre de otra persona. Revisa el número y tus apellidos.');
+    }
+  }
+  return { ok: true };
+}
+
+/** Lee el resultado guardado en la descripción del archivo. */
+function fileMeta(driveId) {
+  try { return JSON.parse(DriveApp.getFileById(driveId).getDescription() || '{}'); } catch (e) { return {}; }
+}
+
+/* ---- Texto ---- */
+
+function normText(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[ \t]+/g, ' ');
+}
+/** ¿Aparece el número? Tolera espacios, guiones o puntos entre dígitos y la O leída como 0. */
+function hasNumber(t, num) {
+  if (!num) return false;
+  const s = t.replace(/(\d)O|O(?=\d)/g, (m, d) => d ? d + '0' : '0').replace(/(\d)[\s.\-]+(?=\d)/g, '$1');
+  return s.indexOf(num) >= 0;
+}
+/** Cédulas válidas de 10 dígitos en el texto que no son las esperadas. */
+function foreignIds(t, mine) {
+  const s = t.replace(/(\d)[\s.\-]+(?=\d)/g, '$1');
+  const out = [];
+  (s.match(/\d{10,13}/g) || []).forEach(n => {
+    const c = n.slice(0, 10);
+    if (validCedula(c) && mine.indexOf(c) < 0 && out.indexOf(c) < 0) out.push(c);
+  });
+  return out;
+}
+function foreignRucs(t, ruc) {
+  const s = t.replace(/(\d)[\s.\-]+(?=\d)/g, '$1');
+  return (s.match(/\d{10}001/g) || []).filter(n => n !== ruc && validRuc(n));
+}
+function words(s) { return normText(s).replace(/[^A-Z ]/g, ' ').split(' ').filter(w => w.length >= 3 && ['DEL', 'LOS', 'LAS'].indexOf(w) < 0); }
+function hasWord(t, w) { return new RegExp('(^|[^A-Z])' + w + '([^A-Z]|$)').test(t.replace(/[^A-Z0-9]/g, ' ').replace(/ +/g, ' ')) || t.replace(/[^A-Z]/g, '').indexOf(w) >= 0 && w.length >= 6; }
+function surnameFound(t, lastName) { const w = words(lastName); return w.length ? hasWord(t, w[0]) || (w[1] ? hasWord(t, w[1]) : false) : false; }
+function nameFound(t, firstName) { const w = words(firstName); return w.length ? hasWord(t, w[0]) : false; }
+function companyFound(t, businessName) {
+  const w = words(businessName).filter(x => ['CIA', 'LTDA', 'S.A', 'SAS', 'COMPANIA', 'EMPRESA'].indexOf(x) < 0);
+  return w.length ? hasWord(t, w[0]) : false;
+}
+
+/* ---- Fechas ---- */
+
+const MESES = { ENERO: 1, FEBRERO: 2, MARZO: 3, ABRIL: 4, MAYO: 5, JUNIO: 6, JULIO: 7, AGOSTO: 8, SEPTIEMBRE: 9, SETIEMBRE: 9, OCTUBRE: 10, NOVIEMBRE: 11, DICIEMBRE: 12,
+  ENE: 1, FEB: 2, MAR: 3, ABR: 4, MAY: 5, JUN: 6, JUL: 7, AGO: 8, SEP: 9, SET: 9, OCT: 10, NOV: 11, DIC: 12 };
+function mkDate(y, m, d) {
+  y = +y; m = +m; d = +d;
+  if (y < 1950 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return null;
+  const x = new Date(y, m - 1, d);
+  return x.getMonth() === m - 1 ? x : null;
+}
+function findDates(t) {
+  const out = [];
+  const push = x => { if (x) out.push(x); };
+  t.replace(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})\b/g, (m, d, mo, y) => push(mkDate(y, mo, d)));
+  t.replace(/\b(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})\b/g, (m, y, mo, d) => push(mkDate(y, mo, d)));
+  t.replace(/\b(\d{1,2})\s*(?:DE\s+)?([A-Z]{3,10})\.?\s*(?:DE|DEL|,)?\s*(\d{4})\b/g, (m, d, mes, y) => { if (MESES[mes]) push(mkDate(y, MESES[mes], d)); });
+  return out;
+}
+/** La fecha más reciente que no esté en el futuro (fecha de emisión). */
+function latestDate(t) {
+  const lim = today().getTime() + 86400000;
+  const ds = findDates(t).filter(d => d.getTime() <= lim).sort((a, b) => b - a);
+  return ds[0] || null;
+}
+/** Primera fecha que aparece después de una etiqueta (p. ej. FECHA DE EXPIRACIÓN). */
+function dateAfter(t, label) {
+  const m = label.exec(t);
+  if (!m) return null;
+  const ds = findDates(t.slice(m.index, m.index + 60));
+  return ds[0] || null;
+}
+function today() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
+function iso(d) { return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'); }
+function human(d) { return Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd/MM/yyyy'); }
+
 /* ================================ Utilidades ================================ */
 
 function validCedula(id) {
@@ -444,6 +756,13 @@ function validRuc(r) {
   const t = Number(r[2]);
   return t < 6 ? validCedula(r.slice(0, 10)) : (t === 6 || t === 9);
 }
+/** Datos con los que se verificó un documento (para exigir que no cambien después). */
+function cleanExpect(e) {
+  e = e || {};
+  const s = (x, n) => String(x == null ? '' : x).trim().slice(0, n);
+  return { cedula: s(e.cedula, 10), ruc: s(e.ruc, 13), firstName: s(e.firstName, 80), lastName: s(e.lastName, 80), businessName: s(e.businessName, 120), kind: e.kind === 'empresa' ? 'empresa' : 'persona' };
+}
+
 /** Nombre visible de una categoría (de la lista o agregada por el profesional). */
 function catName(s, d) { return CATS[s] ? CATS[s].name : String(((d || {}).customNames || {})[s] || s).trim(); }
 function num(x) { const n = Number(x); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; }
