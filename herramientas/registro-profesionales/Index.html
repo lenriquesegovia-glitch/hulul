@@ -117,7 +117,6 @@ const CONSENT_VERSION = 'preregistro-2026-10-21';
 
 /* Datos tomados de packages/shared/src (categories.ts, provider.ts, cities.ts, tax.ts) */
 const CATS = [{"slug":"climatizacion","name":"Climatización","suggested":25,"servicios":["Mantenimiento de split","Carga de gas","Instalación de aire acondicionado","Reparación de inverter","Desinstalación y traslado de equipos","Aire acondicionado central y ductos","Fuga de agua del split","Instalación de extractores"]},{"slug":"plomeria","name":"Plomería","suggested":20,"servicios":["Destape de tuberías","Reparación de fugas","Bombas de agua","Cambio de grifería","Instalación de inodoro","Calefón y termotanque","Cisternas y tanques elevados","Lavamanos y fregaderos","Detección de fugas ocultas","Hidroneumático y presurizador"]},{"slug":"electricidad","name":"Electricidad","suggested":20,"servicios":["Electricista urgente","Cambio de breakers","Instalación de lámparas","Revisión de tablero","Tomacorrientes e interruptores","Ventiladores de techo","Duchas eléctricas","Acometida y medidor","Puesta a tierra","Iluminación LED"]},{"slug":"electrodomesticos","name":"Electrodomésticos","suggested":20,"servicios":["Reparación de lavadoras","Reparación de refrigeradoras","Cocinas de inducción","Secadoras","Microondas","Hornos y cocinas a gas","Lavavajillas","Congeladores","Instalación de electrodomésticos"]},{"slug":"limpieza","name":"Limpieza","suggested":25,"servicios":["Limpieza por horas","Limpieza profunda","Limpieza post obra","Limpieza de oficinas","Planchado","Limpieza de vidrios","Muebles y colchones","Alfombras y cortinas","Limpieza por mudanza"]},{"slug":"jardineria","name":"Jardinería","suggested":20,"servicios":["Corte de césped","Poda de árboles y arbustos","Mantenimiento de jardines","Sistemas de riego","Siembra de grama","Diseño de jardines","Retiro de maleza y desechos","Fumigación de plantas"]},{"slug":"piscinas","name":"Piscinas","suggested":20,"servicios":["Limpieza de piscina","Balance de químicos","Reparación de bombas y filtros","Mantenimiento mensual","Recuperar piscina verde","Cambio de arena del filtro","Reparación de fugas","Iluminación de piscina"]},{"slug":"pintura","name":"Pintura","suggested":25,"servicios":["Pintura de interiores","Pintura de fachadas","Empaste y resanes","Impermeabilización","Rejas y puertas","Lacado de muebles","Tratamiento de humedad","Pintura de techos"]},{"slug":"belleza","name":"Belleza","suggested":15,"servicios":["Manicure y pedicure","Maquillaje","Peinado","Barbería","Uñas acrílicas y gel","Corte de cabello","Cejas y pestañas","Tintes y mechas","Depilación","Masajes relajantes"]},{"slug":"mascotas","name":"Mascotas","suggested":12,"servicios":["Peluquería canina","Paseo de perros","Cuidado de mascotas","Baño de mascotas","Corte de uñas","Adiestramiento","Cuidado de gatos"]},{"slug":"clases","name":"Clases","suggested":12,"servicios":["Tareas dirigidas","Clases de inglés","Clases de matemáticas","Clases de música","Física y química","Preuniversitario","Computación","Otros idiomas"]},{"slug":"salud","name":"Salud","suggested":20,"servicios":["Fisioterapia","Enfermería a domicilio","Consulta pediátrica","Cuidado de adultos mayores","Curso de primeros auxilios","Toma de muestras","Terapia de lenguaje","Nutrición","Cuidado posoperatorio"]},{"slug":"cerrajeria","name":"Cerrajería","suggested":20,"servicios":["Apertura de puertas","Cambio de chapas y cerraduras","Copia de llaves","Cerraduras de seguridad","Apertura de autos","Cajas fuertes","Cerraduras digitales"]},{"slug":"carpinteria","name":"Carpintería","suggested":20,"servicios":["Reparación de muebles","Muebles a medida","Closets y cocinas","Puertas y marcos","Armado de muebles","Pisos de madera","Lacado y restauración"]},{"slug":"albanileria","name":"Albañilería","suggested":25,"servicios":["Colocación de cerámica y porcelanato","Enlucido y paredes","Arreglo de goteras y losas","Gypsum y cielo falso","Contrapisos","Remodelación de baños","Remodelación de cocinas","Cerramientos"]},{"slug":"fumigacion","name":"Fumigación","suggested":30,"servicios":["Cucarachas","Termitas y comején","Roedores","Mosquitos y zancudos","Hormigas","Desinfección de ambientes","Pulgas y garrapatas"]},{"slug":"mudanzas","name":"Mudanzas","suggested":40,"servicios":["Mudanza de casa","Mudanza de departamento","Fletes pequeños","Cargadores","Embalaje","Armado y desarmado de muebles","Mudanza de oficina"]},{"slug":"tecnologia","name":"Tecnología","suggested":20,"servicios":["Reparación de computadoras","Internet y WiFi","Cámaras de seguridad","Instalación de TV y soportes","Reparación de celulares","Impresoras","Alarmas y cerco eléctrico","Domótica y casa inteligente"]}];
-const RATE_BAND = 0.25, MIN_RATE = 5;
 const CITIES = [
   { slug:'guayaquil', name:'Guayaquil', zonas:['Urdesa','Kennedy','Los Ceibos','Alborada','Vía a la Costa','Centro','Norte','Sur'] },
   { slug:'samborondon', name:'Samborondón', zonas:['La Puntilla','Entre Ríos','Ciudad Celeste','Vía Samborondón'] },
@@ -171,7 +170,6 @@ function newId(){ const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; const r=
 const $ = (s,el=document)=>el.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const catBy = slug => CATS.find(c=>c.slug===slug);
-const rateRange = slug => { const s = catBy(slug).suggested; return { min:Math.max(MIN_RATE, Math.floor(s*(1-RATE_BAND))), max:Math.ceil(s*(1+RATE_BAND)) }; };
 function getPath(o,p){ return p.split('.').reduce((x,k)=>x==null?undefined:x[k],o); }
 function setPath(o,p,v){ const ks=p.split('.'); let x=o; ks.slice(0,-1).forEach(k=>{ if(x[k]==null||typeof x[k]!=='object') x[k]={}; x=x[k]; }); x[ks.at(-1)]=v; }
 
@@ -359,17 +357,17 @@ function viewPro(){
 }
 
 function catBox(slug){
-  const c = catBy(slug), d = S.d, r = rateRange(slug);
+  const c = catBy(slug), d = S.d;
   const ev = d.catEvidence[slug] || (d.catEvidence[slug] = { kind:'', note:'', reference:'' });
   const evFiles = Object.keys(FILES).filter(k=>k.startsWith(`ev_${slug}_`));
   return `<div class="catbox">
-    <h3>${esc(c.name)} <small>Sugerida $${c.suggested}</small></h3>
+    <h3>${esc(c.name)}</h3>
     <span class="lbl">Trabajos que haces</span>
     ${chips(`services.${slug}`, c.servicios.map(s=>({value:s,label:s})), {sm:true})}
     ${field(`otherServices.${slug}`,'Otros trabajos de esta categoría (opcional)',{ph:'Sepáralos con comas'})}
     <label class="f"><span>Tu tarifa por visita</span>
-      <div class="rate"><b>$</b><input type="number" inputmode="decimal" min="${r.min}" max="${r.max}" step="1" data-bind="visitRates.${slug}" value="${esc(d.visitRates[slug]??'')}" placeholder="${c.suggested}"></div>
-      <small class="help">Lo que cobras por ir al domicilio, diagnosticar y hacer el arreglo si se resuelve en la visita. Entre $${r.min} y $${r.max}.</small></label>
+      <div class="rate"><b>$</b><input type="number" inputmode="decimal" min="0" step="0.01" data-bind="visitRates.${slug}" value="${esc(d.visitRates[slug]??'')}" placeholder="Ej.: 20"></div>
+      <small class="help">Lo que cobras por ir al domicilio, diagnosticar y hacer el arreglo si se resuelve en la visita.</small></label>
     <span class="lbl">¿Cómo demuestras que sabes hacerlo?</span>
     <div class="seg">
       <label><input type="radio" name="ev_${slug}" value="certificado" data-bind="catEvidence.${slug}.kind" data-rerender ${ev.kind==='certificado'?'checked':''}><span>Tengo certificado o título</span></label>
@@ -426,10 +424,10 @@ function validate(step){
   if (step===1) {
     if (!d.categories.length) return 'Elige al menos una categoría.';
     for (const s of d.categories) {
-      const c = catBy(s), r = rateRange(s), ev = d.catEvidence[s] || {};
+      const c = catBy(s), ev = d.catEvidence[s] || {};
       if (!(d.services[s]||[]).length && !(d.otherServices[s]||'').trim()) return `${c.name}: marca al menos un trabajo que haces.`;
       const v = +d.visitRates[s];
-      if (!v || v<r.min || v>r.max) return `${c.name}: tu tarifa debe estar entre $${r.min} y $${r.max}.`;
+      if (!(v > 0)) return `${c.name}: escribe tu tarifa por visita.`;
       if (!ev.kind) return `${c.name}: elige cómo demuestras que sabes hacerlo.`;
       if (s==='salud' && ev.kind!=='certificado') return 'Salud exige título registrado en la SENESCYT.';
       if ((ev.note||'').trim().length<5) return `${c.name}: ${ev.kind==='certificado'?'escribe qué certificado o título tienes.':'cuenta tu experiencia: años y dónde trabajaste.'}`;

@@ -88,7 +88,7 @@ Por cada registro te llega un correo con el resumen, la carpeta y el WhatsApp de
 
 ## Detalles del formulario
 
-- Los mismos pasos del registro de la app: datos (profesional independiente o empresa), servicios con tarifa por visita y validación por categoría, zonas y horario (incluye noche y feriados con recargo), documentos, cobros y envío.
+- Los mismos pasos del registro de la app: datos (profesional independiente o empresa), servicios con tarifa por visita libre (sin rango mínimo ni máximo) y validación por categoría, zonas y horario (incluye noche y feriados con recargo), documentos, cobros y envío.
 - Valida cédula y RUC con el dígito verificador. Permite marcar **"RUC en trámite"** (queda en la columna **Faltan**).
 - La cuenta bancaria es **obligatoria** y debe estar a nombre del profesional o de su empresa.
 - Las fotos se reducen en el celular antes de subir.

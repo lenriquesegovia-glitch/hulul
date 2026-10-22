@@ -33,7 +33,6 @@ const CONFIG = {
 
 /* Igual que packages/shared/src (categories.ts y provider.ts). */
 const CATS = {climatizacion: { name: 'Climatización', suggested: 25 }, plomeria: { name: 'Plomería', suggested: 20 }, electricidad: { name: 'Electricidad', suggested: 20 }, electrodomesticos: { name: 'Electrodomésticos', suggested: 20 }, limpieza: { name: 'Limpieza', suggested: 25 }, jardineria: { name: 'Jardinería', suggested: 20 }, piscinas: { name: 'Piscinas', suggested: 20 }, pintura: { name: 'Pintura', suggested: 25 }, belleza: { name: 'Belleza', suggested: 15 }, mascotas: { name: 'Mascotas', suggested: 12 }, clases: { name: 'Clases', suggested: 12 }, salud: { name: 'Salud', suggested: 20 }, cerrajeria: { name: 'Cerrajería', suggested: 20 }, carpinteria: { name: 'Carpintería', suggested: 20 }, albanileria: { name: 'Albañilería', suggested: 25 }, fumigacion: { name: 'Fumigación', suggested: 30 }, mudanzas: { name: 'Mudanzas', suggested: 40 }, tecnologia: { name: 'Tecnología', suggested: 20 }};
-const RATE_BAND = 0.25, MIN_RATE = 5;
 const CITIES = { guayaquil: 'Guayaquil', samborondon: 'Samborondón', daule: 'Daule', duran: 'Durán', quito: 'Quito', cuenca: 'Cuenca' };
 const TAX = ['general', 'rimpe_emprendedor', 'rimpe_popular', 'no_se'];
 const DOC_KEYS = ['cedulaFrente', 'cedulaReverso', 'selfie', 'antecedentes', 'ruc', 'titulo'];
@@ -119,7 +118,7 @@ function api(req) {
     return { ok: false, error: 'Acción desconocida.' };
   } catch (err) {
     console.error(err);
-    return { ok: false, error: err && err.userMessage ? err.userMessage : 'Error del servidor. Inténtalo otra vez.' };
+    return { ok: false, error: err && err.userMessage ? err.userMessage : 'Error del servidor (' + (err && err.message ? err.message : err) + '). Inténtalo otra vez.' };
   }
 }
 
@@ -192,7 +191,7 @@ function saveProvider(req) {
     if (ev.kind === 'experiencia') catEvidence[s].reference = String(ev.reference || '').trim();
     const extra = String((d.otherServices || {})[s] || '').split(',').map(x => x.trim()).filter(Boolean);
     services[s] = (d.services[s] || []).concat(extra);
-    visitRates[s] = Math.round(Number(d.visitRates[s]));
+    visitRates[s] = Math.round(Number(d.visitRates[s]) * 100) / 100;
     catStatus[s] = 'en_revision';
   });
   const surcharges = {};
@@ -229,6 +228,7 @@ function saveProvider(req) {
   let duplicate = '';
   try {
     const ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    ensureTabs(ss);
     const sh = ss.getSheetByName(TAB.pro);
     // Si reintenta el envío con el mismo código, se reemplaza lo anterior.
     [TAB.pro, TAB.cat, TAB.bank].forEach(n => removeRows(ss.getSheetByName(n), req.id));
@@ -267,8 +267,8 @@ function validateProvider(d) {
   for (let i = 0; i < d.categories.length; i++) {
     const s = d.categories[i];
     if (!CATS[s]) return 'Categoría no reconocida.';
-    const r = rateRange(s), rate = Number((d.visitRates || {})[s]);
-    if (!(rate >= r.min && rate <= r.max)) return CATS[s].name + ': la tarifa debe estar entre $' + r.min + ' y $' + r.max + '.';
+    const rate = Number((d.visitRates || {})[s]);
+    if (!(rate > 0)) return CATS[s].name + ': falta la tarifa por visita.';
     const ev = (d.catEvidence || {})[s] || {};
     if (['certificado', 'experiencia'].indexOf(ev.kind) < 0) return CATS[s].name + ': falta la validación.';
     if (s === 'salud' && ev.kind !== 'certificado') return 'Salud exige título registrado en la SENESCYT.';
@@ -304,6 +304,21 @@ function removeRows(sh, id) {
   if (n < 1) return;
   const ids = sh.getRange(2, 1, n, 1).getValues(); // columna A = _codigo
   for (let i = ids.length - 1; i >= 0; i--) if (ids[i][0] === id) sh.deleteRow(i + 2);
+}
+
+/**
+ * Crea las pestañas que falten con su encabezado (por si no se ejecutó
+ * setup() o se cambió el nombre de una pestaña).
+ */
+function ensureTabs(ss) {
+  Object.keys(HEADERS).forEach(name => {
+    let sh = ss.getSheetByName(name);
+    if (!sh) sh = ss.insertSheet(name);
+    if (sh.getLastRow() === 0) {
+      sh.getRange(1, 1, 1, HEADERS[name].length).setValues([HEADERS[name]]).setFontWeight('bold');
+      sh.setFrozenRows(1);
+    }
+  });
 }
 
 /** Agrega una fila poniendo cada valor bajo la columna de su mismo nombre. */
@@ -416,10 +431,6 @@ function validRuc(r) {
   if (!/^\d{10}001$/.test(r)) return false;
   const t = Number(r[2]);
   return t < 6 ? validCedula(r.slice(0, 10)) : (t === 6 || t === 9);
-}
-function rateRange(slug) {
-  const s = CATS[slug].suggested;
-  return { min: Math.max(MIN_RATE, Math.floor(s * (1 - RATE_BAND))), max: Math.ceil(s * (1 + RATE_BAND)) };
 }
 function num(x) { const n = Number(x); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; }
 function checkId(id) { if (!/^RP-[A-Z0-9]{8}$/.test(String(id))) fail('Código de registro inválido.'); }
