@@ -37,7 +37,7 @@ export function SearchBox() {
   return (
     <form action="/buscar" className="search search-ac" role="search" ref={box}
       onBlur={(e) => { if (!box.current?.contains(e.relatedTarget as Node)) setOpen(false); }}>
-      <Icon name="search" size={20} color="#6B6560" />
+      <Icon name="search" size={20} color="#536260" />
       <label htmlFor="q" className="sr-only">Buscar servicio</label>
       <input id="q" name="q" type="search" autoComplete="off" enterKeyHint="search"
         placeholder="Aire acondicionado, limpieza, uñas…"

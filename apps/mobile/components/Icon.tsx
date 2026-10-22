@@ -8,7 +8,7 @@ interface Props {
   strokeWidth?: number;
 }
 
-export function Icon({ name, size = 24, color = '#1C1A1A', strokeWidth = 1.8 }: Props) {
+export function Icon({ name, size = 24, color = '#182D2E', strokeWidth = 1.8 }: Props) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       {icons[name].map((s, i) => {

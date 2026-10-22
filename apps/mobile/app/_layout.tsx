@@ -4,8 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 // Importamos solo los pesos que usa la app para no incluir todas las variantes.
-import { Montserrat_700Bold } from '@expo-google-fonts/montserrat/700Bold';
-import { Montserrat_800ExtraBold } from '@expo-google-fonts/montserrat/800ExtraBold';
+import { Manrope_800ExtraBold } from '@expo-google-fonts/manrope/800ExtraBold';
 import { Manrope_500Medium } from '@expo-google-fonts/manrope/500Medium';
 import { Manrope_600SemiBold } from '@expo-google-fonts/manrope/600SemiBold';
 import { Manrope_700Bold } from '@expo-google-fonts/manrope/700Bold';
@@ -47,8 +46,8 @@ function Navigator({ fontsLoaded }: { fontsLoaded: boolean }) {
 export default function RootLayout() {
   useAutoUpdate();
   const [fontsLoaded] = useFonts({
-    Montserrat_700Bold,
-    Montserrat_800ExtraBold,
+
+    Manrope_800ExtraBold,
     Manrope_500Medium,
     Manrope_600SemiBold,
     Manrope_700Bold,

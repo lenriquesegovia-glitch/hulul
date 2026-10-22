@@ -37,7 +37,7 @@ export default function HomePage() {
           <SearchBox />
           <ul className="trust-row" aria-label="Por qué HULUL">
             {promises.map((p) => (
-              <li key={p.t}><Icon name={p.icon} size={18} color="#9A5B34" strokeWidth={2} />{p.t}</li>
+              <li key={p.t}><Icon name={p.icon} size={18} color="#685943" strokeWidth={2} />{p.t}</li>
             ))}
           </ul>
         </div>

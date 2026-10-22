@@ -38,7 +38,7 @@ export function ServicePicker({ cat, city, cityName }: { cat: Category; city?: s
         <div className="job-grid">
           {[...cat.servicios, OTHER_JOB].map((s) => (
             <button key={s} type="button" aria-pressed={job === s} className={`job-card ${job === s ? 'on' : ''}`} onClick={() => pick(s)}>
-              <span className="job-icon"><Icon name={s === OTHER_JOB ? 'chat' : cat.icon} size={22} color={job === s ? '#fff' : '#9A5B34'} /></span>
+              <span className="job-icon"><Icon name={s === OTHER_JOB ? 'chat' : cat.icon} size={22} color={job === s ? '#fff' : '#685943'} /></span>
               <span className="stack" style={{ minWidth: 0, flex: 1 }}>
                 <strong>{s}</strong>
                 <span className="muted" style={{ fontSize: 13 }}>

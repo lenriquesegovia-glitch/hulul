@@ -562,7 +562,7 @@ function DepartPanel({ b, busy, onGo }: { b: ProBooking; busy: boolean; onGo: ()
   return (
     <div className="stack gap-8" style={{ width: '100%' }}>
       {trip && (
-        <div style={{ padding: 12, borderRadius: 12, background: plan.lateBy > 0 ? '#F6E7E9' : 'var(--success-soft)', fontSize: 14.5 }}>
+        <div style={{ padding: 12, borderRadius: 12, background: plan.lateBy > 0 ? '#FBEAE8' : 'var(--success-soft)', fontSize: 14.5 }}>
           Estás a <strong>{trip.km} km</strong>, unos <strong>{durationLabel(trip.minutes * 60_000)}</strong> con tráfico. Si sales ahora llegas a las <strong>{hhmmEcuador(new Date(now.getTime() + trip.minutes * 60_000))}</strong>.{' '}
           {plan.lateBy > 0
             ? <>Si sales ahora llegarías <strong>{plan.lateBy} min tarde</strong>. Propón otra hora al cliente o, si no alcanzas, marca &ldquo;No puedo ir&rdquo;.</>

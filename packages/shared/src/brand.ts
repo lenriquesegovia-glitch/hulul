@@ -1,28 +1,26 @@
-/** Identidad visual de HULUL, tomada del logotipo (crema, vino tinto y cobre). */
+/** HULUL · Fase 3. Petróleo y superficies cálidas. */
 export const brand = {
   name: 'HULUL',
-  tagline: 'Servicios del hogar',
+  tagline: 'Soluciones para tu día',
   domain: 'hululec.com',
   colors: {
-    background: '#FAF7F2',
-    surface: '#FFFFFF',
-    surfaceWarm: '#F6EDE6',
-    border: '#E7DFD5',
-    text: '#1C1A1A',
-    textSecondary: '#3F3A37',
-    textMuted: '#6B6560',
-    primary: '#7A1E2C',
-    primaryDark: '#5C1622',
-    copper: '#9A5B34',
-    copperSoft: '#F3E6DC',
-    success: '#1F7A4A',
-    successSoft: '#E3F2E8',
-    onPrimary: '#FFFFFF',
-  },
-  fonts: {
-    display: 'Montserrat',
-    body: 'Manrope',
-  },
+    "background": "#FAF8F3",
+    "surface": "#FFFFFF",
+    "surfaceWarm": "#F1EADF",
+    "border": "#D5DDD9",
+    "text": "#182D2E",
+    "textSecondary": "#3E5553",
+    "textMuted": "#536260",
+    "primary": "#123F43",
+    "primaryDark": "#0B2F33",
+    "copper": "#685943",
+    "copperSoft": "#E8DFCF",
+    "success": "#206344",
+    "successSoft": "#E6F2E9",
+    "onPrimary": "#FFFFFF",
+    "danger": "#B42318"
+},
+  fonts: { display: 'Manrope', body: 'Manrope' },
 } as const;
 
 export type BrandColors = typeof brand.colors;

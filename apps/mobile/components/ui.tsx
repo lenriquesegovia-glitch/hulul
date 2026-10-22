@@ -31,8 +31,8 @@ export function Avatar({ initials, size = 48 }: { initials: string; size?: numbe
 /**
  * Botones de HULUL: todos del mismo alto, ancho completo y forma, para que se
  * reconozcan a simple vista.
- * - primary: el siguiente paso (relleno vino). Uno por pantalla o tarjeta.
- * - secondary: otras opciones (borde, texto vino).
+ * - primary: el siguiente paso (relleno petróleo). Uno por pantalla o tarjeta.
+ * - secondary: otras opciones (borde, texto petróleo).
  * - danger: cancelar, rechazar, reportar (borde y texto rojo).
  */
 export type ButtonVariant = 'primary' | 'secondary' | 'danger';
@@ -89,7 +89,7 @@ const s = StyleSheet.create({
   card: { backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, borderRadius: radius.lg, padding: 16 },
   avatar: { backgroundColor: c.copperSoft, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontFamily: font.display, color: c.primary },
-  btn: { minHeight: 52, alignSelf: 'stretch', borderRadius: radius.md, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
+  btn: { minHeight: 48, alignSelf: 'stretch', borderRadius: radius.md, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
   btnText: { fontFamily: font.bodyBold, fontSize: 15.5, textAlign: 'center' },
   primary: { backgroundColor: c.primary, borderColor: c.primary },
   primaryPressed: { backgroundColor: c.primaryDark, borderColor: c.primaryDark },

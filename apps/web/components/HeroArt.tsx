@@ -31,22 +31,22 @@ export function HeroArt() {
   return (
     <div className="hero-art" aria-hidden="true">
       <svg viewBox="0 0 520 440" width="100%" height="100%">
-        <circle cx="260" cy="240" r="200" fill="#F3E6DC" />
-        <circle cx="260" cy="240" r="150" fill="#F6EDE6" />
+        <circle cx="260" cy="240" r="200" fill="#E8DFCF" />
+        <circle cx="260" cy="240" r="150" fill="#F1EADF" />
 
         {/* Casa */}
-        <path d="M112 168 L260 52 L408 168" fill="none" stroke="#7A1E2C" strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" />
-        <rect x="128" y="150" width="264" height="232" rx="14" fill="#FFFFFF" stroke="#E7DFD5" strokeWidth="2" />
-        <line x1="260" y1="150" x2="260" y2="382" stroke="#E7DFD5" strokeWidth="2" />
-        <line x1="128" y1="266" x2="392" y2="266" stroke="#E7DFD5" strokeWidth="2" />
-        <rect x="350" y="70" width="22" height="48" rx="3" fill="#9A5B34" />
+        <path d="M112 168 L260 52 L408 168" fill="none" stroke="#123F43" strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" />
+        <rect x="128" y="150" width="264" height="232" rx="14" fill="#FFFFFF" stroke="#D5DDD9" strokeWidth="2" />
+        <line x1="260" y1="150" x2="260" y2="382" stroke="#D5DDD9" strokeWidth="2" />
+        <line x1="128" y1="266" x2="392" y2="266" stroke="#D5DDD9" strokeWidth="2" />
+        <rect x="350" y="70" width="22" height="48" rx="3" fill="#685943" />
 
         {/* Ambientes con servicios */}
         {rooms.map((r) => (
           <g key={r.label}>
-            <circle cx={r.x} cy={r.y - 10} r="30" fill="#F3E6DC" />
-            <SvgIcon name={r.name} x={r.x} y={r.y - 10} size={30} color="#9A5B34" stroke={1.8} />
-            <text x={r.x} y={r.y + 40} textAnchor="middle" fontFamily="Manrope, sans-serif" fontWeight="700" fontSize="13" fill="#3F3A37">{r.label}</text>
+            <circle cx={r.x} cy={r.y - 10} r="30" fill="#E8DFCF" />
+            <SvgIcon name={r.name} x={r.x} y={r.y - 10} size={30} color="#685943" stroke={1.8} />
+            <text x={r.x} y={r.y + 40} textAnchor="middle" fontFamily="Manrope, sans-serif" fontWeight="700" fontSize="13" fill="#3E5553">{r.label}</text>
           </g>
         ))}
 
@@ -62,7 +62,7 @@ export function HeroArt() {
         </span>
       </div>
       <div className="hero-chip hero-chip-left">
-        <span style={{ color: '#9A5B34', fontSize: 16 }}>★</span>
+        <span style={{ color: '#685943', fontSize: 16 }}>★</span>
         <strong style={{ fontSize: 14 }}>4,9</strong>
         <span className="muted" style={{ fontSize: 12.5 }}>· 128 reseñas</span>
       </div>

@@ -1,20 +1,22 @@
 :root {
   color-scheme: only light;
-  --bg: #FAF7F2;
+  --bg: #FAF8F3;
   --surface: #FFFFFF;
-  --surface-warm: #F6EDE6;
-  --border: #E7DFD5;
-  --text: #1C1A1A;
-  --text-2: #3F3A37;
-  --muted: #6B6560;
-  --primary: #7A1E2C;
-  --primary-dark: #5C1622;
-  --copper: #9A5B34;
-  --copper-soft: #F3E6DC;
-  --success: #1F7A4A;
-  --success-soft: #E3F2E8;
+  --surface-warm: #F1EADF;
+  --border: #D5DDD9;
+  --text: #182D2E;
+  --text-2: #3E5553;
+  --muted: #536260;
+  --primary: #123F43;
+  --primary-dark: #0B2F33;
+  --copper: #685943;
+  --copper-soft: #E8DFCF;
+  --success: #206344;
+  --success-soft: #E6F2E9;
+  --on-primary: #FFFFFF;
+  --danger: #B42318;
   --radius: 16px;
-  --font-display: 'Montserrat', system-ui, sans-serif;
+  --font-display: 'Manrope', system-ui, sans-serif;
   --font-body: 'Manrope', system-ui, sans-serif;
   --max: 1180px;
 }
@@ -54,7 +56,7 @@ img { max-width: 100%; }
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:hover { background: var(--primary-dark); color: #fff; }
 .btn-ghost, .btn-secondary { background: var(--surface); color: var(--primary); border: 1.5px solid var(--primary); }
-.btn-ghost:hover, .btn-secondary:hover { background: #F6E7E9; color: var(--primary); }
+.btn-ghost:hover, .btn-secondary:hover { background: #F1EADF; color: var(--primary); }
 /* Jerarquía de botones (mismo alto y forma en toda la web):
    principal = el siguiente paso; secundario (borde) = otras opciones;
    peligro (borde rojo) = cancelar, rechazar, reportar. */
@@ -145,7 +147,7 @@ img { max-width: 100%; }
 /* Banda oscura */
 .band { background: var(--primary); color: #fff; border-radius: 24px; padding: 40px; }
 .band h2 { color: #fff; }
-.band p { color: #F3E6DC; }
+.band p { color: #E8DFCF; }
 .band .btn-ghost { background: #fff; }
 
 /* Migas y enlaces SEO */
@@ -426,3 +428,16 @@ details p { margin-top: 10px; color: var(--text-2); }
   .role-card img { width: 96px; aspect-ratio: 1; flex-shrink: 0; }
 }
 .own-job { flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--text); background: var(--surface); border: 1px dashed var(--border); border-radius: 12px; padding: 10px 12px; min-height: 44px; }
+
+/* Identidad HULUL: superficies claras y fotografías sin oscurecer. */
+.logo .brand-lockup { width: 176px; height: 52px; color: var(--primary); }
+.header { background: rgba(250,248,243,.96); }
+.photo-card { aspect-ratio: auto; background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.photo-card img { position: static; display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; }
+.photo-card:hover img { transform: none; }
+.photo-shade { display: none; }
+.photo-text { position: static; padding: 16px; gap: 6px; }
+.photo-text span { color: var(--text-2); opacity: 1; }
+.photo-card:hover { color: var(--primary); border-color: var(--primary); }
+.btn:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+@media (max-width: 600px) { .logo .brand-lockup { width: 150px; height: 44px; } .photo-text { padding: 12px; } }

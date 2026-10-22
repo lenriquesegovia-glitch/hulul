@@ -12,7 +12,7 @@ module.exports = ({ config }) => {
   // chocar con los ajustes locales de Expo que guarda actualizar.bat.
   config.plugins = [
     ...(config.plugins ?? []),
-    ['expo-notifications', { color: '#7A1E2C', defaultChannel: 'pedidos' }],
+    ['expo-notifications', { color: '#123F43', defaultChannel: 'pedidos' }],
     // Fotos del problema (cliente) y del trabajo: cámara y galería.
     ['expo-image-picker', {
       cameraPermission: 'HULUL usa la cámara para que tomes fotos del problema o del trabajo terminado.',

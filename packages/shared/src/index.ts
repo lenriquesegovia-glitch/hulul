@@ -17,3 +17,5 @@ export * from './places';
 export * from './schedule';
 export * from './copy';
 export * from './profanity';
+
+export * from './logo';

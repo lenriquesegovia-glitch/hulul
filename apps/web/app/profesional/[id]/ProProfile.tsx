@@ -42,7 +42,7 @@ export function ProProfile({ id }: { id: string }) {
             <div className="stack gap-8">
               <h1 className="row gap-8" style={{ fontSize: 32 }}>
                 {pro.name}
-                <Icon name="shield" size={24} color="#9A5B34" label="Verificado" />
+                <Icon name="shield" size={24} color="#685943" label="Verificado" />
               </h1>
               <p className="muted">{cat.name} · {pro.zone}{pro.isCompany ? ' · Perfil empresa' : ''}</p>
               {pro.availableToday && <span className="pill pill-success" style={{ alignSelf: 'flex-start' }}>Atiende hoy{pro.hours ? ` · ${pro.hours}` : ''}</span>}

@@ -13,7 +13,7 @@ export function ProCard({ pro, job }: { pro: Professional; job?: string }) {
           <div className="stack gap-4" style={{ minWidth: 0 }}>
             <strong className="row gap-8" style={{ fontSize: 16 }}>
               {pro.name}
-              {pro.verified && <Icon name="shield" size={18} color="#9A5B34" label="Verificado" />}
+              {pro.verified && <Icon name="shield" size={18} color="#685943" label="Verificado" />}
             </strong>
             <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
               {ratingLabel(pro)}{pro.jobsDone > 0 ? ` · ${pro.jobsDone} servicios` : ` · ${pro.years} años de experiencia`}

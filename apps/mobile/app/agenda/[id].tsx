@@ -211,7 +211,7 @@ function DepartInfo({ b }: { b: ProBooking }) {
   const arrive = trip ? new Date(now.getTime() + trip.minutes * 60_000) : null;
   const late = plan.lateBy > 0;
   return (
-    <View style={[s.info, trip && { backgroundColor: late ? '#F6E7E9' : c.successSoft }]}>
+    <View style={[s.info, trip && { backgroundColor: late ? '#FBEAE8' : c.successSoft }]}>
       {trip ? (
         <>
           <Text style={s.label}>Estás a {trip.km} km · unos {trip.minutes} min con tráfico</Text>

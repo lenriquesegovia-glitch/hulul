@@ -1,3 +1,4 @@
+import { BrandLogo } from '@/components/BrandLogo';
 import { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -35,13 +36,7 @@ export default function Home() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top']}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <View style={s.header}>
-          <View style={s.logoRow}>
-            <Icon name="logo" size={30} color={c.copper} />
-            <View>
-              <Text style={s.logoWord}>HULUL</Text>
-              <Text style={s.logoSub}>SERVICIOS DEL HOGAR</Text>
-            </View>
-          </View>
+          <BrandLogo />
           <Pressable accessibilityRole="button" accessibilityLabel="Mi cuenta" onPress={() => router.push('/cuenta')} style={s.location}>
             <Icon name="user" size={18} />
             <Text style={s.locationText}>Mi cuenta</Text>
@@ -104,8 +99,7 @@ export default function Home() {
               onPress={() => router.push(`/categoria/${cat.slug}`)}
               style={({ pressed }) => [s.photo, pressed && { opacity: 0.85 }]}
             >
-              <Image source={{ uri: categoryImage(cat.slug, 500) }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-              <View style={s.shade} />
+              <Image source={{ uri: categoryImage(cat.slug, 500) }} style={s.photoImage} resizeMode="cover" />
               <Text style={s.photoText} numberOfLines={2}>{cat.name}</Text>
             </Pressable>
           ))}
@@ -178,9 +172,9 @@ const s = StyleSheet.create({
   search: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 52, paddingHorizontal: 16, borderRadius: radius.md, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
   searchInput: { flex: 1, fontFamily: font.body, fontSize: 15, color: c.text },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  photo: { width: '48%', flexGrow: 1, aspectRatio: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: c.surfaceWarm, justifyContent: 'flex-end' },
-  shade: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(28,26,26,0.32)' },
-  photoText: { fontFamily: font.display, fontSize: 16, color: '#fff', padding: 12 },
+  photo: { width: '48%', flexGrow: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: c.surface },
+  photoImage: { width: '100%', aspectRatio: 4 / 3 },
+  photoText: { fontFamily: font.display, fontSize: 16, color: c.text, padding: 12 },
   suggest: { borderWidth: 1, borderColor: c.border, borderRadius: radius.md, backgroundColor: c.surface, padding: 4, marginTop: -12 },
   suggestRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10 },
   suggestIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: c.copperSoft, alignItems: 'center', justifyContent: 'center' },
@@ -189,7 +183,7 @@ const s = StyleSheet.create({
   listItem: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderRadius: radius.md, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
   proCard: { borderRadius: 18, overflow: 'hidden', backgroundColor: c.primary },
   proImg: { width: '100%', aspectRatio: 16 / 7, backgroundColor: c.primaryDark },
-  proEyebrow: { fontFamily: font.bodyBold, fontSize: 11, letterSpacing: 1, color: '#E9C9B3' },
+  proEyebrow: { fontFamily: font.bodyBold, fontSize: 11, letterSpacing: 1, color: '#E8DFCF' },
   proTitle: { fontFamily: font.display, fontSize: 19, lineHeight: 24, color: '#fff' },
   proText: { fontFamily: font.body, fontSize: 13.5, lineHeight: 19, color: 'rgba(255,255,255,0.9)' },
   proBtn: { alignSelf: 'flex-start', marginTop: 4, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12 },

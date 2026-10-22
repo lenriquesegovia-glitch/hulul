@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#FAF7F2',
+  themeColor: '#FAF8F3',
   colorScheme: 'only light',
 };
 
@@ -37,12 +37,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Montserrat:wght@600;700;800&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
         />
       </head>
       <body>
         {DEMO_MODE && (
-          <div role="note" style={{ background: '#1C1A1A', color: '#FAF7F2', fontSize: 13.5, textAlign: 'center', padding: '8px 16px' }}>
+          <div role="note" style={{ background: '#182D2E', color: '#FAF8F3', fontSize: 13.5, textAlign: 'center', padding: '8px 16px' }}>
             Versión de prueba: las reservas no generan ningún cobro.
           </div>
         )}

@@ -1,3 +1,4 @@
+import { BrandLogo } from '@/components/BrandLogo';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,13 +30,7 @@ export default function WelcomeScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={s.content}>
-        <View style={s.logoRow}>
-          <Icon name="logo" size={40} color={c.copper} />
-          <View>
-            <Text style={s.logoWord}>HULUL</Text>
-            <Text style={s.logoSub}>SERVICIOS DEL HOGAR</Text>
-          </View>
-        </View>
+        <BrandLogo />
 
         <View style={{ gap: 8 }}>
           <H1>Cuidamos tu privacidad</H1>

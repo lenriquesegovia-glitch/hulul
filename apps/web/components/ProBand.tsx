@@ -10,7 +10,7 @@ export function ProBand() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={categoryImage('electricidad', 900)} alt="" loading="lazy" />
           <div className="pro-band-text">
-            <span className="eyebrow" style={{ color: '#E9C9B3' }}>Para técnicos y profesionales</span>
+            <span className="eyebrow" style={{ color: '#E8DFCF' }}>Para técnicos y profesionales</span>
             <h2>¿Eres técnico o profesional? Gana más con HULUL</h2>
             <ul>
               <li>Registro gratis: solo pagas {Math.round(COMMISSION_RATE * 100)} % cuando haces un trabajo.</li>

@@ -119,7 +119,7 @@ export function CancelBox({ row, onDone }: { row: Row; onDone: () => void }) {
   };
 
   return (
-    <div className="stack gap-12" style={{ marginTop: 8, padding: 14, borderRadius: 12, background: t.fee > 0 ? 'var(--primary-soft, #F6E7E9)' : 'var(--surface-warm, #F4EEE8)' }}>
+    <div className="stack gap-12" style={{ marginTop: 8, padding: 14, borderRadius: 12, background: t.fee > 0 ? '#FBEAE8' : 'var(--surface-warm)' }}>
       <strong style={{ fontSize: 15 }}>{t.fee > 0 ? `Cancelar ahora cuesta ${usd(t.fee)}` : 'Cancelar es gratis'}</strong>
       <span style={{ fontSize: 14, color: 'var(--text-2)' }}>{t.reason}</span>
       {t.fee > 0 && row.demo && <span className="muted" style={{ fontSize: 13 }}>Versión de prueba: el cargo se registra, pero no se cobra.</span>}

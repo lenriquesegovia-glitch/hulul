@@ -26,7 +26,7 @@ export function AgendaMap({ points }: { points: AgendaPoint[] }) {
       points.forEach((p, i) => {
         const icon = L.divIcon({
           className: '',
-          html: `<div style="width:30px;height:30px;border-radius:50%;background:${p.pending ? '#9A5B34' : '#7A1E2C'};color:#fff;font:700 13px/30px system-ui;text-align:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">${i + 1}</div>`,
+          html: `<div style="width:30px;height:30px;border-radius:50%;background:${p.pending ? '#685943' : '#123F43'};color:#fff;font:700 13px/30px system-ui;text-align:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">${i + 1}</div>`,
           iconSize: [30, 30], iconAnchor: [15, 15],
         });
         L.marker([p.lat, p.lng], { icon }).bindPopup(p.label).addTo(layer.current!);

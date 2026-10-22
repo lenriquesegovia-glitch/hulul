@@ -49,7 +49,7 @@ async function setup(N: NotificationsModule): Promise<string | null> {
       importance: N.AndroidImportance.MAX,
       sound: 'default',
       vibrationPattern: [0, 600, 250, 600, 250, 600],
-      lightColor: '#7A1E2C',
+      lightColor: '#123F43',
       lockscreenVisibility: N.AndroidNotificationVisibility.PUBLIC,
       enableVibrate: true,
     });

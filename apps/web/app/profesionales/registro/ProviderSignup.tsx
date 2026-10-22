@@ -416,7 +416,7 @@ function StepServices({ d, setD, uid }: { d: Draft; setD: (fn: (x: Draft) => Dra
           const on = d.categories.includes(c.slug);
           return (
             <button key={c.slug} type="button" aria-pressed={on} className={`cat-tile pick ${on ? 'on' : ''}`} onClick={() => toggleCat(c.slug)}>
-              <span className="cat-icon"><Icon name={c.icon} size={26} color={on ? '#fff' : '#9A5B34'} /></span>
+              <span className="cat-icon"><Icon name={c.icon} size={26} color={on ? '#fff' : '#685943'} /></span>
               <strong>{c.tileName ?? c.name}</strong>
             </button>
           );

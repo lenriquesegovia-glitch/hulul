@@ -102,7 +102,7 @@ export function CancelBox({ row, onDone }: { row: ClientBooking; onDone: () => v
     try { await cancelBooking(row.id, reason.trim()); onDone(); } catch (e) { setMsg(cancelErrorMessage(e)); setBusy(false); }
   };
   return (
-    <View style={[s.cancel, t.fee > 0 && { backgroundColor: '#F6E7E9' }]}>
+    <View style={[s.cancel, t.fee > 0 && { backgroundColor: '#FBEAE8' }]}>
       <Text style={s.name}>{t.fee > 0 ? `Cancelar ahora cuesta ${usd(t.fee)}` : 'Cancelar es gratis'}</Text>
       <Body style={{ fontSize: 13.5 }}>{t.reason}</Body>
       {t.fee > 0 && row.demo ? <Body muted style={{ fontSize: 12.5 }}>Versión de prueba: el cargo se registra, pero no se cobra.</Body> : null}

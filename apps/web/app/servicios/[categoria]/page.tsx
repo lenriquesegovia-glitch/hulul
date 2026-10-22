@@ -39,7 +39,7 @@ export default async function CategoryPage({ params }: { params: Promise<Params>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="cat-hero" src={categoryImage(cat.slug, 1200)} alt={cat.seoName} />
           <div className="row gap-16">
-            <span className="cat-icon" style={{ width: 60, height: 60 }}><Icon name={cat.icon} size={32} color="#9A5B34" /></span>
+            <span className="cat-icon" style={{ width: 60, height: 60 }}><Icon name={cat.icon} size={32} color="#685943" /></span>
             <h1 style={{ fontSize: 'clamp(28px, 4vw, 42px)' }}>{cat.seoName}</h1>
           </div>
           <p style={{ fontSize: 17, color: 'var(--text-2)', maxWidth: 680 }}>{cat.sub}. Elige tu ciudad para ver a los profesionales disponibles.</p>
