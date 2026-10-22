@@ -40,8 +40,11 @@ const CONFIG = {
   FACE_REJECT: 0.5,
   /** Antigüedad máxima del certificado de antecedentes penales (días). */
   ANTECEDENTES_MAX_DAYS: 90,
-  /** Consultar el RUC en el SRI (si el SRI no responde, se usa solo el certificado). */
-  SRI_CHECK: true,
+  /**
+   * Consultar el RUC en el SRI. Apagado: el SRI rechaza las consultas desde los servidores de
+   * Google (fuera de Ecuador). El RUC se verifica con el certificado que sube el profesional.
+   */
+  SRI_CHECK: false,
 };
 
 const DOC_LABEL = { cedulaFrente: 'Cédula (frente)', cedulaReverso: 'Cédula (reverso)', selfie: 'Selfie', antecedentes: 'Certificado de antecedentes', ruc: 'Certificado del RUC', titulo: 'Título' };
