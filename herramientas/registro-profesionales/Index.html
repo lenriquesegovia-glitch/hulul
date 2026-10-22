@@ -120,6 +120,22 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary)
 </style>
 </head>
 <body>
+<script>
+/* Vigilante: si el código principal no arranca (error o archivo incompleto), muestra el motivo. */
+window.__ok = false;
+window.__err = '';
+window.onerror = function(msg, src, line, col){ window.__err = msg + ' (línea ' + line + ', columna ' + col + ')'; };
+setTimeout(function(){
+  if (window.__ok) return;
+  var app = document.getElementById('app'); if (!app) return;
+  var total = document.documentElement.outerHTML.length;
+  var fin = document.documentElement.outerHTML.indexOf('FIN-DEL-' + 'ARCHIVO-INDEX') >= 0;
+  app.innerHTML = '<div style="background:#FDECEA;color:#B42318;border-radius:12px;padding:14px;font:600 14px sans-serif">' +
+    'El formulario no pudo arrancar.<br>' + (window.__err ? 'Error: ' + window.__err.replace(/</g,'&lt;') + '<br>' : '') +
+    (fin ? '' : 'El archivo Index está incompleto: falta el final del código. Vuelve a pegarlo completo.<br>') +
+    'Tamaño recibido: ' + Math.round(total/1024) + ' KB.</div>';
+}, 10000);
+</script>
 <div class="wrap">
   <div style="height:20px"></div>
   <main id="app" aria-live="polite"><p class="muted">Cargando…</p></main>
@@ -863,7 +879,7 @@ window.addEventListener('beforeunload', e=>{ if (S.view==='enviando' || (S.view=
 
 let started = false, startError = '';
 function start(){
-  if (started) return; started = true;
+  if (started) return; started = true; window.__ok = true;
   try { if (ref) S.d.referredBy = S.d.referredBy || ref; render(); }
   catch(e) { showFatal(e); }
 }
@@ -889,6 +905,7 @@ if (GS) {
     .withFailureHandler(e => { startError = 'Servidor: ' + ((e && e.message) || e); console.error(e); start(); if (CFG.verify === undefined) showWarn(startError); })
     .config();
 } else { CFG = { controller:'el responsable del registro', contact:'', url:location.origin+location.pathname }; start(); }
+/* FIN-DEL-ARCHIVO-INDEX */
 </script>
 </body>
 </html>
