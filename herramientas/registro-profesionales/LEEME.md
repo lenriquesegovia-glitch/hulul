@@ -8,7 +8,8 @@ Lo que llenan cae en una hoja de Google Sheets y sus documentos en una carpeta d
 
 | Archivo | Para qué |
 |---|---|
-| `Index.html` | La página que llenan los profesionales. Funciona en celular. |
+| `Index.html` | La página que llenan los profesionales (generada; es la que se pega en Apps Script). |
+| `fuente/` | Versión legible de la página y el generador. |
 | `Code.gs` | Sirve la página, escribe la hoja y guarda los archivos. |
 
 Los dos van dentro de un proyecto de Google Apps Script. No se suben a ninguna web.
@@ -128,6 +129,10 @@ Hay casos que pasan pero quedan marcados para **revisión manual**: parecido dud
 1. Revisa la hoja: pon `status` = aprobado (u otro) en `providers` y aprueba las categorías en `providers.catStatus`.
 2. En el editor de Apps Script ejecuta **exportarFirestore**. Deja en la carpeta RESPALDO DE PROVEEDORES el archivo `firestore-providers.json`, con un elemento por profesional: `{ codigo, uid, provider, banco, carpeta }`. `provider` ya es el documento `providers/{uid}` completo (con `catStatus` armado desde su pestaña) y `banco` es `private/banco`.
 3. Con ese archivo, el script de importación (lo hacemos cuando toque) crea la cuenta de cada profesional en Firebase Authentication, sube sus archivos de Drive a Storage, escribe los documentos y anota el `_uid` en la hoja. El profesional acepta los términos y el mandato de cobro al entrar por primera vez a la app.
+
+## Cómo se genera Index.html
+
+`Index.html` es el archivo que se pega en Apps Script. Se **genera** desde `fuente/Index.fuente.html` (la versión legible, con comentarios) con `node fuente/construir.mjs`. El generador quita todos los comentarios y escribe `/*` y `//` de forma escapada, porque Google Apps Script recorta los comentarios al publicar y, si el código los tiene, lo rompe (el formulario se quedaba en "Cargando…"). Para cambiar la página, edita la fuente y vuelve a generar; no edites `Index.html` a mano.
 
 ## Si algo no funciona
 
