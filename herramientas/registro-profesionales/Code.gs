@@ -40,15 +40,26 @@ const DOC_KEYS = ['cedulaFrente', 'cedulaReverso', 'selfie', 'antecedentes', 'ru
 const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'];
 
+/*
+ * Estructura de la hoja: cada pestaña es una colección de Firestore y cada
+ * columna se llama igual que el campo. Las columnas que empiezan con "_"
+ * son de control (no se suben). Las listas y objetos van en JSON.
+ *
+ *  providers               → providers/{uid}            (una fila por profesional)
+ *  providers.catStatus     → providers/{uid}.catStatus  (una fila por profesional y categoría; aquí se aprueba cada una)
+ *  providers.private.banco → providers/{uid}/private/banco
+ */
+const TAB = { pro: 'providers', cat: 'providers.catStatus', bank: 'providers.private.banco' };
 const HEADERS = {
-  Profesionales: ['Fecha', 'Código', 'Estado', 'Tipo', 'Nombres', 'Apellidos', 'Razón social', 'Cédula', 'RUC', 'Celular', 'WhatsApp', 'Correo',
-    'Años exp.', 'Presentación', 'Categorías', 'Tarifas', 'Ciudades', 'Zonas', 'Días', 'Desde', 'Hasta', 'Efectivo',
-    'Horas fuera de horario', 'Feriados', 'Recargo nocturno', 'Recargo feriado', 'Régimen SRI', 'Firma electrónica', 'Cuenta bancaria',
-    'Documentos', 'Faltan', 'Carpeta', 'Invitado por', 'Cómo se enteró', 'Acepta novedades', 'Consentimiento', 'Posible duplicado',
-    'Notas', 'Migrado a Firebase'],
-  'Categorías': ['Fecha', 'Código', 'Profesional', 'Cédula', 'Celular', 'Ciudades', 'Categoría', 'Trabajos', 'Tarifa', 'Validación', 'Detalle', 'Referencia', 'Archivos', 'Estado'],
-  'Banco (privado)': ['Fecha', 'Código', 'Profesional', 'Banco', 'Tipo', 'Número', 'Titular', 'Cédula/RUC titular'],
+  'providers': ['_codigo', '_fecha', '_seguimiento', '_duplicado', '_carpeta', '_whatsapp', '_notas', '_uid',
+    'status', 'kind', 'firstName', 'lastName', 'businessName', 'cedula', 'ruc', 'phone', 'email', 'years', 'bio',
+    'categories', 'services', 'visitRates', 'catEvidence', 'cities', 'days', 'from', 'to', 'acceptsCash',
+    'offHours', 'holidays', 'surcharges', 'taxRegime', 'eSignature', 'docs', 'consentPrivacy', 'consentMarketing', 'preregistro'],
+  'providers.catStatus': ['_codigo', '_nombre', 'category', 'catStatus', 'visitRate', 'services', 'evidenceKind', 'evidenceNote', 'evidenceReference', 'evidenceFiles', '_carpeta'],
+  'providers.private.banco': ['_codigo', '_nombre', 'bank', 'type', 'number', 'holder', 'holderId'],
 };
+/** Columnas que deben quedar como texto (ceros a la izquierda). */
+const TEXT_COLS = ['cedula', 'ruc', 'phone', 'number', 'holderId', 'from', 'to'];
 
 /* ============================== Instalación ============================== */
 
@@ -72,11 +83,18 @@ function setup() {
       sh.setFrozenRows(1);
     }
   });
-  ss.getSheetByName('Profesionales').getRange('C2:C').setDataValidation(SpreadsheetApp.newDataValidation()
-    .requireValueInList(['nuevo', 'contactado', 'en_revision', 'observado', 'aprobado', 'rechazado'], true).build());
+  const list = vals => SpreadsheetApp.newDataValidation().requireValueInList(vals, true).build();
+  const col = (name, h) => HEADERS[name].indexOf(h) + 1;
+  const pro = ss.getSheetByName(TAB.pro), cat = ss.getSheetByName(TAB.cat);
+  pro.getRange(2, col(TAB.pro, '_seguimiento'), pro.getMaxRows() - 1).setDataValidation(list(['nuevo', 'contactado', 'documentos pendientes', 'listo']));
+  pro.getRange(2, col(TAB.pro, 'status'), pro.getMaxRows() - 1).setDataValidation(list(['en_revision', 'observado', 'aprobado', 'rechazado']));
+  cat.getRange(2, col(TAB.cat, 'catStatus'), cat.getMaxRows() - 1).setDataValidation(list(['en_revision', 'observado', 'aprobado', 'rechazado']));
+  Object.keys(HEADERS).forEach(name => HEADERS[name].forEach((h, i) => {
+    if (TEXT_COLS.indexOf(h) >= 0) ss.getSheetByName(name).getRange(2, i + 1, ss.getSheetByName(name).getMaxRows() - 1).setNumberFormat('@');
+  }));
   Logger.log('Listo.\nHoja: ' + ss.getUrl() + '\nCarpeta de archivos: ' + folder.getUrl());
 }
-const HEADERS_FIRST = 'Profesionales';
+const HEADERS_FIRST = TAB.pro;
 
 /* ================================ Web app ================================ */
 
@@ -211,33 +229,24 @@ function saveProvider(req) {
   let duplicate = '';
   try {
     const ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-    const sh = ss.getSheetByName('Profesionales');
+    const sh = ss.getSheetByName(TAB.pro);
     // Si reintenta el envío con el mismo código, se reemplaza lo anterior.
-    ['Profesionales', 'Categorías', 'Banco (privado)'].forEach(n => removeRows(ss.getSheetByName(n), req.id));
+    [TAB.pro, TAB.cat, TAB.bank].forEach(n => removeRows(ss.getSheetByName(n), req.id));
     duplicate = findDuplicate(sh, d.cedula, d.phone, req.id);
-    const wa = 'https://wa.me/593' + d.phone.slice(1);
-    const allFiles = Object.keys(files).length;
-    sh.appendRow([
-      now, req.id, 'nuevo', d.kind, profile.firstName, profile.lastName, profile.businessName, "'" + d.cedula,
-      d.ruc ? "'" + d.ruc : 'En trámite', "'" + d.phone, wa, d.email, profile.years, profile.bio,
-      d.categories.map(s => CATS[s].name).join(', '),
-      d.categories.map(s => CATS[s].name + ' $' + visitRates[s]).join(' · '),
-      d.cities.map(c => CITIES[c]).join(', '), (d.zones || []).map(z => z.split(':')[1]).join(', '),
-      profile.days.map(i => DAYS[i]).join(' '), d.from, d.to, d.acceptsCash ? 'Sí' : 'No',
-      profile.offHours.map(h => ('0' + h).slice(-2)).join(' '), d.holidays ? 'Sí' : 'No',
-      surcharges.nocturno === undefined ? '' : surcharges.nocturno, surcharges.feriado === undefined ? '' : surcharges.feriado,
-      d.taxRegime, d.eSignature ? 'Sí' : 'No', req.bank.bank + ' · ' + req.bank.type,
-      allFiles + ' archivos', d.rucPending ? 'RUC' : '', folder.getUrl(),
-      profile.preregistro.referredBy, profile.preregistro.heardFrom, d.consentMarketing ? 'Sí' : 'No',
-      profile.preregistro.consentVersion, duplicate, '', '',
-    ]);
-    const cs = ss.getSheetByName('Categorías');
+    const { catStatus: _omit, ...fields } = profile;
+    appendObj(sh, Object.assign({}, fields, {
+      _codigo: req.id, _fecha: now, _seguimiento: 'nuevo', _duplicado: duplicate, _carpeta: folder.getUrl(),
+      _whatsapp: 'https://wa.me/593' + d.phone.slice(1),
+    }));
+    const cs = ss.getSheetByName(TAB.cat);
     d.categories.forEach(s => {
       const ev = catEvidence[s];
-      cs.appendRow([now, req.id, fullName, "'" + d.cedula, "'" + d.phone, d.cities.map(c => CITIES[c]).join(', '),
-        CATS[s].name, services[s].join(', '), visitRates[s], ev.kind, ev.note, ev.reference || '', ev.files.length, 'en_revision']);
+      appendObj(cs, { _codigo: req.id, _nombre: fullName, category: s, catStatus: 'en_revision', visitRate: visitRates[s],
+        services: services[s], evidenceKind: ev.kind, evidenceNote: ev.note, evidenceReference: ev.reference || '', evidenceFiles: ev.files, _carpeta: folder.getUrl() });
     });
-    ss.getSheetByName('Banco (privado)').appendRow([now, req.id, fullName, req.bank.bank, req.bank.type, "'" + req.bank.number, req.bank.holder, "'" + req.bank.holderId]);
+    const b = req.bank;
+    appendObj(ss.getSheetByName(TAB.bank), { _codigo: req.id, _nombre: fullName, bank: b.bank, type: b.type === 'corriente' ? 'corriente' : 'ahorros',
+      number: String(b.number), holder: String(b.holder).trim(), holderId: String(b.holderId) });
   } finally { lock.releaseLock(); }
 
   notifyOwner(req.id, profile, folder.getUrl(), duplicate);
@@ -285,18 +294,79 @@ function validateBank(b, d) {
 }
 
 function findDuplicate(sh, cedula, phone, id) {
-  const n = sh.getLastRow() - 1;
-  if (n < 1) return '';
-  const rows = sh.getRange(2, 2, n, 9).getValues(); // B..J: Código … Celular
-  const hits = rows.filter(r => r[0] !== id && (String(r[6]) === cedula || String(r[8]) === phone)).map(r => r[0]);
-  return hits.length ? 'Sí: ' + hits.join(', ') : '';
+  const rows = readObjs(sh);
+  const hits = rows.filter(r => r._codigo !== id && (String(r.cedula) === cedula || String(r.phone) === phone)).map(r => r._codigo);
+  return hits.length ? hits.join(', ') : '';
 }
 
 function removeRows(sh, id) {
   const n = sh.getLastRow() - 1;
   if (n < 1) return;
-  const ids = sh.getRange(2, 2, n, 1).getValues();
+  const ids = sh.getRange(2, 1, n, 1).getValues(); // columna A = _codigo
   for (let i = ids.length - 1; i >= 0; i--) if (ids[i][0] === id) sh.deleteRow(i + 2);
+}
+
+/** Agrega una fila poniendo cada valor bajo la columna de su mismo nombre. */
+function appendObj(sh, obj) {
+  const head = HEADERS[sh.getName()];
+  sh.appendRow(head.map(h => toCell(obj[h], h)));
+}
+function toCell(v, h) {
+  if (v === undefined || v === null) return '';
+  if (v instanceof Date) return v;
+  if (typeof v === 'object') return JSON.stringify(v);
+  if (TEXT_COLS.indexOf(h) >= 0) return "'" + v;
+  // Evita que un texto que empieza con = + - @ se tome como fórmula.
+  if (typeof v === 'string' && /^[=+\-@]/.test(v)) return "'" + v;
+  return v;
+}
+
+/** Lee una pestaña como lista de objetos {columna: valor}. */
+function readObjs(sh) {
+  const n = sh.getLastRow() - 1;
+  if (n < 1) return [];
+  const head = HEADERS[sh.getName()];
+  return sh.getRange(2, 1, n, head.length).getValues().map(r => {
+    const o = {};
+    head.forEach((h, i) => { o[h] = r[i]; });
+    return o;
+  });
+}
+
+/* ========================== Exportar para Firebase ========================== */
+
+/**
+ * Ejecutar desde el editor cuando toque subir a Firebase. Junta las tres
+ * pestañas (con lo que hayas aprobado o corregido en la hoja) y deja en la
+ * carpeta el archivo firestore-providers.json:
+ *   [{ codigo, provider: {…providers/{uid}}, banco: {…private/banco}, carpeta }]
+ * Los archivos de docs y catEvidence van con su id de Drive; el script de
+ * importación los sube a Storage y crea la cuenta (uid) de cada profesional.
+ */
+function exportarFirestore() {
+  const ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  const parse = (v, h) => {
+    if (v === '' || v === null) return undefined;
+    if (['categories', 'services', 'visitRates', 'catEvidence', 'cities', 'days', 'offHours', 'surcharges', 'docs', 'preregistro', 'evidenceFiles'].indexOf(h) >= 0) {
+      return typeof v === 'string' ? JSON.parse(v) : v;
+    }
+    if (TEXT_COLS.indexOf(h) >= 0) return v instanceof Date ? Utilities.formatDate(v, Session.getScriptTimeZone(), 'HH:mm') : String(v);
+    return v;
+  };
+  const cats = readObjs(ss.getSheetByName(TAB.cat));
+  const banks = readObjs(ss.getSheetByName(TAB.bank));
+  const out = readObjs(ss.getSheetByName(TAB.pro)).filter(r => r._codigo).map(r => {
+    const provider = {};
+    Object.keys(r).forEach(h => { if (h[0] !== '_') { const v = parse(r[h], h); if (v !== undefined) provider[h] = v; } });
+    provider.catStatus = {};
+    cats.filter(c => c._codigo === r._codigo).forEach(c => { provider.catStatus[c.category] = c.catStatus || 'en_revision'; });
+    const b = banks.find(x => x._codigo === r._codigo);
+    const banco = b ? { bank: b.bank, type: b.type, number: String(b.number), holder: b.holder, holderId: String(b.holderId) } : null;
+    return { codigo: r._codigo, uid: r._uid || '', provider: provider, banco: banco, carpeta: r._carpeta };
+  });
+  const folder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
+  writeJson(folder, 'firestore-providers.json', out);
+  Logger.log(out.length + ' profesionales exportados a firestore-providers.json en ' + folder.getUrl());
 }
 
 /* ================================ Correos ================================ */

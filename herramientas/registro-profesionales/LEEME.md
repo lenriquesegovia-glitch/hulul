@@ -41,13 +41,48 @@ Si quieres un enlace más corto, usa un acortador (bit.ly u otro) con un nombre 
 
 Hoja: **1C97wrHqgCq5yGUEmyYNHizLglkdnPiY6hKVZSqflR_I**. Fotos y documentos: carpeta **RESPALDO DE PROVEEDORES** (1ZpZs19-_cT12vw-2oVLGt5yPfrlzQB0L). Para cambiarlas, edita `SHEET_ID` y `FOLDER_ID` en `CONFIG`.
 
-**Hoja "Profesionales":** una fila por profesional con todo el registro, enlace de WhatsApp, enlace a su carpeta, columna **Estado** (nuevo, contactado, en_revision, observado, aprobado, rechazado), **Posible duplicado** (misma cédula o celular) y **Notas**.
+### Estructura de la hoja (igual a Firestore)
 
-**Hoja "Categorías":** una fila por profesional y categoría (tarifa, trabajos, cómo se validó), para ver cuántos tienes por oficio y ciudad.
+Cada pestaña es una parte de Firestore y cada columna se llama exactamente igual que el campo. Las columnas que empiezan con `_` son de control y **no se suben**. Listas y objetos van en formato JSON dentro de la celda.
 
-**Hoja "Banco (privado)":** la cuenta bancaria de cada profesional. No compartas esta pestaña.
+**Pestaña `providers`** → documento `providers/{uid}`, una fila por profesional.
 
-**Carpeta de cada profesional**, dentro de **RESPALDO DE PROVEEDORES** (`Apellido Nombre · cédula · RP-XXXXXXXX`): sus documentos (`doc_…`), certificados o fotos de trabajos por categoría (`ev_…`), `datos.json` (perfil con los campos de Firestore, `status: en_revision`) y `banco.json` (igual que `providers/{uid}/private/banco`).
+| Columna | Qué es | Ejemplo |
+|---|---|---|
+| `_codigo` | Código del registro (columna A) | RP-5XP6MUNB |
+| `_fecha` | Fecha del registro | 21/10/2026 21:30 |
+| `_seguimiento` | Tu control: nuevo, contactado, documentos pendientes, listo | nuevo |
+| `_duplicado` | Otros registros con la misma cédula o celular | RP-AB12CD34 |
+| `_carpeta` | Enlace a su carpeta de documentos | https://drive.google.com/… |
+| `_whatsapp` | Enlace directo a su WhatsApp | https://wa.me/593991234567 |
+| `_notas` | Tus notas | |
+| `_uid` | Se llena al migrar (uid de Firebase) | |
+| `status` | **Lo cambias tú**: en_revision, observado, aprobado, rechazado | en_revision |
+| `kind` | persona o empresa | persona |
+| `firstName`, `lastName`, `businessName` | Nombres, apellidos, razón social | Juan · Vargas · |
+| `cedula`, `ruc`, `phone`, `email` | Texto (conservan el 0 inicial) | 0926687856 · 0926687856001 · 0991234567 |
+| `years`, `bio` | Años de experiencia y presentación | 5 · Plomero con… |
+| `categories` | Categorías (JSON) | ["plomeria","electricidad"] |
+| `services` | Trabajos por categoría | {"plomeria":["Destape de tuberías"]} |
+| `visitRates` | Tarifa por visita por categoría | {"plomeria":20} |
+| `catEvidence` | Cómo valida cada categoría; `files` = ids de Drive | {"plomeria":{"kind":"certificado","note":"SECAP 2019","files":["1Ab…"]}} |
+| `cities`, `days` | Ciudades y días (0 = domingo) | ["guayaquil"] · [1,2,3,4,5,6] |
+| `from`, `to`, `acceptsCash` | Horario y efectivo | 08:00 · 17:00 · TRUE |
+| `offHours`, `holidays`, `surcharges` | Fuera de horario, feriados y recargos | [19,20] · FALSE · {"nocturno":10} |
+| `taxRegime`, `eSignature` | Régimen SRI y firma electrónica (vacío si respondió "No sé") | rimpe_popular · FALSE |
+| `docs` | Documentos con su id de Drive | {"cedulaFrente":{"driveId":"1Xy…","name":"doc_cedulaFrente.jpg"}} |
+| `consentPrivacy`, `consentMarketing` | Autorizaciones | TRUE · TRUE |
+| `preregistro` | Datos solo de este registro (código, RUC en trámite, zonas, invitado por, cómo se enteró) | {"rucPending":false,…} |
+
+**Pestaña `providers.catStatus`** → campo `catStatus` del profesional. Una fila por profesional y categoría. Aquí **apruebas cada categoría** cambiando `catStatus` (en_revision, observado, aprobado, rechazado). Columnas: `_codigo`, `_nombre`, `category`, `catStatus`, `visitRate`, `services`, `evidenceKind`, `evidenceNote`, `evidenceReference`, `evidenceFiles`, `_carpeta`.
+
+**Pestaña `providers.private.banco`** → documento `providers/{uid}/private/banco`. Columnas: `_codigo`, `_nombre`, `bank`, `type`, `number`, `holder`, `holderId`. No compartas esta pestaña.
+
+Puedes corregir cualquier celda a mano (por ejemplo un nombre mal escrito): lo que esté en la hoja es lo que se sube.
+
+### Carpetas
+
+Dentro de **RESPALDO DE PROVEEDORES**, una carpeta por profesional (`Apellido Nombre · cédula · RP-XXXXXXXX`) con sus documentos (`doc_…`), certificados o fotos de trabajos (`ev_…`), `datos.json` y `banco.json` (respaldo de lo que envió).
 
 Por cada registro te llega un correo con el resumen, la carpeta y el WhatsApp del profesional.
 
@@ -62,7 +97,9 @@ Por cada registro te llega un correo con el resumen, la carpeta y el WhatsApp de
 
 ## Cuando llegue la app: pasar a Firebase
 
-Cada `datos.json` ya tiene la forma de `providers/{uid}`. Falta un script (lo hacemos cuando toque) que por cada carpeta cree la cuenta en Firebase Authentication, suba los archivos a Storage, escriba `providers/{uid}` y `private/banco`, y marque **Migrado a Firebase**. El profesional acepta los términos y el mandato de cobro al entrar por primera vez a la app.
+1. Revisa la hoja: pon `status` = aprobado (u otro) en `providers` y aprueba las categorías en `providers.catStatus`.
+2. En el editor de Apps Script ejecuta **exportarFirestore**. Deja en la carpeta RESPALDO DE PROVEEDORES el archivo `firestore-providers.json`, con un elemento por profesional: `{ codigo, uid, provider, banco, carpeta }`. `provider` ya es el documento `providers/{uid}` completo (con `catStatus` armado desde su pestaña) y `banco` es `private/banco`.
+3. Con ese archivo, el script de importación (lo hacemos cuando toque) crea la cuenta de cada profesional en Firebase Authentication, sube sus archivos de Drive a Storage, escribe los documentos y anota el `_uid` en la hoja. El profesional acepta los términos y el mandato de cobro al entrar por primera vez a la app.
 
 ## Cuidados
 
