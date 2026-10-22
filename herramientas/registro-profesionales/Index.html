@@ -861,11 +861,33 @@ document.addEventListener('click', async e=>{
 });
 window.addEventListener('beforeunload', e=>{ if (S.view==='enviando' || (S.view==='pro' && Object.keys(FILES).length)) { e.preventDefault(); e.returnValue=''; } });
 
-function start(){ if (ref) S.d.referredBy = S.d.referredBy || ref; render(); }
+let started = false, startError = '';
+function start(){
+  if (started) return; started = true;
+  try { if (ref) S.d.referredBy = S.d.referredBy || ref; render(); }
+  catch(e) { showFatal(e); }
+}
+function showWarn(m){
+  const app = document.getElementById('app'); if (!app) return;
+  const d = document.createElement('div'); d.className = 'alert err'; d.textContent = 'Aviso del servidor: ' + m; app.prepend(d);
+}
+/** Si algo falla al abrir, se muestra el motivo en vez de quedarse en "Cargando…". */
+function showFatal(e){
+  const m = (e && (e.message || e.reason && e.reason.message)) || String(e || 'Error desconocido');
+  const app = document.getElementById('app');
+  if (app) app.innerHTML = '<div class="card"><h2>No se pudo abrir el formulario</h2><p class="small muted">Recarga la página. Si sigue igual, envía una captura de este mensaje:</p><div class="alert err">'+esc(m)+(startError?'<br>'+esc(startError):'')+'</div></div>';
+}
+window.addEventListener('error', ev => { if (!started || S.view==='inicio') showFatal(ev.error || ev.message); });
 if (GS) {
-  google.script.url.getLocation(loc => { ref = (loc.parameter && loc.parameter.ref) || ref;
-    google.script.run.withSuccessHandler(c => { CFG = Object.assign(CFG, c || {}); start(); }).withFailureHandler(start).config();
-  });
+  // Si el servidor no responde en 8 segundos, la página abre igual.
+  setTimeout(()=>{ if (!started) { startError = 'El servidor no respondió al abrir (config).'; start(); } }, 8000);
+  try {
+    google.script.url.getLocation(loc => { ref = (loc && loc.parameter && loc.parameter.ref) || ref; if (ref && !S.d.referredBy) S.d.referredBy = ref; });
+  } catch(e) {}
+  google.script.run
+    .withSuccessHandler(c => { CFG = Object.assign(CFG, c || {}); start(); })
+    .withFailureHandler(e => { startError = 'Servidor: ' + ((e && e.message) || e); console.error(e); start(); if (CFG.verify === undefined) showWarn(startError); })
+    .config();
 } else { CFG = { controller:'el responsable del registro', contact:'', url:location.origin+location.pathname }; start(); }
 </script>
 </body>

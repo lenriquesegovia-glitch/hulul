@@ -113,6 +113,27 @@ function setup() {
 }
 const HEADERS_FIRST = TAB.pro;
 
+/**
+ * Ejecutar desde el editor si algo no funciona: revisa hoja, carpeta, lector de documentos
+ * (Drive API + OCR), correo y SRI, y deja el resultado en el registro de ejecución.
+ */
+function diagnostico() {
+  const out = [];
+  const t = (name, fn) => { try { out.push('✔ ' + name + (fn() ? ': ' + fn.res : '')); } catch (e) { out.push('✘ ' + name + ': ' + (e && e.message || e)); } };
+  t('Hoja', () => { SpreadsheetApp.openById(CONFIG.SHEET_ID).getName(); return false; });
+  t('Carpeta', () => { DriveApp.getFolderById(CONFIG.FOLDER_ID).getName(); return false; });
+  t('Servicio Drive API', () => { if (typeof Drive === 'undefined') throw new Error('no está activado (Servicios → + → Drive API)'); return false; });
+  t('Lector de documentos (OCR)', () => {
+    const tmp = DriveApp.getFolderById(CONFIG.FOLDER_ID).createFile(Utilities.newBlob('PRUEBA OCR 0926687856', 'text/plain', 'ocr-prueba.txt'));
+    try { const txt = ocrText(tmp); if (txt.indexOf('0926687856') < 0) throw new Error('no devolvió el texto esperado'); } finally { tmp.setTrashed(true); }
+    return false;
+  });
+  t('Correo (cupo restante hoy)', function f() { f.res = MailApp.getRemainingDailyQuota(); return true; });
+  t('Consulta al SRI', function f() { const r = sriLookup('1790016919001'); f.res = r.checked ? 'responde' : 'no responde (' + r.note + '); se usará solo el certificado'; return true; });
+  Logger.log(out.join('\n'));
+  return out;
+}
+
 /* ================================ Web app ================================ */
 
 function doGet() {

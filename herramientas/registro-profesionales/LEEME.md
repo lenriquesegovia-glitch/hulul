@@ -129,6 +129,11 @@ Hay casos que pasan pero quedan marcados para **revisión manual**: parecido dud
 2. En el editor de Apps Script ejecuta **exportarFirestore**. Deja en la carpeta RESPALDO DE PROVEEDORES el archivo `firestore-providers.json`, con un elemento por profesional: `{ codigo, uid, provider, banco, carpeta }`. `provider` ya es el documento `providers/{uid}` completo (con `catStatus` armado desde su pestaña) y `banco` es `private/banco`.
 3. Con ese archivo, el script de importación (lo hacemos cuando toque) crea la cuenta de cada profesional en Firebase Authentication, sube sus archivos de Drive a Storage, escribe los documentos y anota el `_uid` en la hoja. El profesional acepta los términos y el mandato de cobro al entrar por primera vez a la app.
 
+## Si algo no funciona
+
+- **Se queda en "Cargando…" o sale un aviso del servidor:** casi siempre faltan permisos o la versión nueva. En el editor, ejecuta **setup** y acepta todos los permisos; luego **Implementar → Administrar implementaciones → lápiz → Nueva versión**.
+- **Diagnóstico:** en el editor, elige la función **diagnostico** y toca **Ejecutar**. En el registro de ejecución verás ✔ o ✘ para la hoja, la carpeta, el servicio Drive API, el lector de documentos, el correo y el SRI.
+
 ## Cuidados
 
 - La hoja y la carpeta tienen documentos de identidad y cuentas bancarias: no las compartas con enlace público.
