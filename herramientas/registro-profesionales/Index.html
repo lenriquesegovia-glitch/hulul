@@ -131,6 +131,7 @@ const TAX_REGIMES = [
   { value:'general', label:'Régimen general', help:'Facturas con IVA (obligados a llevar contabilidad, empresas y el resto).' },
   { value:'no_se', label:'No sé / aún no tengo RUC', help:'Te ayudamos a revisarlo antes de activar tu cuenta.' },
 ];
+const ESIG_ISSUERS = ['Security Data','Banco Central del Ecuador','ANF AC','Uanataca','Eclipsoft','Consejo de la Judicatura','Otra','No recuerdo'];
 const BANKS = ['Banco Pichincha','Banco Guayaquil','Banco del Pacífico','Produbanco','Banco Bolivariano','Banco Internacional','Banco del Austro','Banco de Machala','Banco General Rumiñahui','Banco Solidario','Banco ProCredit','Banco de Loja','Cooperativa JEP','Cooperativa Jardín Azuayo','Otro banco o cooperativa'];
 const DAYS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 const HOURS = Array.from({length:16},(_,i)=>String(6+i).padStart(2,'0')+':00');
@@ -154,7 +155,7 @@ const EMPTY = () => ({
   years:'', bio:'', categories:[], services:{}, otherServices:{}, customNames:{}, visitRates:{}, catEvidence:{},
   cities:[], zones:[], days:[1,2,3,4,5,6], from:'08:00', to:'17:00', acceptsCash:true,
   offHours:[], holidays:false, surcharges:{ nocturno:'', feriado:'' },
-  taxRegime:'', eSignature:false,
+  taxRegime:'', eSignature:false, eSignatureIssuer:'', eSignatureExpires:'',
   bank:{ bank:'', type:'ahorros', number:'', holder:'', holderId:'' },
   referredBy: ref, heardFrom:'', consentPrivacy:false, consentTruth:false, consentMarketing:true,
 });
@@ -321,7 +322,12 @@ function viewPro(){
       <div class="seg" style="flex-direction:column;align-items:stretch">
         ${TAX_REGIMES.map(r=>`<label><input type="radio" name="taxRegime" value="${r.value}" data-bind="taxRegime" ${d.taxRegime===r.value?'checked':''}><span style="display:block;border-radius:12px;padding:10px 14px"><b>${r.label}</b><br><small style="font-weight:500;opacity:.85">${r.help}</small></span></label>`).join('')}
       </div>
-      ${check('eSignature','Tengo firma electrónica (archivo .p12) para emitir facturas.')}
+      ${check('eSignature','Tengo firma electrónica (archivo .p12) para emitir facturas.',{rerender:true})}
+      ${d.eSignature ? `<div class="row two">
+        <label class="f"><span>¿Quién la emitió?</span><select data-bind="eSignatureIssuer"><option value="">Elegir…</option>${ESIG_ISSUERS.map(o=>`<option ${d.eSignatureIssuer===o?'selected':''}>${o}</option>`).join('')}</select></label>
+        <label class="f"><span>¿Cuándo caduca?</span><input type="month" data-bind="eSignatureExpires" value="${esc(d.eSignatureExpires)}"><small class="help">Mes y año. Está en el correo o certificado que te dieron.</small></label>
+      </div>
+      <p class="small muted" style="margin-top:-6px">No subas aquí tu archivo ni tu clave: te los pediremos más adelante por un canal seguro.</p>` : ''}
       <div class="card">
         <h3>Cuenta para recibir tus pagos <span class="req">*</span></h3>
         <p class="small muted">Aquí recibirás tus pagos. Debe estar a tu nombre o al de tu empresa.</p>
@@ -461,6 +467,10 @@ function validate(step){
   }
   if (step===4) {
     if (!d.taxRegime) return 'Elige tu régimen en el SRI (o "No sé").';
+    if (d.eSignature) {
+      if (!d.eSignatureIssuer) return 'Elige quién emitió tu firma electrónica (o "No recuerdo").';
+      if (d.eSignatureExpires && !/^\d{4}-\d{2}$/.test(d.eSignatureExpires)) return 'Revisa la fecha de caducidad de tu firma.';
+    }
     const b = d.bank;
     if (!b.bank) return 'Elige el banco de tu cuenta.';
     if (!/^\d{5,20}$/.test(b.number.trim())) return 'Escribe el número de cuenta (solo dígitos).';

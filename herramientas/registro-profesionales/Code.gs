@@ -216,6 +216,9 @@ function saveProvider(req) {
       referredBy: String(d.referredBy || '').slice(0, 80), heardFrom: String(d.heardFrom || '').slice(0, 40),
       // Categorías nuevas que propuso el profesional (otra-1 → nombre). Al migrar se asignan a una categoría de la app.
       customNames: customNames,
+      // Firma electrónica: solo quién la emitió y cuándo caduca (AAAA-MM). El archivo y la clave nunca se piden aquí.
+      eSignatureIssuer: d.eSignature ? String(d.eSignatureIssuer || '').slice(0, 40) : '',
+      eSignatureExpires: d.eSignature && /^\d{4}-\d{2}$/.test(String(d.eSignatureExpires)) ? String(d.eSignatureExpires) : '',
     },
   };
   if (['general', 'rimpe_emprendedor', 'rimpe_popular'].indexOf(d.taxRegime) >= 0) profile.taxRegime = d.taxRegime;
