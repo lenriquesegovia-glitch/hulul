@@ -25,7 +25,8 @@ Usa la cuenta de Google que quieras que sea dueña de los datos.
    - `CONTACT_EMAIL`: un correo para que el profesional pida corregir o borrar sus datos. Vacío = no se muestra. Conviene uno neutro (no @hululec.com).
    - `CONFIRM_TO_APPLICANT`: si es `true`, el profesional recibe un correo de confirmación sin marca, enviado desde tu cuenta de Google. Está en `false`.
 5. Arriba, en la lista de funciones, elige **setup** y toca **Ejecutar**. Acepta los permisos (Drive, Sheets y correo). Si sale "Google no verificó esta app", toca *Configuración avanzada → Ir a Registro de profesionales*.
-   - Crea en tu Drive la carpeta **Registro de profesionales** con la hoja del mismo nombre y la subcarpeta **Profesionales**.
+   - Usa la hoja y la carpeta ya definidas en `CONFIG` (`SHEET_ID` y `FOLDER_ID`) y crea en la hoja las pestañas **Profesionales**, **Categorías** y **Banco (privado)**. No borra nada de lo que la hoja ya tenga.
+   - Haz la instalación con una cuenta que pueda **editar** esa hoja y esa carpeta.
 6. **Implementar → Nueva implementación → Tipo: Aplicación web**.
    - Ejecutar como: **Yo**.
    - Quién tiene acceso: **Cualquier usuario**.
@@ -38,13 +39,15 @@ Si quieres un enlace más corto, usa un acortador (bit.ly u otro) con un nombre 
 
 ## Qué se guarda
 
+Hoja: **1C97wrHqgCq5yGUEmyYNHizLglkdnPiY6hKVZSqflR_I**. Fotos y documentos: carpeta **RESPALDO DE PROVEEDORES** (1ZpZs19-_cT12vw-2oVLGt5yPfrlzQB0L). Para cambiarlas, edita `SHEET_ID` y `FOLDER_ID` en `CONFIG`.
+
 **Hoja "Profesionales":** una fila por profesional con todo el registro, enlace de WhatsApp, enlace a su carpeta, columna **Estado** (nuevo, contactado, en_revision, observado, aprobado, rechazado), **Posible duplicado** (misma cédula o celular) y **Notas**.
 
 **Hoja "Categorías":** una fila por profesional y categoría (tarifa, trabajos, cómo se validó), para ver cuántos tienes por oficio y ciudad.
 
 **Hoja "Banco (privado)":** la cuenta bancaria de cada profesional. No compartas esta pestaña.
 
-**Carpeta de cada profesional** (`Profesionales/Apellido Nombre · cédula · RP-XXXXXXXX`): sus documentos (`doc_…`), certificados o fotos de trabajos por categoría (`ev_…`), `datos.json` (perfil con los campos de Firestore, `status: en_revision`) y `banco.json` (igual que `providers/{uid}/private/banco`).
+**Carpeta de cada profesional**, dentro de **RESPALDO DE PROVEEDORES** (`Apellido Nombre · cédula · RP-XXXXXXXX`): sus documentos (`doc_…`), certificados o fotos de trabajos por categoría (`ev_…`), `datos.json` (perfil con los campos de Firestore, `status: en_revision`) y `banco.json` (igual que `providers/{uid}/private/banco`).
 
 Por cada registro te llega un correo con el resumen, la carpeta y el WhatsApp del profesional.
 

@@ -5,17 +5,21 @@
  *
  * Cada profesional queda con:
  *  - una fila en la hoja "Profesionales" (y una por categoría en "Categorías"),
- *  - una carpeta en Drive "Profesionales/<Apellido Nombre> · <cédula> · <código>"
+ *  - una carpeta "<Apellido Nombre> · <cédula> · <código>" dentro de CONFIG.FOLDER_ID
  *    con sus documentos, fotos de trabajos y datos.json (perfil con los mismos
  *    campos de Firestore providers/{uid}, listo para migrar),
  *  - su cuenta bancaria (obligatoria): una fila en "Banco (privado)" y banco.json.
  *
  * Instalación: ver LEEME.md. Resumen: crear Code.gs e Index.html en un
- * proyecto de Apps Script, ejecutar setup() una vez e implementar como
+ * proyecto de Apps Script, revisar CONFIG, ejecutar setup() una vez e implementar como
  * Aplicación web (Ejecutar como: yo · Acceso: cualquier usuario).
  */
 
 const CONFIG = {
+  /** Google Sheet donde se escriben los registros. */
+  SHEET_ID: '1C97wrHqgCq5yGUEmyYNHizLglkdnPiY6hKVZSqflR_I',
+  /** Carpeta de Drive "RESPALDO DE PROVEEDORES": una subcarpeta por profesional con sus fotos y documentos. */
+  FOLDER_ID: '1ZpZs19-_cT12vw-2oVLGt5yPfrlzQB0L',
   /** Responsable del tratamiento de datos que se nombra en la autorización (LOPDP). */
   CONTROLLER: 'Corporación Coffeeport Cía. Ltda.',
   /** Correo que ve el profesional para dudas o para pedir que borren sus datos (vacío = no se muestra). */
@@ -48,30 +52,31 @@ const HEADERS = {
 
 /* ============================== Instalación ============================== */
 
-/** Ejecutar UNA vez desde el editor: crea la carpeta, la hoja y las pestañas. */
+/**
+ * Ejecutar UNA vez desde el editor: conecta la hoja y la carpeta de CONFIG
+ * y crea en la hoja las pestañas que falten (no borra nada de lo que ya tenga).
+ */
 function setup() {
-  const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('SHEET_ID')) {
-    Logger.log('Ya estaba configurado.\nHoja: ' + SpreadsheetApp.openById(props.getProperty('SHEET_ID')).getUrl() +
-      '\nCarpeta: ' + DriveApp.getFolderById(props.getProperty('ROOT_ID')).getUrl());
-    return;
-  }
-  const root = DriveApp.createFolder('Registro de profesionales');
-  const pros = root.createFolder('Profesionales');
-  const ss = SpreadsheetApp.create('Registro de profesionales');
-  DriveApp.getFileById(ss.getId()).moveTo(root);
-  Object.keys(HEADERS).forEach((name, i) => {
-    const sh = i === 0 ? ss.getSheets()[0].setName(name) : ss.insertSheet(name);
-    sh.getRange(1, 1, 1, HEADERS[name].length).setValues([HEADERS[name]])
-      .setFontWeight('bold').setBackground('#7A1E2C').setFontColor('#FFFFFF');
-    sh.setFrozenRows(1);
+  const ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  const folder = DriveApp.getFolderById(CONFIG.FOLDER_ID);
+  Object.keys(HEADERS).forEach(name => {
+    let sh = ss.getSheetByName(name);
+    if (!sh) {
+      // Si la hoja está recién creada y vacía, se usa su primera pestaña.
+      const first = ss.getSheets()[0];
+      sh = (ss.getSheets().length === 1 && first.getLastRow() === 0 && !ss.getSheetByName(HEADERS_FIRST)) ? first.setName(name) : ss.insertSheet(name);
+    }
+    if (sh.getLastRow() === 0) {
+      sh.getRange(1, 1, 1, HEADERS[name].length).setValues([HEADERS[name]])
+        .setFontWeight('bold').setBackground('#1F3A5F').setFontColor('#FFFFFF');
+      sh.setFrozenRows(1);
+    }
   });
-  const estado = ss.getSheetByName('Profesionales').getRange('C2:C');
-  estado.setDataValidation(SpreadsheetApp.newDataValidation()
+  ss.getSheetByName('Profesionales').getRange('C2:C').setDataValidation(SpreadsheetApp.newDataValidation()
     .requireValueInList(['nuevo', 'contactado', 'en_revision', 'observado', 'aprobado', 'rechazado'], true).build());
-  props.setProperties({ SHEET_ID: ss.getId(), ROOT_ID: root.getId(), PROS_ID: pros.getId() });
-  Logger.log('Listo.\nHoja: ' + ss.getUrl() + '\nCarpeta: ' + root.getUrl());
+  Logger.log('Listo.\nHoja: ' + ss.getUrl() + '\nCarpeta de archivos: ' + folder.getUrl());
 }
+const HEADERS_FIRST = 'Profesionales';
 
 /* ================================ Web app ================================ */
 
@@ -120,7 +125,7 @@ function saveFile(req) {
 }
 
 function providerFolder(id) {
-  const parent = DriveApp.getFolderById(prop('PROS_ID'));
+  const parent = DriveApp.getFolderById(CONFIG.FOLDER_ID);
   const it = parent.searchFolders('title contains "' + id + '"');
   if (it.hasNext()) return it.next();
   const lock = LockService.getScriptLock();
@@ -205,7 +210,7 @@ function saveProvider(req) {
   lock.waitLock(30000);
   let duplicate = '';
   try {
-    const ss = SpreadsheetApp.openById(prop('SHEET_ID'));
+    const ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
     const sh = ss.getSheetByName('Profesionales');
     // Si reintenta el envío con el mismo código, se reemplaza lo anterior.
     ['Profesionales', 'Categorías', 'Banco (privado)'].forEach(n => removeRows(ss.getSheetByName(n), req.id));
@@ -348,7 +353,6 @@ function rateRange(slug) {
 }
 function num(x) { const n = Number(x); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; }
 function checkId(id) { if (!/^RP-[A-Z0-9]{8}$/.test(String(id))) fail('Código de registro inválido.'); }
-function prop(k) { const v = PropertiesService.getScriptProperties().getProperty(k); if (!v) fail('Falta ejecutar setup().'); return v; }
 function writeJson(folder, name, obj) {
   const old = folder.getFilesByName(name);
   while (old.hasNext()) old.next().setTrashed(true);
