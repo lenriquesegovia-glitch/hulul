@@ -171,7 +171,7 @@ function newId(){ const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; const r=
 const $ = (s,el=document)=>el.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const isCustom = slug => /^otra-\d+$/.test(slug);
-const catBy = slug => CATS.find(c=>c.slug===slug) || { slug, name:(S.d.customNames[slug]||'').trim() || 'Nueva categoría', servicios:[], custom:true };
+const catBy = slug => CATS.find(c=>c.slug===slug) || { slug, name:(S.d.customNames[slug]||'').trim() || 'Actividad nueva', servicios:[], custom:true };
 function getPath(o,p){ return p.split('.').reduce((x,k)=>x==null?undefined:x[k],o); }
 function setPath(o,p,v){ const ks=p.split('.'); let x=o; ks.slice(0,-1).forEach(k=>{ if(x[k]==null||typeof x[k]!=='object') x[k]={}; x=x[k]; }); x[ks.at(-1)]=v; }
 
@@ -274,10 +274,13 @@ function viewPro(){
   if (st===1) {
     body = `
       <h2>¿Qué servicios ofreces?</h2>
-      <p class="muted small">Elige todas las categorías que haces y, en cada una, sus subcategorías (los trabajos que haces). Si tu oficio no está en la lista, agrégalo con "Otra categoría".</p>
-      <span class="lbl">Categorías</span>
+      <p class="muted small">Elige tus actividades (categorías) y, en cada una, las subcategorías: los trabajos que haces.</p>
+      <div class="alert info" style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+        <span><b>¿No encuentras tu actividad?</b><br>Agrégala con sus subcategorías.</span>
+        <button type="button" class="btn primary small" data-act="addcat">+ Agregar mi actividad</button>
+      </div>
+      <span class="lbl">Actividades</span>
       ${chips('categories', CATS.map(c=>({value:c.slug,label:c.name})), {rerender:true})}
-      <button type="button" class="btn secondary small" data-act="addcat" style="margin:-4px 0 16px">+ Otra categoría</button>
       ${d.categories.map(catBox).join('')}`;
   }
   if (st===2) {
@@ -370,8 +373,8 @@ function catBox(slug){
   const ev = d.catEvidence[slug] || (d.catEvidence[slug] = { kind:'', note:'', reference:'' });
   const evFiles = Object.keys(FILES).filter(k=>k.startsWith(`ev_${slug}_`));
   return `<div class="catbox">
-    ${c.custom ? `<h3>Otra categoría <button type="button" class="btn secondary small" data-act="rmcat" data-slug="${slug}">Quitar</button></h3>
-      ${field(`customNames.${slug}`,'Nombre de la categoría',{ph:'Ej.: Herrería, Vidriería, Tapicería'})}
+    ${c.custom ? `<h3>Actividad nueva <button type="button" class="btn secondary small" data-act="rmcat" data-slug="${slug}">Quitar</button></h3>
+      ${field(`customNames.${slug}`,'Nombre de tu actividad (categoría)',{ph:'Ej.: Herrería, Vidriería, Tapicería'})}
       ${field(`otherServices.${slug}`,'Subcategorías (trabajos que haces)',{ph:'Ej.: Puertas de hierro, Rejas, Soldadura',help:'Sepáralas con comas.'})}`
     : `<h3>${esc(c.name)}</h3>
       <span class="lbl">Subcategorías (trabajos que haces)</span>
@@ -434,10 +437,10 @@ function validate(step){
     if (d.bio.trim().length<20) return 'Preséntate en al menos una o dos líneas.';
   }
   if (step===1) {
-    if (!d.categories.length) return 'Elige al menos una categoría.';
+    if (!d.categories.length) return 'Elige o agrega al menos una actividad.';
     for (const s of d.categories) {
       const c = catBy(s), ev = d.catEvidence[s] || {};
-      if (c.custom && (d.customNames[s]||'').trim().length<3) return 'Escribe el nombre de la categoría que agregaste.';
+      if (c.custom && (d.customNames[s]||'').trim().length<3) return 'Escribe el nombre de la actividad que agregaste.';
       if (!(d.services[s]||[]).length && !(d.otherServices[s]||'').trim()) return `${c.name}: ${c.custom?'escribe':'marca'} al menos una subcategoría.`;
       const v = +d.visitRates[s];
       if (!(v > 0)) return `${c.name}: escribe tu tarifa por visita.`;
@@ -592,7 +595,7 @@ document.addEventListener('click', e=>{
   const a = e.target.closest('[data-act]'); if (!a) return;
   const act = a.dataset.act;
   if (act==='home') { S.view='inicio'; error=''; render(); scrollTo(0,0); }
-  if (act==='addcat') { let n=1; while (S.d.categories.includes('otra-'+n)) n++; S.d.categories.push('otra-'+n); S.d.customNames['otra-'+n]=''; persist(); render(); return; }
+  if (act==='addcat') { let n=1; while (S.d.categories.includes('otra-'+n)) n++; S.d.categories.push('otra-'+n); S.d.customNames['otra-'+n]=''; persist(); render(); const el=document.querySelector(`[data-bind="customNames.otra-${n}"]`); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.focus(); } return; }
   if (act==='rmcat') { const s=a.dataset.slug; S.d.categories=S.d.categories.filter(x=>x!==s); Object.keys(FILES).filter(k=>k.startsWith(`ev_${s}_`)).forEach(k=>delete FILES[k]); persist(); render(); return; }
   if (act==='back') { S.step--; error=''; render(); scrollTo(0,0); }
   if (act==='next') { const m = validate(S.step); if (m) return fail(m); S.step++; error=''; render(); scrollTo(0,0); }

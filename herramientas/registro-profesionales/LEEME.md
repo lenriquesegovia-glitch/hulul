@@ -89,7 +89,7 @@ Por cada registro te llega un correo con el resumen, la carpeta y el WhatsApp de
 ## Detalles del formulario
 
 - Los mismos pasos del registro de la app: datos (profesional independiente o empresa), servicios con tarifa por visita libre (sin rango mínimo ni máximo) y validación por categoría, zonas y horario (incluye noche y feriados con recargo), documentos, cobros y envío.
-- **Categorías y subcategorías:** elige de la lista y marca las subcategorías (trabajos) que hace; puede sumar subcategorías propias. Si su oficio no está, toca **+ Otra categoría** y escribe el nombre y sus subcategorías. Esas quedan con `category` = `otra-1`, `otra-2`… y su nombre en `_categoria` y en `preregistro.customNames`; al migrar se asignan a una categoría de la app (o se crea la categoría nueva).
+- **Categorías y subcategorías:** elige de la lista y marca las subcategorías (trabajos) que hace; puede sumar subcategorías propias. Si su oficio no está, toca **+ Agregar mi actividad** y escribe el nombre y sus subcategorías. Esas quedan con `category` = `otra-1`, `otra-2`… y su nombre en `_categoria` y en `preregistro.customNames`; al migrar se asignan a una categoría de la app (o se crea la categoría nueva).
 - **Firma electrónica:** pregunta si tiene, quién la emitió y cuándo caduca (quedan en `eSignature` y en `preregistro.eSignatureIssuer` / `preregistro.eSignatureExpires`). El archivo .p12 y su clave **no** se piden aquí: se cargan después, al activar la cuenta, directo en el proveedor de facturación electrónica.
 - Valida cédula y RUC con el dígito verificador. Permite marcar **"RUC en trámite"** (queda en la columna **Faltan**).
 - La cuenta bancaria es **obligatoria** y debe estar a nombre del profesional o de su empresa.
