@@ -40,6 +40,15 @@
     "experiments": {
       "typedRoutes": true
     },
-    "owner": "lsegovia941"
+    "owner": "lsegovia941",
+    "updates": {
+      "url": "https://u.expo.dev/d696a4a8-5f4e-4503-ae2f-81e18312f227"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d696a4a8-5f4e-4503-ae2f-81e18312f227"
+      }
+    }
   }
 }
