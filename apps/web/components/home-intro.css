@@ -25,9 +25,13 @@
 .hh-visual figcaption { color:#536260; font-size:11px; text-align:right; margin-top:8px; }
 .hh-discovery { padding:24px 0 32px; border-top:1px solid #D5DDD9; }
 .hh-discovery h2,.hh-catalog h2 { font-size:26px; line-height:1.2; color:var(--hh-ink); margin:0 0 16px; }
-.hh-discovery ul { display:flex; gap:24px; padding:0; margin:0; list-style:none; overflow-x:auto; }
-.hh-discovery li { flex:0 0 auto; }
-.hh-discovery a { display:flex; align-items:center; min-height:48px; color:var(--hh-ink); font-size:15px; text-underline-offset:5px; }
+.hh-discovery ul { display:flex; gap:16px; padding:0 0 12px; margin:0; list-style:none; overflow-x:auto; scroll-snap-type:x proximity; scrollbar-width:thin; scrollbar-color:#D5DDD9 transparent; }
+.hh-discovery li { flex:0 0 260px; scroll-snap-align:start; }
+.hh-discovery .hh-featured-card { display:flex; flex-direction:column; height:100%; overflow:hidden; border:1px solid #D5DDD9; border-radius:16px; background:#fff; color:var(--hh-ink); font-size:16px; font-weight:700; text-decoration:none; }
+.hh-featured-card img { display:block; width:100%; height:auto; aspect-ratio:3/2; object-fit:cover; }
+.hh-featured-card > span { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:64px; padding:14px; line-height:1.4; }
+.hh-featured-card > span > span { flex-shrink:0; }
+.hh-photo-note { margin:8px 0 0; font-size:12px; color:#536260; }
 .hh-catalog { padding-top:40px; scroll-margin-top:100px; }
 .hh-catalog > p { margin:0 0 24px; color:#536260; font-size:14px; }
 .hh-catalog .photo-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; }
@@ -51,6 +55,9 @@
  .hh-search input { width:calc(100% - 40px); flex:1; }
  .hh-search button { width:100%; }
  .hh-discovery h2,.hh-catalog h2 { font-size:24px; }
+ .hh-discovery li { flex-basis:164px; }
+ .hh-discovery .hh-featured-card { font-size:14px; }
+ .hh-featured-card > span { padding:12px; gap:8px; }
  .hh-catalog { padding-top:28px; }
  .hh-catalog .photo-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
  .hh-catalog .photo-text { padding:12px; }

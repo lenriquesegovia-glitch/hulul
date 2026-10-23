@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { categories, categoryImage, suggestServices, homeCopy, featuredHomeServices, discoveryTitle } from '@hulul/shared';
+import { categories, categoryImage, getCategory, suggestServices, homeCopy, featuredHomeServices, discoveryTitle } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { ActiveBooking } from '@/components/ActiveBooking';
 import { ProHome } from '@/components/ProHome';
@@ -101,15 +101,19 @@ export default function Home() {
         <View style={{ gap: 12 }}>
           <H2>{discoveryTitle(discovery.mode)}</H2>
           <ScrollView horizontal contentContainerStyle={{ gap: 16 }}>
-          {discovery.items.map((p) => (
-            <Pressable key={p.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/categoria/[slug]', params: { slug: p.categoryId, trabajo: p.label } })} style={[s.listItem, { maxWidth: 250, minHeight: 48 }]}>
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={s.listTitle}>{p.label}</Text>
+          {discovery.items.map((p) => {
+            const category = getCategory(p.categoryId);
+            if (!category) return null;
+            return <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={p.label} onPress={() => router.push({ pathname: '/categoria/[slug]', params: { slug: p.categoryId, trabajo: p.label } })} style={s.featuredCard}>
+              <Image source={{ uri: categoryImage(category.slug, 500) }} style={s.featuredImage} resizeMode="cover" accessible={false} />
+              <View style={s.featuredCaption}>
+                <Text style={[s.listTitle, { flex: 1 }]}>{p.label}</Text>
+                <Icon name="chevronRight" size={18} color={c.primary} />
               </View>
-              <Icon name="chevronRight" size={20} color={c.textMuted} />
-            </Pressable>
-          ))}
+            </Pressable>;
+          })}
           </ScrollView>
+          <Body muted style={{ fontSize: 12 }}>Fotos de referencia</Body>
         </View>
 
         <View onLayout={event => setCatalogY(event.nativeEvent.layout.y)} style={{ gap: 16 }}>
@@ -172,6 +176,9 @@ export default function Home() {
 }
 
 const s = StyleSheet.create({
+  featuredCard: { width: 164, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
+  featuredImage: { width: '100%', aspectRatio: 3 / 2 },
+  featuredCaption: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 64, padding: 12 },
   homeTitle: { fontSize: 38, lineHeight: 42, letterSpacing: -1.4, color: c.primary, fontFamily: font.displayHeavy, marginVertical: 10 },
   homeDescription: { fontSize: 16, lineHeight: 25 },
   homeProcess: { fontSize: 14, lineHeight: 22, color: c.textSecondary, marginTop: 8 },
