@@ -1,10 +1,10 @@
 import { BrandLogo } from '@/components/BrandLogo';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { categories, categoryImage, suggestServices } from '@hulul/shared';
+import { categories, categoryImage, getCategory, suggestServices, homeCopy, featuredHomeServices, discoveryTitle } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { ActiveBooking } from '@/components/ActiveBooking';
 import { ProHome } from '@/components/ProHome';
@@ -14,13 +14,15 @@ import { useUser } from '@/lib/auth';
 import { useProviderStatus } from '@/lib/pros';
 
 
-const popular = [
-  { slug: 'climatizacion', title: 'Mantenimiento de split', sub: 'Limpieza, revisión de gas y drenaje' },
-  { slug: 'limpieza', title: 'Limpieza por horas', sub: 'Casas y departamentos' },
-  { slug: 'plomeria', title: 'Destape de tuberías', sub: 'Fugas, destapes y bombas de agua' },
-];
-
 export default function Home() {
+  const scroll = useRef<ScrollView>(null);
+  const [catalogY, setCatalogY] = useState(0);
+  const [discovery, setDiscovery] = useState(featuredHomeServices);
+  useEffect(() => {
+    let active = true;
+    import('@hulul/shared/firebase').then(m => m.loadHomeDiscovery()).then(result => { if (active) setDiscovery(result); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   const user = useUser();
   const isPro = useProviderStatus(user?.uid) === 'aprobado';
   // Un profesional elige arriba cómo usar la app: como profesional (su día) o como cliente.
@@ -34,7 +36,7 @@ export default function Home() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top']}>
-      <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scroll} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <View style={s.header}>
           <BrandLogo />
           <Pressable accessibilityRole="button" accessibilityLabel="Mi cuenta" onPress={() => router.push('/cuenta')} style={s.location}>
@@ -57,8 +59,10 @@ export default function Home() {
         <ActiveBooking />
 
         <View style={{ gap: 6 }}>
-          <Body muted>Hola</Body>
-          <H1>¿Qué necesitas resolver hoy?</H1>
+          <Body muted style={{ fontSize: 12 }}>{homeCopy.coverage}</Body>
+          <H1 style={s.homeTitle}>{homeCopy.headline}</H1>
+          <Body style={s.homeDescription}>{homeCopy.description}</Body>
+          <Body style={s.homeProcess}>{homeCopy.process}</Body>
         </View>
 
         <View style={s.search}>
@@ -90,6 +94,31 @@ export default function Home() {
         )}
         {q.trim().length > 0 && suggestions.length === 0 && <Body muted>No encontramos ese servicio. Mira todas las categorías abajo.</Body>}
 
+        <Pressable accessibilityRole="button" style={s.explore} onPress={() => scroll.current?.scrollTo({ y: catalogY, animated: false })}>
+          <Text style={s.exploreText}>Explorar los {categories.length} servicios →</Text>
+        </Pressable>
+
+        <View style={{ gap: 12 }}>
+          <H2>{discoveryTitle(discovery.mode)}</H2>
+          <ScrollView horizontal contentContainerStyle={{ gap: 16 }}>
+          {discovery.items.map((p) => {
+            const category = getCategory(p.categoryId);
+            if (!category) return null;
+            return <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={p.label} onPress={() => router.push({ pathname: '/categoria/[slug]', params: { slug: p.categoryId, trabajo: p.label } })} style={s.featuredCard}>
+              <Image source={{ uri: categoryImage(category.slug, 500) }} style={s.featuredImage} resizeMode="cover" accessible={false} />
+              <View style={s.featuredCaption}>
+                <Text style={[s.listTitle, { flex: 1 }]}>{p.label}</Text>
+                <Icon name="chevronRight" size={18} color={c.primary} />
+              </View>
+            </Pressable>;
+          })}
+          </ScrollView>
+          <Body muted style={{ fontSize: 12 }}>Fotos de referencia</Body>
+        </View>
+
+        <View onLayout={event => setCatalogY(event.nativeEvent.layout.y)} style={{ gap: 16 }}>
+          <H2>Servicios a domicilio</H2>
+          <Body muted style={{ fontSize: 13 }}>Explora las {categories.length} categorías. Fotos de referencia.</Body>
         <View style={s.grid}>
           {categories.map((cat) => (
             <Pressable
@@ -103,6 +132,7 @@ export default function Home() {
               <Text style={s.photoText} numberOfLines={2}>{cat.name}</Text>
             </Pressable>
           ))}
+        </View>
         </View>
 
         <Pressable accessibilityRole="button" onPress={() => (isPro ? router.push('/agenda') : Linking.openURL('https://hululec.com/profesionales/registro'))} style={({ pressed }) => [s.proCard, pressed && { opacity: 0.9 }]}>
@@ -134,18 +164,7 @@ export default function Home() {
           ))}
         </View>
 
-        <View style={{ gap: 12 }}>
-          <H2>Lo más pedido en Guayaquil</H2>
-          {popular.map((p) => (
-            <Pressable key={p.title} accessibilityRole="button" onPress={() => router.push({ pathname: '/categoria/[slug]', params: { slug: p.slug, trabajo: p.title } })} style={s.listItem}>
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={s.listTitle}>{p.title}</Text>
-                <Body muted style={{ fontSize: 13 }}>{p.sub}</Body>
-              </View>
-              <Icon name="chevronRight" size={20} color={c.textMuted} />
-            </Pressable>
-          ))}
-        </View>
+
         </>}
 
         <Pressable accessibilityRole="link" onPress={() => router.push('/privacidad')} style={{ alignSelf: 'center', paddingVertical: 12 }}>
@@ -157,6 +176,14 @@ export default function Home() {
 }
 
 const s = StyleSheet.create({
+  featuredCard: { width: 164, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
+  featuredImage: { width: '100%', aspectRatio: 3 / 2 },
+  featuredCaption: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 64, padding: 12 },
+  homeTitle: { fontSize: 38, lineHeight: 42, letterSpacing: -1.4, color: c.primary, fontFamily: font.displayHeavy, marginVertical: 10 },
+  homeDescription: { fontSize: 16, lineHeight: 25 },
+  homeProcess: { fontSize: 14, lineHeight: 22, color: c.textSecondary, marginTop: 8 },
+  explore: { minHeight: 48, justifyContent: 'center' },
+  exploreText: { fontFamily: font.bodyBold, fontSize: 16, color: c.primary },
   content: { padding: 20, paddingBottom: 40, gap: 24 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   seg: { flexDirection: 'row', padding: 4, borderRadius: radius.md, backgroundColor: c.surfaceWarm, borderWidth: 1, borderColor: c.border, marginTop: -8 },

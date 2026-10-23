@@ -19,6 +19,9 @@ import { defineSecret, defineString } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import nodemailer from 'nodemailer';
 import { randomInt } from 'node:crypto';
+import homeCatalog from './home-catalog.js';
+import { buildRanking } from './home-ranking-core.js';
+import { normalizeRankingBooking } from './home-ranking.js';
 import { hasProfanity, maskProfanity, PROFANITY_MESSAGE } from './profanity.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
 
@@ -28,6 +31,35 @@ const PROJECT = 'hulul-59081';
 
 initializeApp();
 const db = () => getFirestore();
+
+/** Read-only ranking, isolated from all booking mutations and financial functions. */
+export const refreshHomeDiscovery = onSchedule({ region: REGION, schedule: '0 4 * * *', timeZone: 'America/Guayaquil', maxInstances: 1 }, async () => {
+  const now = Date.now();
+  const reservations = await db().collection('bookings').where('acceptedAt', '>=', new Date(now - 7 * 86400000)).get();
+  const providers = new Map();
+  const ids = [...new Set(reservations.docs.map(d => d.data().professionalId).filter(id => typeof id === 'string' && id && !id.includes('/')))];
+  for (let i = 0; i < ids.length; i += 100) {
+    const docs = await db().getAll(...ids.slice(i, i + 100).map(id => db().doc(`providers/${id}`)));
+    for (const doc of docs) providers.set(doc.id, doc.exists ? doc.data() : null);
+  }
+  const events = reservations.docs.map(doc => normalizeRankingBooking(doc.id, doc.data(), providers.get(doc.data().professionalId), homeCatalog));
+  const fallback = ['limpieza', 'climatizacion', 'plomeria'].map(slug => homeCatalog.find(s => s.categoryId === slug)?.id).filter(Boolean);
+  const snapshot = buildRanking(events, homeCatalog, fallback, now);
+  const ref = db().doc('homeDiscovery/current');
+  await db().runTransaction(async tx => {
+    const old = await tx.get(ref);
+    if ((old.data()?.generatedAtMs ?? 0) <= now) tx.set(ref, snapshot);
+  });
+});
+
+/** Public response contains only known catalog IDs/labels, never raw booking data. */
+export const homeDiscovery = onCall({ region: REGION, maxInstances: 5 }, async () => {
+  const data = (await db().doc('homeDiscovery/current').get()).data();
+  if (!data || data.mode !== 'popular' || !Number.isFinite(data.expiresAtMs) || data.expiresAtMs <= Date.now()) return { mode: 'featured', items: [] };
+  const items = [...new Set((Array.isArray(data.items) ? data.items : []).map(item => item?.id))]
+    .map(id => homeCatalog.find(service => service.id === id)).filter(Boolean).slice(0, 10);
+  return { mode: 'popular', items, generatedAtMs: data.generatedAtMs, expiresAtMs: data.expiresAtMs };
+});
 
 const MAIL_PASSWORD = defineSecret('MAIL_PASSWORD');
 const MAIL_PROVIDER = defineString('MAIL_PROVIDER', { default: 'gmail', description: 'gmail o resend' });

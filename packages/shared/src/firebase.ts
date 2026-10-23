@@ -18,6 +18,17 @@ import { sortPros, toProfessional, type PublicPro } from './demo-data';
 import type { JobOutcome } from './policy';
 import type { CategoryEvidence } from './provider';
 import type { TaxRegime } from './tax';
+import { featuredHomeServices, validateHomeDiscovery } from './home-discovery';
+
+/** Read-only aggregate; unavailable or stale recommendations never block booking. */
+export async function loadHomeDiscovery() {
+  try {
+    const response = await httpsCallable<undefined, unknown>(getFunctions(firebaseApp(), 'southamerica-east1'), 'homeDiscovery', { timeout: 5000 })();
+    return validateHomeDiscovery(response.data);
+  } catch {
+    return featuredHomeServices;
+  }
+}
 
 export const firebaseConfig = {
   apiKey: 'AIzaSyAR2w6K7JXPHyPvfLb3piv--48T3gvlL2o',
