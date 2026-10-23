@@ -19,3 +19,6 @@ export * from './copy';
 export * from './profanity';
 
 export * from './logo';
+
+export * from './home';
+export * from './home-discovery';

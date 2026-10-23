@@ -6,8 +6,7 @@ import { ProBand } from '@/components/ProBand';
 import { RoleChooser } from '@/components/RoleChooser';
 import { DownloadBand } from '@/components/DownloadBand';
 import { Faq } from '@/components/Faq';
-import { Icon } from '@/components/Icon';
-import { HeroArt } from '@/components/HeroArt';
+import { HomeIntro } from '@/components/HomeIntro';
 import { SearchBox } from '@/components/SearchBox';
 
 const steps = [
@@ -16,41 +15,18 @@ const steps = [
   { n: '3', t: 'Aprueba el trabajo', d: 'Sigue al profesional en la app. El pago se libera cuando confirmas que todo quedó bien.' },
 ];
 
-const promises = [
-  { icon: 'shield' as const, t: 'Profesionales verificados' },
-  { icon: 'clock' as const, t: 'Precio claro, sin presupuestos' },
-  { icon: 'card' as const, t: 'Pago protegido' },
-];
-
 export default function HomePage() {
   const active = cities.filter((c) => c.activa);
   return (
     <>
 
-      <RoleChooser />
-      <ActiveBooking />
-      <section className="hero">
-        <div className="container hero-grid">
-        <div className="stack gap-24">
-          <span className="eyebrow">Guayaquil · Samborondón · Daule</span>
-          <h1>¿Qué necesitas resolver hoy en tu hogar?</h1>
-          <SearchBox />
-          <ul className="trust-row" aria-label="Por qué HULUL">
-            {promises.map((p) => (
-              <li key={p.t}><Icon name={p.icon} size={18} color="#685943" strokeWidth={2} />{p.t}</li>
-            ))}
-          </ul>
-        </div>
-        <HeroArt />
-        </div>
-      </section>
-
-      <section id="servicios" className="section-sm">
-        <div className="container stack gap-24">
-          <h2 style={{ fontSize: 30 }}>Servicios a domicilio</h2>
-          <PhotoGrid />
-        </div>
-      </section>
+      <HomeIntro
+        roleChoice={<RoleChooser />}
+        activeBooking={<ActiveBooking />}
+        search={<SearchBox />}
+        catalog={<PhotoGrid />}
+        categoryCount={categories.length}
+      />
 
       <ProBand />
 

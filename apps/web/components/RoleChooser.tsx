@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { categoryImage } from '@hulul/shared';
 import { useUser } from '@/lib/auth';
 
 const KEY = 'hulul-rol';
@@ -33,24 +32,20 @@ export function RoleChooser() {
 
   if (!open) return null;
   return (
-    <div className="role-overlay" role="dialog" aria-modal="true" aria-labelledby="role-title">
-      <div className="role-sheet">
+    <section className="home-role-choice" aria-labelledby="role-title">
+      <div className="home-role-inner">
         <h2 id="role-title">¿Cómo quieres usar HULUL?</h2>
         <p className="muted">Te llevamos directo a crear tu cuenta.</p>
         <div className="role-options">
           <button type="button" className="role-card" onClick={() => choose('cliente')}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={categoryImage('limpieza', 500)} alt="" />
             <span className="role-text"><strong>Necesito un servicio</strong><span>Reserva técnicos y profesionales a domicilio</span></span>
           </button>
           <button type="button" className="role-card" onClick={() => choose('profesional')}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={categoryImage('electricidad', 500)} alt="" />
             <span className="role-text"><strong>Quiero ofrecer mis servicios</strong><span>Soy técnico o profesional y quiero recibir trabajos</span></span>
           </button>
         </div>
         <button type="button" className="link-btn" style={{ alignSelf: 'center' }} onClick={() => choose('mirar')}>Solo quiero mirar por ahora</button>
       </div>
-    </div>
+    </section>
   );
 }
