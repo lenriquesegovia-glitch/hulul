@@ -11,7 +11,7 @@ export function PhotoGrid({ city }: { city?: string }) {
           <img src={categoryImage(c.slug, 600)} alt="" loading={i < 4 ? 'eager' : 'lazy'} decoding="async" />
           <span className="photo-shade" />
           <span className="photo-text">
-            <strong>{c.name}</strong><b aria-hidden="true" className="category-arrow">→</b>
+            <strong>{c.slug === 'electrodomesticos' ? 'Electro\u00addomésticos' : c.name}</strong><b aria-hidden="true" className="category-arrow">→</b>
             <span>{c.servicios.slice(0, 2).join(' · ')}</span>
           </span>
         </Link>
