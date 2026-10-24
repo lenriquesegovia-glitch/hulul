@@ -81,8 +81,10 @@
  .hh-hero::before {display:none;}
  .hh-explore {width:100%;}
  .hh-discovery li {flex-basis:224px;}
- .hh-catalog .photo-grid {grid-template-columns:1fr;}
+ .hh-catalog .photo-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
  .hh-catalog .photo-card {display:block;}
- .hh-catalog .photo-card img {height:auto;width:100%;aspect-ratio:16/7;}
- .hh-catalog .photo-text strong {font-size:16px;}
+ .hh-catalog .photo-card img {height:auto;width:100%;aspect-ratio:16/10;}
+ .hh-catalog .photo-text {padding:10px;gap:6px;min-height:64px;grid-template-columns:minmax(0,1fr) 16px;}
+ .hh-catalog .photo-text strong {font-size:14px;line-height:19px;hyphens:manual;}
+ .hh-catalog .category-arrow {font-size:18px;}
 }

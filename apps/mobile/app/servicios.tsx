@@ -10,15 +10,17 @@ export default function Services() {
     <ScrollView contentContainerStyle={{padding:20,gap:16,paddingBottom:40}}>
       <BackButton/><H1>¿En qué te ayudamos?</H1>
       <Body muted>Elige una categoría para ver sus servicios.</Body>
+      <View style={{flexDirection:'row',flexWrap:'wrap',gap:12}}>
       {categories.map(cat => <Pressable key={cat.slug} accessibilityRole="button" accessibilityLabel={cat.name}
         onPress={()=>router.push({pathname:'/categoria/[slug]',params:{slug:cat.slug}})}
-        style={({pressed})=>({borderRadius:18,overflow:'hidden',backgroundColor:c.surface,borderWidth:1,borderColor:c.border,opacity:pressed ? 0.8 : 1})}>
-        <Image source={{uri:categoryImage(cat.slug,600)}} style={{width:'100%',aspectRatio:16/7}}/>
-        <View style={{flexDirection:'row',alignItems:'center',gap:12,padding:16,minHeight:56}}>
-          <Text style={{flex:1,fontFamily:font.bodyBold,fontSize:17,color:c.text}}>{cat.name}</Text>
-          <Icon name="chevronRight" size={22}/>
+        style={({pressed})=>({width:'47%',flexGrow:1,borderRadius:16,overflow:'hidden',backgroundColor:c.surface,borderWidth:1,borderColor:c.border,opacity:pressed ? 0.8 : 1})}>
+        <Image source={{uri:categoryImage(cat.slug,400)}} style={{width:'100%',aspectRatio:16/10}}/>
+        <View style={{flexDirection:'row',alignItems:'center',gap:6,padding:10,minHeight:64,flex:1}}>
+          <Text style={{flex:1,fontFamily:font.bodyBold,fontSize:14,lineHeight:19,color:c.text}}>{cat.slug === 'electrodomesticos' ? 'Electro-\ndomésticos' : cat.name}</Text>
+          <Icon name="chevronRight" size={16}/>
         </View>
       </Pressable>)}
+      </View>
       <Body muted>Fotos de referencia</Body>
     </ScrollView>
   </SafeAreaView>;
