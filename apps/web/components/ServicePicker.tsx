@@ -1,5 +1,8 @@
 'use client';
 
+import {useEffect} from 'react';
+import {useCity,selectCity} from '@/lib/city';
+import {serviceCity} from '@hulul/shared';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { serviceIcon, formatPrice, type Category } from '@hulul/shared';
@@ -15,7 +18,9 @@ export const OTHER_JOB = 'Otro';
  * elegido viaja a la reserva (?trabajo=…).
  */
 export function ServicePicker({ cat, city, cityName, providersOnly = false, initialJob = '' }: { cat: Category; city?: string; cityName?: string; providersOnly?: boolean; initialJob?: string }) {
-  const { pros: all } = usePros(cat.slug, city);
+  const selectedCity=useCity();
+  useEffect(()=>{if(city) selectCity(city);},[city]);
+  const { pros: all, error } = usePros(cat.slug, selectedCity);
   const job = cat.servicios.includes(initialJob) || initialJob === OTHER_JOB ? initialJob : '';
   const router = useRouter();
   // Si eligió un trabajo, primero quienes lo marcaron.
@@ -28,7 +33,7 @@ export function ServicePicker({ cat, city, cityName, providersOnly = false, init
 
   const pick = (j: string) => {
     const params = new URLSearchParams({trabajo:j});
-    if(city) params.set('ciudad',city);
+    params.set('ciudad',selectedCity);
     router.push(`/servicios/${cat.slug}/profesionales?${params}`);
   };
 
@@ -63,8 +68,8 @@ export function ServicePicker({ cat, city, cityName, providersOnly = false, init
         )}
         {pros && pros.length === 0 && (
           <div className="card stack gap-12">
-            <h3 style={{ fontSize: 19 }}>Estamos sumando profesionales de {cat.name.toLowerCase()}{cityName ? ` en ${cityName}` : ''}</h3>
-            <p className="muted">Todos los profesionales de HULUL son personas reales, verificadas una por una. Muy pronto habrá quien te atienda aquí.</p>
+            <h3 style={{ fontSize: 19 }}>Estamos sumando profesionales de {cat.name.toLowerCase()}{` en ${serviceCity(selectedCity)?.name || cityName || ''}`}</h3>
+            <p className="muted">{error ? 'No pudimos consultar la disponibilidad. Recarga para intentar de nuevo.' : 'Aún no tenemos profesionales disponibles en esta ciudad para este servicio.'}</p>
             <div className="row gap-12" style={{ flexWrap: 'wrap' }}>
               <Link href="/profesionales/registro" className="btn btn-primary">¿Trabajas en {cat.name.toLowerCase()}? Regístrate</Link>
               <Link href="/" className="btn btn-ghost">Ver otros servicios</Link>

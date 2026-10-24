@@ -23,7 +23,7 @@ export const company = {
  * Versión de la política. Al cambiarla, la web y la app vuelven a pedir
  * la aceptación a todos los usuarios.
  */
-export const PRIVACY_VERSION = '2026-10-14';
+export const PRIVACY_VERSION = '2026-10-24';
 export const PRIVACY_UPDATED = '14 de octubre de 2026';
 
 export type LegalBlock = { p: string } | { ul: string[] };
@@ -105,7 +105,7 @@ export const privacyPolicy: LegalSection[] = [
     body: [
       { p: 'No vendemos ni alquilamos tus datos personales. Solo los compartimos con:' },
       { ul: [
-        'El profesional o el cliente de tu reserva: solo lo necesario para el servicio, como nombre, dirección, descripción del trabajo y medio de contacto dentro de la Plataforma.',
+        'El profesional o el cliente de tu reserva: solo lo necesario para el servicio, como nombre, dirección, descripción del trabajo y medio de contacto dentro de la Plataforma. El profesional asignado puede consultar el promedio y la cantidad de calificaciones del cliente para evaluar la solicitud. Los comentarios privados del cliente no se publican.',
         `La pasarela de pagos (${company.pasarelaPago}), para procesar cobros, retenciones y reembolsos.`,
         'Proveedores tecnológicos que trabajan por encargo de HULUL: alojamiento y base de datos (Google Cloud / Firebase), alojamiento del sitio web (Vercel), envío de notificaciones, mapas (Google Maps) y mensajería. Solo pueden usar los datos para prestar su servicio a HULUL.',
         'El Servicio de Rentas Internas (SRI) y otras autoridades, cuando la ley o una orden judicial lo exijan.',

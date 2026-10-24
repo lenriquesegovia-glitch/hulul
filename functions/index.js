@@ -18,7 +18,8 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import nodemailer from 'nodemailer';
-import { randomInt } from 'node:crypto';
+import { randomInt, createHash } from 'node:crypto';
+import { canReadClientSummary, clientSummary } from './client-summary.js';
 import homeCatalog from './home-catalog.js';
 import { buildRanking } from './home-ranking-core.js';
 import { normalizeRankingBooking } from './home-ranking.js';
@@ -333,6 +334,12 @@ export const registrarAviso = onCall({ region: REGION }, async (req) => {
 async function pushTo(uid, title, body, data = {}) {
   if (!uid) return;
   try {
+    // Persist even without a device token. A stable key makes identical retries idempotent.
+    const key = createHash('sha256').update(JSON.stringify([uid,title,body,data])).digest('hex');
+    const ref = db().doc(`inboxes/${uid}/items/${key}`);
+    try { await ref.create({title,body,data,read:false,createdAt:FieldValue.serverTimestamp()}); }
+    catch(e) { if(e.code !== 6 && e.code !== 'already-exists') throw e; }
+    data = {...data, notificationId:key};
     const snap = await db().collection('pushTokens').where('uid', '==', uid).get();
     if (snap.empty) return;
     const docs = snap.docs;
@@ -374,18 +381,21 @@ async function checkPrice(b) {
   const fee = PLATFORM_FEE;
   // Régimen del profesional: define si la visita lleva IVA.
   const regime = regimeOf(p.taxRegime);
-  const total = priceOf(visit, sc.amount, regime).total;
+  const total = priceOf(sc.amount > 0 ? sc.amount : visit, 0, regime).total;
+  if (b.pricingVersion !== 2 && sc.amount > 0 && !(b.createdAt?.toMillis?.() < Date.parse('2026-10-24T14:17:23Z'))) return { ok: false, total, reason: 'Actualiza HULUL para reservar con la tarifa especial completa, sin recargos acumulados.' };
   const near = (x, y) => Math.abs(Number(x ?? 0) - y) < 0.02;
   // También vale la tarifa publicada en el directorio (por si cambió hace segundos).
   const pub = pubDoc?.visitRates?.[b.category];
   const pubSc = tester ? sc : surchargeOf(pubDoc, b.date, b.slot);
   const okFor = (v, s) => {
-    const q = priceOf(v, s.amount, regime);
+    const appliedVisit = b.pricingVersion === 2 && s.amount > 0 ? s.amount : v;
+    const extra = b.pricingVersion === 2 ? 0 : s.amount;
+    const q = priceOf(appliedVisit, extra, regime);
     // Apps anteriores calculaban el IVA sobre (visita + cargo) en un solo paso: también vale.
     const legacyIva = r2((q.subtotal + fee) * IVA_RATE);
     const ivaOk = near(b.iva, q.iva) || (chargesVat(regime) && near(b.iva, legacyIva));
     const totalOk = near(b.total, q.total) || (chargesVat(regime) && near(b.total, r2(q.subtotal + fee + legacyIva)));
-    return near(b.visit, v) && near(b.surcharge, s.amount) && (s.amount === 0 || b.surchargeKind === s.kind)
+    return near(b.visit, appliedVisit) && near(b.surcharge, extra) && (s.amount === 0 || b.surchargeKind === s.kind)
       && near(b.subtotal, q.subtotal) && near(b.fee, fee) && ivaOk && totalOk;
   };
   const pubOk = Number.isFinite(Number(pub)) && (okFor(r2(Number(pub)), sc) || okFor(r2(Number(pub)), pubSc));
@@ -1458,7 +1468,7 @@ export const avisoChat = onDocumentCreated({ document: 'bookings/{id}/messages/{
   const toPro = m.from === 'cliente';
   const name = toPro ? String(b.contactName ?? 'El cliente').split(' ')[0] : String(b.professionalName ?? 'Tu profesional').split(' ')[0];
   const body = m.kind === 'foto' ? '📷 Te envió una foto' : m.kind === 'pedir_fotos' ? `📷 Te pide fotos: ${String(m.text ?? '').slice(0, 120)}` : String(m.text ?? '').slice(0, 160);
-  await pushTo(toPro ? b.professionalId : b.clientId, `💬 ${name}`, body, toPro ? { url: AGENDA, bookingId: id, to: 'pro', chat: true } : { bookingId: id, to: 'cliente', chat: true });
+  await pushTo(toPro ? b.professionalId : b.clientId, `💬 ${name}`, body, toPro ? { url: AGENDA, bookingId: id, to: 'pro', chat: true, messageId: event.params.mid } : { bookingId: id, to: 'cliente', chat: true, messageId: event.params.mid });
 });
 
 /* ----------------------- Recordatorios y vencimientos ----------------------- */
@@ -1796,4 +1806,15 @@ export const liquidacionSemanal = onSchedule({ schedule: 'every monday 06:00', r
       '<p style="font-size:13px;color:#6B6560">Órdenes en Firestore: colección <b>payouts</b> (status "por_pagar"). Al transferir, cambia status a <b>pagado</b>. Retenciones aún en 0: porcentajes por definir con el contador.</p>'),
   }).catch((e) => logger.warn('No se pudo enviar el resumen de liquidación', { e: String(e) }));
   logger.info('Liquidación semanal', { week, pagos: toPay.length });
+});
+
+/** Only the professional assigned to this booking can read this aggregate. */
+export const resumenCliente = onCall({region:REGION}, async req => {
+ const uid=req.auth?.uid; if(!uid) throw new HttpsError('unauthenticated','Inicia sesión.');
+ const id=String(req.data?.bookingId || '');
+ if(!/^[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('invalid-argument','Reserva inválida.');
+ const booking=(await db().doc('bookings/'+id).get()).data();
+ if(!canReadClientSummary(uid,booking)) throw new HttpsError('permission-denied','Esta reserva no es tuya.');
+ const aggregate=booking.clientId ? (await db().doc('clientRatings/'+booking.clientId).get()).data() : null;
+ return clientSummary(booking,aggregate);
 });

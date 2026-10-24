@@ -109,7 +109,7 @@ export default function CategoryScreen({ providersOnly = false }: { providersOnl
           : all.length === 0 ? (
             <Card style={{ gap: 10 }}>
               <Text style={s.proName}>Estamos sumando profesionales de {cat.name.toLowerCase()}</Text>
-              <Body muted style={{ fontSize: 13.5 }}>Todos los profesionales de HULUL son personas reales, verificadas una por una. Muy pronto habrá quien te atienda aquí.</Body>
+              <Body muted style={{ fontSize: 13.5 }}>Aún no tenemos profesionales disponibles en esta ciudad para este servicio.</Body>
               <Link href="/profesionales" style={{ fontFamily: font.bodyBold, fontSize: 14, color: c.primary }}>¿Trabajas en {cat.name.toLowerCase()}? Regístrate</Link>
             </Card>
           ) : <Body muted style={{ fontSize: 13 }}>{pros.length} {pros.length === 1 ? 'profesional' : 'profesionales'}</Body>}

@@ -40,15 +40,23 @@ service cloud.firestore {
         && d.createdAt == request.time;
     }
 
+    match /inboxes/{uid}/items/{id} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && request.resource.data.read == true;
+      allow create, delete: if false;
+    }
     match /bookings/{bookingId} {
       allow create: if request.resource.data.keys().hasOnly([
             'source', 'clientId', 'professionalId', 'professionalName', 'category',
             'date', 'slot', 'hours', 'address', 'location', 'notes',
             'contactName', 'contactPhone', 'contactEmail', 'paymentMethod',
             'subtotal', 'fee', 'iva', 'total', 'consentMarketing', 'demo',
-            'pricing', 'visit', 'safetyAccepted', 'photos', 'surcharge', 'surchargeKind', 'noiseAccepted',
+            'pricingVersion', 'pricing', 'visit', 'safetyAccepted', 'photos', 'surcharge', 'surchargeKind', 'noiseAccepted',
             'taxRegime', 'visitIva',
             'status', 'consentPrivacy', 'privacyVersion', 'createdAt'])
+        && (!('pricingVersion' in request.resource.data) || request.resource.data.pricingVersion == 2)
         && request.resource.data.source in ['web', 'app']
         // Desde la web solo se reserva con cuenta, y a nombre propio.
         // (La app se suma cuando tenga inicio de sesión.)

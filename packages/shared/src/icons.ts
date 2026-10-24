@@ -14,7 +14,7 @@ export type UiIconName =
   | IconName
   | 'pin' | 'search' | 'chevronRight' | 'chevronLeft' | 'check' | 'shield'
   | 'broom' | 'office' | 'iron' | 'window' | 'sofa' | 'rug' | 'brush' | 'tool' | 'bulb' | 'box'
-  | 'card' | 'clock' | 'home' | 'calendar' | 'chat' | 'user' | 'logo';
+  | 'card' | 'clock' | 'home' | 'calendar' | 'bell' | 'chat' | 'user' | 'logo';
 
 export const icons: Record<UiIconName, IconShape[]> = {
   broom: [{kind:'path',d:'M15 3l-4 10M8 12l7 3-3 7-8-3 4-7zM7 17l-1 3m4-2-1 3'}],
@@ -126,6 +126,7 @@ export const icons: Record<UiIconName, IconShape[]> = {
     { kind: 'rect', x: 4, y: 5, width: 16, height: 15, rx: 2 },
     { kind: 'path', d: 'M4 10h16M9 3v4M15 3v4' },
   ],
+  bell: [{ kind: 'path', d: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4' }],
   chat: [{ kind: 'path', d: 'M4 5h16v11H9l-5 4V5z' }],
   user: [
     { kind: 'circle', cx: 12, cy: 8, r: 4 },

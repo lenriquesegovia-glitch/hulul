@@ -1,0 +1,2279 @@
+[
+  {
+    "nombre": "Azuay",
+    "cantones": [
+      {
+        "nombre": "Camilo Ponce Enríquez",
+        "parroquias": [
+          "Camilo Ponce Enríquez"
+        ]
+      },
+      {
+        "nombre": "Chordeleg",
+        "parroquias": [
+          "Chordeleg",
+          "La Unión",
+          "Luis Galarza Orellana",
+          "Principal",
+          "San Martín de Puzhio"
+        ]
+      },
+      {
+        "nombre": "Cuenca",
+        "parroquias": [
+          "Baños",
+          "Chaucha",
+          "Checa",
+          "Chiquintad",
+          "Cuenca",
+          "Cumbe",
+          "Llacao",
+          "Molleturo",
+          "Nulti",
+          "Octavio Cordero Palacios",
+          "Paccha",
+          "Quingeo",
+          "Ricaurte",
+          "San Joaquín",
+          "Santa Ana",
+          "Sayausí",
+          "Sidcay",
+          "Sinincay",
+          "Tarqui",
+          "Turi",
+          "Valle",
+          "Victoria del Portete"
+        ]
+      },
+      {
+        "nombre": "El Pan",
+        "parroquias": [
+          "El Pan",
+          "San Vicente"
+        ]
+      },
+      {
+        "nombre": "Girón",
+        "parroquias": [
+          "Girón",
+          "La Asunción",
+          "San Gerardo"
+        ]
+      },
+      {
+        "nombre": "Guachapala",
+        "parroquias": [
+          "Guachapala"
+        ]
+      },
+      {
+        "nombre": "Gualaceo",
+        "parroquias": [
+          "Daniel Córdova Toral",
+          "Gualaceo",
+          "Jadán",
+          "Luis Cordero Vega",
+          "Mariano Moreno",
+          "Remigio Crespo Toral",
+          "San Juan",
+          "Simón Bolívar",
+          "Zhidmad"
+        ]
+      },
+      {
+        "nombre": "Nabón",
+        "parroquias": [
+          "Cochapata",
+          "El Progreso",
+          "Las Nieves",
+          "Nabón"
+        ]
+      },
+      {
+        "nombre": "Oña",
+        "parroquias": [
+          "San Felipe de Oña",
+          "Susudel"
+        ]
+      },
+      {
+        "nombre": "Paute",
+        "parroquias": [
+          "Bulán",
+          "Chicán",
+          "Dug Dug",
+          "El Cabo",
+          "Guarainag",
+          "Paute",
+          "San Cristóbal",
+          "Tomebamba"
+        ]
+      },
+      {
+        "nombre": "Pucará",
+        "parroquias": [
+          "Pucará",
+          "San Rafael de Sharug"
+        ]
+      },
+      {
+        "nombre": "San Fernando",
+        "parroquias": [
+          "Chumblín",
+          "San Fernando"
+        ]
+      },
+      {
+        "nombre": "Santa Isabel",
+        "parroquias": [
+          "Abdón Calderón",
+          "El Carmen de Pijilí",
+          "San Salvador de Cañaribamba",
+          "Santa Isabel",
+          "Shaglli"
+        ]
+      },
+      {
+        "nombre": "Sevilla de Oro",
+        "parroquias": [
+          "Amaluza",
+          "Palmas",
+          "Sevilla de Oro"
+        ]
+      },
+      {
+        "nombre": "Sígsig",
+        "parroquias": [
+          "Cuchil",
+          "Güel",
+          "Jima",
+          "Ludo",
+          "San Bartolomé",
+          "San José de Raranga",
+          "Sígsig"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Bolívar",
+    "cantones": [
+      {
+        "nombre": "Caluma",
+        "parroquias": [
+          "Caluma"
+        ]
+      },
+      {
+        "nombre": "Chillanes",
+        "parroquias": [
+          "Chillanes",
+          "San José del Tambo"
+        ]
+      },
+      {
+        "nombre": "Chimbo",
+        "parroquias": [
+          "Asunción",
+          "La Magdalena",
+          "San José de Chimbo",
+          "San Sebastián",
+          "Telimbela"
+        ]
+      },
+      {
+        "nombre": "Echeandía",
+        "parroquias": [
+          "Echeandía"
+        ]
+      },
+      {
+        "nombre": "Guaranda",
+        "parroquias": [
+          "Facundo Vela",
+          "Guaranda",
+          "Julio E. Moreno",
+          "Salinas",
+          "San Lorenzo",
+          "San Luis de Pambil",
+          "San Simón",
+          "Santa Fe",
+          "Simiátug"
+        ]
+      },
+      {
+        "nombre": "Las Naves",
+        "parroquias": [
+          "Las Naves"
+        ]
+      },
+      {
+        "nombre": "San Miguel",
+        "parroquias": [
+          "Balsapamba",
+          "Bilován",
+          "Régulo de Mora",
+          "San Miguel",
+          "San Pablo",
+          "San Vicente",
+          "Santiago"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Cañar",
+    "cantones": [
+      {
+        "nombre": "Azogues",
+        "parroquias": [
+          "Azogues",
+          "Cojitambo",
+          "Guapán",
+          "Javier Loyola",
+          "Luis Cordero",
+          "Pindilig",
+          "Rivera",
+          "San Miguel",
+          "Taday"
+        ]
+      },
+      {
+        "nombre": "Biblián",
+        "parroquias": [
+          "Biblián",
+          "Jerusalén",
+          "Nazón",
+          "San Francisco de Sageo",
+          "Turupamba"
+        ]
+      },
+      {
+        "nombre": "Cañar",
+        "parroquias": [
+          "Cañar",
+          "Chontamarca",
+          "Chorocopte",
+          "Ducur",
+          "General Morales",
+          "Gualleturo",
+          "Honorato Vásquez",
+          "Ingapirca",
+          "Juncal",
+          "San Antonio",
+          "Ventura",
+          "Zhud"
+        ]
+      },
+      {
+        "nombre": "Déleg",
+        "parroquias": [
+          "Déleg",
+          "Solano"
+        ]
+      },
+      {
+        "nombre": "El Tambo",
+        "parroquias": [
+          "El Tambo"
+        ]
+      },
+      {
+        "nombre": "La Troncal",
+        "parroquias": [
+          "La Troncal",
+          "Manuel J. Calle",
+          "Pancho Negro"
+        ]
+      },
+      {
+        "nombre": "Suscal",
+        "parroquias": [
+          "Suscal"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Carchi",
+    "cantones": [
+      {
+        "nombre": "Bolívar",
+        "parroquias": [
+          "Bolívar",
+          "García Moreno",
+          "Los Andes",
+          "Monte Olivo",
+          "San Rafael",
+          "San Vicente de Pusir"
+        ]
+      },
+      {
+        "nombre": "Espejo",
+        "parroquias": [
+          "El Goaltal",
+          "El Ángel",
+          "La Libertad",
+          "San Isidro"
+        ]
+      },
+      {
+        "nombre": "Mira",
+        "parroquias": [
+          "Concepción",
+          "Jijón y Caamaño",
+          "Juan Montalvo",
+          "Mira"
+        ]
+      },
+      {
+        "nombre": "Montúfar",
+        "parroquias": [
+          "Chitán de Navarrete",
+          "Cristóbal Colón",
+          "Fernández Salvador",
+          "La Paz",
+          "Piartal",
+          "San Gabriel"
+        ]
+      },
+      {
+        "nombre": "San Pedro de Huaca",
+        "parroquias": [
+          "Huaca",
+          "Mariscal Sucre"
+        ]
+      },
+      {
+        "nombre": "Tulcán",
+        "parroquias": [
+          "El Carmelo",
+          "El Chical",
+          "Julio Andrade",
+          "Maldonado",
+          "Pioter",
+          "Santa Martha de Cuba",
+          "Tobar Donoso",
+          "Tufiño",
+          "Tulcán",
+          "Urbina"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Chimborazo",
+    "cantones": [
+      {
+        "nombre": "Alausí",
+        "parroquias": [
+          "Achupallas",
+          "Alausí",
+          "Guasuntos",
+          "Huigra",
+          "Multitud",
+          "Pistishi",
+          "Pumallacta",
+          "Sevilla",
+          "Sibambe",
+          "Tixán"
+        ]
+      },
+      {
+        "nombre": "Chambo",
+        "parroquias": [
+          "Chambo"
+        ]
+      },
+      {
+        "nombre": "Chunchi",
+        "parroquias": [
+          "Capzol",
+          "Chunchi",
+          "Compud",
+          "Gonzol",
+          "Llagos"
+        ]
+      },
+      {
+        "nombre": "Colta",
+        "parroquias": [
+          "Cañi",
+          "Columbe",
+          "Juan de Velasco",
+          "Santiago de Quito",
+          "Villa la Unión"
+        ]
+      },
+      {
+        "nombre": "Cumandá",
+        "parroquias": [
+          "Cumandá"
+        ]
+      },
+      {
+        "nombre": "Guamote",
+        "parroquias": [
+          "Cebadas",
+          "Guamote",
+          "Palmira"
+        ]
+      },
+      {
+        "nombre": "Guano",
+        "parroquias": [
+          "Guanando",
+          "Guano",
+          "Ilapo",
+          "La Providencia",
+          "San Andrés",
+          "San Gerardo",
+          "San Isidro de Patulú",
+          "San José del Chazo",
+          "Santa Fé de Galán",
+          "Valparaiso"
+        ]
+      },
+      {
+        "nombre": "Pallatanga",
+        "parroquias": [
+          "Pallatanga"
+        ]
+      },
+      {
+        "nombre": "Penipe",
+        "parroquias": [
+          "Bilbao",
+          "El Altar",
+          "La Candelaria",
+          "Matus",
+          "Penipe",
+          "Puela",
+          "San Antonio de Bayushig"
+        ]
+      },
+      {
+        "nombre": "Riobamba",
+        "parroquias": [
+          "Cacha",
+          "Calpi",
+          "Cubijíes",
+          "Flores",
+          "Licto",
+          "Licán",
+          "Pungalá",
+          "Punín",
+          "Quimiag",
+          "Riobamba",
+          "San Juan",
+          "San Luis"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Cotopaxi",
+    "cantones": [
+      {
+        "nombre": "La Maná",
+        "parroquias": [
+          "Guasaganda",
+          "La Maná",
+          "Pucayacu"
+        ]
+      },
+      {
+        "nombre": "Latacunga",
+        "parroquias": [
+          "Aláquez",
+          "Belisario Quevedo",
+          "Guaytacama",
+          "Joseguango Bajo",
+          "Latacunga",
+          "Mulaló",
+          "Once de Noviembre",
+          "Poaló",
+          "San Juan de Pastocalle",
+          "Tanicuchí",
+          "Toacaso"
+        ]
+      },
+      {
+        "nombre": "Pangua",
+        "parroquias": [
+          "El Corazón",
+          "Moraspungo",
+          "Pinllopata",
+          "Ramón Campaña"
+        ]
+      },
+      {
+        "nombre": "Pujilí",
+        "parroquias": [
+          "Angamarca",
+          "Guangaje",
+          "La Victoria",
+          "Pilaló",
+          "Pujilí",
+          "Tingo",
+          "Zumbahua"
+        ]
+      },
+      {
+        "nombre": "Salcedo",
+        "parroquias": [
+          "Antonio José Holguín",
+          "Cusubamba",
+          "Mulalillo",
+          "Mulliquindil",
+          "Pansaleo",
+          "San Miguel"
+        ]
+      },
+      {
+        "nombre": "Saquisilí",
+        "parroquias": [
+          "Canchagua",
+          "Chantilín",
+          "Cochapamba",
+          "Saquisilí"
+        ]
+      },
+      {
+        "nombre": "Sigchos",
+        "parroquias": [
+          "Chugchillán",
+          "Isinlivi",
+          "Las Pampas",
+          "Palo Quemado",
+          "Sigchos"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "El Oro",
+    "cantones": [
+      {
+        "nombre": "Arenillas",
+        "parroquias": [
+          "Arenillas",
+          "Carcabón",
+          "Chacras",
+          "La Cuca",
+          "Palmales"
+        ]
+      },
+      {
+        "nombre": "Atahualpa",
+        "parroquias": [
+          "Ayapamba",
+          "Cordoncillo",
+          "Milagro",
+          "Paccha",
+          "San José",
+          "San Juan de Cerro Azul"
+        ]
+      },
+      {
+        "nombre": "Balsas",
+        "parroquias": [
+          "Balsas",
+          "Bellamaría"
+        ]
+      },
+      {
+        "nombre": "Chilla",
+        "parroquias": [
+          "Chilla"
+        ]
+      },
+      {
+        "nombre": "El Guabo",
+        "parroquias": [
+          "Barbones",
+          "El Guabo",
+          "La Iberia",
+          "Río Bonito",
+          "Tendales"
+        ]
+      },
+      {
+        "nombre": "Huaquillas",
+        "parroquias": [
+          "Huaquillas"
+        ]
+      },
+      {
+        "nombre": "Las Lajas",
+        "parroquias": [
+          "El Paraíso",
+          "La Libertad",
+          "La Victoria",
+          "San Isidro"
+        ]
+      },
+      {
+        "nombre": "Machala",
+        "parroquias": [
+          "El Retiro",
+          "Machala"
+        ]
+      },
+      {
+        "nombre": "Marcabelí",
+        "parroquias": [
+          "El Ingenio",
+          "Marcabelí"
+        ]
+      },
+      {
+        "nombre": "Pasaje",
+        "parroquias": [
+          "Buenavista",
+          "Casacay",
+          "Cañaquemada",
+          "La Peaña",
+          "Pasaje",
+          "Progreso",
+          "Uzhcurrumi"
+        ]
+      },
+      {
+        "nombre": "Piñas",
+        "parroquias": [
+          "Capiro",
+          "La Bocana",
+          "Moromoro",
+          "Piedras",
+          "Piñas",
+          "San Roque",
+          "Saracay"
+        ]
+      },
+      {
+        "nombre": "Portovelo",
+        "parroquias": [
+          "Curtincapa",
+          "Morales",
+          "Portovelo",
+          "Salatí"
+        ]
+      },
+      {
+        "nombre": "Santa Rosa",
+        "parroquias": [
+          "Bellamaría",
+          "Bellavista",
+          "Jambelí",
+          "La Avanzada",
+          "San Antonio",
+          "Santa Rosa",
+          "Torata",
+          "Victoria"
+        ]
+      },
+      {
+        "nombre": "Zaruma",
+        "parroquias": [
+          "Abañín",
+          "Arcapamba",
+          "Guanazán",
+          "Guizhaguiña",
+          "Huertas",
+          "Malvas",
+          "Muluncay Grande",
+          "Salvias",
+          "Sinsao",
+          "Zaruma"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Esmeraldas",
+    "cantones": [
+      {
+        "nombre": "Atacames",
+        "parroquias": [
+          "Atacames",
+          "La Unión",
+          "Súa",
+          "Tonchigüe",
+          "Tonsupa"
+        ]
+      },
+      {
+        "nombre": "Eloy Alfaro",
+        "parroquias": [
+          "Anchayacu",
+          "Atahualpa",
+          "Borbón",
+          "Colón Eloy del María",
+          "La Tola",
+          "Luis Vargas Torres",
+          "Maldonado",
+          "Pampanal de Bolívar",
+          "San Francisco de Onzole",
+          "San José de Cayapas",
+          "Santa Lucía de las Peñas",
+          "Santo Domingo de Onzole",
+          "Selva Alegre",
+          "Telembí",
+          "Timbiré",
+          "Valdez"
+        ]
+      },
+      {
+        "nombre": "Esmeraldas",
+        "parroquias": [
+          "Camarones",
+          "Chinca",
+          "Coronel Carlos Concha Torres",
+          "Esmeraldas",
+          "Majua",
+          "San Mateo",
+          "Tabiazo",
+          "Tachina",
+          "Vuelta Larga"
+        ]
+      },
+      {
+        "nombre": "Muisne",
+        "parroquias": [
+          "Bolívar",
+          "Daule",
+          "Galera",
+          "Muisne",
+          "Quingue",
+          "San Francisco",
+          "San Gregorio",
+          "San José de Chamanga",
+          "Sálima"
+        ]
+      },
+      {
+        "nombre": "Quinindé",
+        "parroquias": [
+          "Chura",
+          "Cube",
+          "La Unión",
+          "Malimpia",
+          "Rosa Zárate",
+          "Viche"
+        ]
+      },
+      {
+        "nombre": "Rioverde",
+        "parroquias": [
+          "Chontaduro",
+          "Chumundé",
+          "Lagarto",
+          "Montalvo",
+          "Rioverde",
+          "Rocafuerte"
+        ]
+      },
+      {
+        "nombre": "San Lorenzo",
+        "parroquias": [
+          "5 de Junio",
+          "Alto Tambo",
+          "Ancón",
+          "Calderón",
+          "Carondelet",
+          "Concepción",
+          "Mataje",
+          "San Javier de Cachaví",
+          "San Lorenzo",
+          "Santa Rita",
+          "Tambillo",
+          "Tululbí",
+          "Urbina"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Galápagos",
+    "cantones": [
+      {
+        "nombre": "Isabela",
+        "parroquias": [
+          "Puerto Villamil",
+          "Tomás de Berlanga"
+        ]
+      },
+      {
+        "nombre": "San Cristóbal",
+        "parroquias": [
+          "El Progreso",
+          "Isla Santa María Floreana",
+          "Puerto Baquerizo Moreno"
+        ]
+      },
+      {
+        "nombre": "Santa Cruz",
+        "parroquias": [
+          "Bella Vista",
+          "Puerto Ayora",
+          "Santa Rosa"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Guayas",
+    "cantones": [
+      {
+        "nombre": "Alfredo Baquerizo Moreno (Juján)",
+        "parroquias": [
+          "Alfredo Baquerizo Moreno (Juján)"
+        ]
+      },
+      {
+        "nombre": "Balao",
+        "parroquias": [
+          "Balao"
+        ]
+      },
+      {
+        "nombre": "Balzar",
+        "parroquias": [
+          "Balzar"
+        ]
+      },
+      {
+        "nombre": "Colimes",
+        "parroquias": [
+          "Colimes",
+          "San Jacinto"
+        ]
+      },
+      {
+        "nombre": "Coronel Marcelino Maridueña",
+        "parroquias": [
+          "Coronel Marcelino Maridueña"
+        ]
+      },
+      {
+        "nombre": "Daule",
+        "parroquias": [
+          "Daule",
+          "Juan Bautista Aguirre",
+          "Laurel",
+          "Limonal",
+          "Los Lojas"
+        ]
+      },
+      {
+        "nombre": "Durán",
+        "parroquias": [
+          "Eloy Alfaro"
+        ]
+      },
+      {
+        "nombre": "El Empalme",
+        "parroquias": [
+          "El Rosario",
+          "Guayas",
+          "Velasco Ibarra"
+        ]
+      },
+      {
+        "nombre": "El Triunfo",
+        "parroquias": [
+          "El Triunfo"
+        ]
+      },
+      {
+        "nombre": "General  Antonio Elizalde",
+        "parroquias": [
+          "General Antonio Elizalde"
+        ]
+      },
+      {
+        "nombre": "Guayaquil",
+        "parroquias": [
+          "Guayaquil",
+          "Juan Gómez Rendón",
+          "Morro",
+          "Posorja",
+          "Puná",
+          "Tenguel"
+        ]
+      },
+      {
+        "nombre": "Isidro Ayora",
+        "parroquias": [
+          "Isidro Ayora"
+        ]
+      },
+      {
+        "nombre": "Lomas de Sargentillo",
+        "parroquias": [
+          "Lomas de Sargentillo"
+        ]
+      },
+      {
+        "nombre": "Milagro",
+        "parroquias": [
+          "Chobo",
+          "Mariscal Sucre",
+          "Milagro",
+          "Roberto Astudillo"
+        ]
+      },
+      {
+        "nombre": "Naranjal",
+        "parroquias": [
+          "Jesús María",
+          "Naranjal",
+          "San Carlos",
+          "Santa Rosa de Flandes",
+          "Taura"
+        ]
+      },
+      {
+        "nombre": "Naranjito",
+        "parroquias": [
+          "Naranjito"
+        ]
+      },
+      {
+        "nombre": "Nobol",
+        "parroquias": [
+          "Narcisa de Jesús"
+        ]
+      },
+      {
+        "nombre": "Palestina",
+        "parroquias": [
+          "Palestina"
+        ]
+      },
+      {
+        "nombre": "Pedro Carbo",
+        "parroquias": [
+          "Pedro Carbo",
+          "Sabanilla",
+          "Valle de la Virgen"
+        ]
+      },
+      {
+        "nombre": "Playas",
+        "parroquias": [
+          "General Villamil"
+        ]
+      },
+      {
+        "nombre": "Salitre",
+        "parroquias": [
+          "El Salitre",
+          "General Vernaza",
+          "Junquillal",
+          "La Victoria"
+        ]
+      },
+      {
+        "nombre": "Samborondón",
+        "parroquias": [
+          "Samborondón",
+          "Tarifa"
+        ]
+      },
+      {
+        "nombre": "San Jacinto de Yaguachi",
+        "parroquias": [
+          "General Pedro J. Montero",
+          "San Jacinto de Yaguachi",
+          "Virgen de Fátima",
+          "Yaguachi Viejo"
+        ]
+      },
+      {
+        "nombre": "Santa Lucía",
+        "parroquias": [
+          "Santa Lucía"
+        ]
+      },
+      {
+        "nombre": "Simón Bolívar",
+        "parroquias": [
+          "Coronel Lorenzo de Garaycoa",
+          "Simón Bolívar"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Imbabura",
+    "cantones": [
+      {
+        "nombre": "Antonio Ante",
+        "parroquias": [
+          "Atuntaqui",
+          "Imbaya",
+          "San Francisco de Natabuela",
+          "San José de Chaltura",
+          "San Roque"
+        ]
+      },
+      {
+        "nombre": "Cotacachi",
+        "parroquias": [
+          "Apuela",
+          "Cotacachi",
+          "García Moreno",
+          "Imantag",
+          "Peñaherrera",
+          "Plaza Gutiérrez",
+          "Quiroga",
+          "Seis de Julio de Cuellaje",
+          "Vacas Galindo"
+        ]
+      },
+      {
+        "nombre": "Ibarra",
+        "parroquias": [
+          "Ambuquí",
+          "Angochagua",
+          "La Carolina",
+          "La Esperanza",
+          "Lita",
+          "Salinas",
+          "San Antonio",
+          "San Miguel de Ibarra"
+        ]
+      },
+      {
+        "nombre": "Otavalo",
+        "parroquias": [
+          "Dr. Miguel Egas Cabezas",
+          "Eugenio Espejo",
+          "González Suárez",
+          "Otavalo",
+          "Pataquí",
+          "San José de Quichinche",
+          "San Juan de Ilumán",
+          "San Pablo",
+          "San Rafael",
+          "Selva Alegre"
+        ]
+      },
+      {
+        "nombre": "Pimampiro",
+        "parroquias": [
+          "Chugá",
+          "Mariano Acosta",
+          "Pimampiro",
+          "San Francisco de Sigsipamba"
+        ]
+      },
+      {
+        "nombre": "San Miguel de Urcuquí",
+        "parroquias": [
+          "Cahuasquí",
+          "La Merced de Buenos Aires",
+          "Pablo Arenas",
+          "San Blas",
+          "Tumbabiro",
+          "Urcuquí"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Loja",
+    "cantones": [
+      {
+        "nombre": "Calvas",
+        "parroquias": [
+          "Cariamanga",
+          "Colaisaca",
+          "El Lucero",
+          "Sanguillín",
+          "Utuana"
+        ]
+      },
+      {
+        "nombre": "Catamayo",
+        "parroquias": [
+          "Catamayo",
+          "El Tambo",
+          "Guayquichuma",
+          "San Pedro de la Bendita",
+          "Zambi"
+        ]
+      },
+      {
+        "nombre": "Celica",
+        "parroquias": [
+          "Celica",
+          "Cruzpamba",
+          "Pózul",
+          "Sabanilla",
+          "Teniente Maximiliano Rodríguez Loaiza"
+        ]
+      },
+      {
+        "nombre": "Chaguarpamba",
+        "parroquias": [
+          "Amarillos",
+          "Buenavista",
+          "Chaguarpamba",
+          "El Rosario",
+          "Santa Rufina"
+        ]
+      },
+      {
+        "nombre": "Espíndola",
+        "parroquias": [
+          "27 de Abril",
+          "Amaluza",
+          "Bellavista",
+          "El Airo",
+          "El Ingenio",
+          "Jimbura",
+          "Santa Teresita"
+        ]
+      },
+      {
+        "nombre": "Gonzanamá",
+        "parroquias": [
+          "Changaimina",
+          "Gonzanamá",
+          "Nambacola",
+          "Purunuma",
+          "Sacapalca"
+        ]
+      },
+      {
+        "nombre": "Loja",
+        "parroquias": [
+          "Chantaco",
+          "Chuquiribamba",
+          "El Cisne",
+          "Gualel",
+          "Jimbilla",
+          "Loja",
+          "Malacatos",
+          "Quinara",
+          "San Lucas",
+          "San Pedro de Vilcabamba",
+          "Santiago",
+          "Taquil",
+          "Vilcabamba",
+          "Yangana"
+        ]
+      },
+      {
+        "nombre": "Macará",
+        "parroquias": [
+          "La Victoria",
+          "Larama",
+          "Macará",
+          "Sabiango"
+        ]
+      },
+      {
+        "nombre": "Olmedo",
+        "parroquias": [
+          "La Tingue",
+          "Olmedo"
+        ]
+      },
+      {
+        "nombre": "Paltas",
+        "parroquias": [
+          "Cangonamá",
+          "Casanga",
+          "Catacocha",
+          "Guachanamá",
+          "Lauro Guerrero",
+          "Orianga",
+          "San Antonio",
+          "Yamana"
+        ]
+      },
+      {
+        "nombre": "Pindal",
+        "parroquias": [
+          "12 de Diciembre",
+          "Chaquinal",
+          "Milagros",
+          "Pindal"
+        ]
+      },
+      {
+        "nombre": "Puyango",
+        "parroquias": [
+          "Alamor",
+          "Ciano",
+          "El Arenal",
+          "El Limo",
+          "Mercadillo",
+          "Vicentino"
+        ]
+      },
+      {
+        "nombre": "Quilanga",
+        "parroquias": [
+          "Fundochamba",
+          "Quilanga",
+          "San Antonio de las Aradas"
+        ]
+      },
+      {
+        "nombre": "Saraguro",
+        "parroquias": [
+          "El Paraíso de Celen",
+          "El Tablón",
+          "Lluzhapa",
+          "Manú",
+          "San Antonio de Qumbe",
+          "San Pablo de Tenta",
+          "San Sebastián de Yúluc",
+          "Saraguro",
+          "Selva Alegre",
+          "Sumaypamba",
+          "Urdaneta"
+        ]
+      },
+      {
+        "nombre": "Sozoranga",
+        "parroquias": [
+          "Nueva Fátima",
+          "Sozoranga",
+          "Tacamoros"
+        ]
+      },
+      {
+        "nombre": "Zapotillo",
+        "parroquias": [
+          "Bolaspamba",
+          "Cazaderos",
+          "Garzareal",
+          "Limones",
+          "Mangahurco",
+          "Paletillas",
+          "Zapotillo"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Los Ríos",
+    "cantones": [
+      {
+        "nombre": "Baba",
+        "parroquias": [
+          "Baba",
+          "Guare",
+          "Isla de Bejucal"
+        ]
+      },
+      {
+        "nombre": "Babahoyo",
+        "parroquias": [
+          "Babahoyo",
+          "Caracol",
+          "Febres Cordero",
+          "La Unión",
+          "Pimocha"
+        ]
+      },
+      {
+        "nombre": "Buena Fe",
+        "parroquias": [
+          "Patricia Pilar",
+          "San Jacinto de Buena Fe"
+        ]
+      },
+      {
+        "nombre": "Mocache",
+        "parroquias": [
+          "Mocache"
+        ]
+      },
+      {
+        "nombre": "Montalvo",
+        "parroquias": [
+          "La Esmeralda",
+          "Montalvo"
+        ]
+      },
+      {
+        "nombre": "Palenque",
+        "parroquias": [
+          "Palenque"
+        ]
+      },
+      {
+        "nombre": "Puebloviejo",
+        "parroquias": [
+          "Puebloviejo",
+          "Puerto Pechiche",
+          "San Juan"
+        ]
+      },
+      {
+        "nombre": "Quevedo",
+        "parroquias": [
+          "La Esperanza",
+          "Quevedo",
+          "San Carlos"
+        ]
+      },
+      {
+        "nombre": "Quinsaloma",
+        "parroquias": [
+          "Quinsaloma"
+        ]
+      },
+      {
+        "nombre": "Urdaneta",
+        "parroquias": [
+          "Catarama",
+          "Ricaurte"
+        ]
+      },
+      {
+        "nombre": "Valencia",
+        "parroquias": [
+          "Valencia"
+        ]
+      },
+      {
+        "nombre": "Ventanas",
+        "parroquias": [
+          "Chacarita",
+          "Los Ángeles",
+          "Ventanas",
+          "Zapotal"
+        ]
+      },
+      {
+        "nombre": "Vinces",
+        "parroquias": [
+          "Antonio Sotomayor",
+          "Vinces"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Manabí",
+    "cantones": [
+      {
+        "nombre": "24 de Mayo",
+        "parroquias": [
+          "Arquitecto Sixto Durán Ballén",
+          "Bellavista",
+          "Noboa",
+          "Sucre"
+        ]
+      },
+      {
+        "nombre": "Bolívar",
+        "parroquias": [
+          "Calceta",
+          "Membrillo",
+          "Quiroga"
+        ]
+      },
+      {
+        "nombre": "Chone",
+        "parroquias": [
+          "Boyacá",
+          "Canuto",
+          "Chibunga",
+          "Chone",
+          "Convento",
+          "Eloy Alfaro",
+          "Ricaurte",
+          "San Antonio"
+        ]
+      },
+      {
+        "nombre": "El Carmen",
+        "parroquias": [
+          "El Carmen",
+          "El Paraíso la 14",
+          "San Pedro de Suma",
+          "Santa María",
+          "Wilfrido Loor Moreira"
+        ]
+      },
+      {
+        "nombre": "Flavio Alfaro",
+        "parroquias": [
+          "Flavio Alfaro",
+          "San Francisco de Novillo",
+          "Zapallo"
+        ]
+      },
+      {
+        "nombre": "Jama",
+        "parroquias": [
+          "Jama"
+        ]
+      },
+      {
+        "nombre": "Jaramijó",
+        "parroquias": [
+          "Jaramijó"
+        ]
+      },
+      {
+        "nombre": "Jipijapa",
+        "parroquias": [
+          "América",
+          "El Anegado",
+          "Jipijapa",
+          "Julcuy",
+          "La Unión",
+          "Membrillal",
+          "Pedro Pablo Gómez",
+          "Puerto Cayo"
+        ]
+      },
+      {
+        "nombre": "Junín",
+        "parroquias": [
+          "Junín"
+        ]
+      },
+      {
+        "nombre": "Manta",
+        "parroquias": [
+          "Manta",
+          "San Lorenzo",
+          "Santa Marianita"
+        ]
+      },
+      {
+        "nombre": "Montecristi",
+        "parroquias": [
+          "La Pila",
+          "Montecristi"
+        ]
+      },
+      {
+        "nombre": "Olmedo",
+        "parroquias": [
+          "Olmedo"
+        ]
+      },
+      {
+        "nombre": "Paján",
+        "parroquias": [
+          "Campozano",
+          "Cascol",
+          "Guale",
+          "Lascano",
+          "Paján"
+        ]
+      },
+      {
+        "nombre": "Pedernales",
+        "parroquias": [
+          "Atahualpa",
+          "Cojimíes",
+          "Diez de Agosto",
+          "Pedernales"
+        ]
+      },
+      {
+        "nombre": "Pichincha",
+        "parroquias": [
+          "Barraganete",
+          "Pichincha",
+          "San Sebastián"
+        ]
+      },
+      {
+        "nombre": "Portoviejo",
+        "parroquias": [
+          "Abdón Calderón",
+          "Alhajuela",
+          "Chirijos",
+          "Crucita",
+          "Portoviejo",
+          "Pueblo Nuevo",
+          "Riochico",
+          "San Plácido"
+        ]
+      },
+      {
+        "nombre": "Puerto López",
+        "parroquias": [
+          "Machalilla",
+          "Puerto López",
+          "Salango"
+        ]
+      },
+      {
+        "nombre": "Rocafuerte",
+        "parroquias": [
+          "Rocafuerte",
+          "Sosote"
+        ]
+      },
+      {
+        "nombre": "San Vicente",
+        "parroquias": [
+          "Canoa",
+          "San Vicente"
+        ]
+      },
+      {
+        "nombre": "Santa Ana",
+        "parroquias": [
+          "Ayacucho",
+          "Honorato Vásquez",
+          "La Unión",
+          "San Pablo",
+          "Santa Ana de Vuelta Larga"
+        ]
+      },
+      {
+        "nombre": "Sucre",
+        "parroquias": [
+          "Bahía de Caráquez",
+          "Charapotó",
+          "San Isidro"
+        ]
+      },
+      {
+        "nombre": "Tosagua",
+        "parroquias": [
+          "Bachillero",
+          "Tosagua",
+          "Ángel Pedro Giler"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Morona Santiago",
+    "cantones": [
+      {
+        "nombre": "Gualaquiza",
+        "parroquias": [
+          "Amazonas",
+          "Bermejos",
+          "Bomboíza",
+          "Chigüinda",
+          "El Ideal",
+          "El Rosario",
+          "Gualaquiza",
+          "Nueva Tarqui",
+          "San Miguel de Cuyes"
+        ]
+      },
+      {
+        "nombre": "Huamboya",
+        "parroquias": [
+          "Chiguaza",
+          "Huamboya"
+        ]
+      },
+      {
+        "nombre": "Limón Indanza",
+        "parroquias": [
+          "General Leonidas Plaza Gutiérrez",
+          "Indanza",
+          "San Antonio",
+          "San Miguel de Conchay",
+          "Santa Susana de Chiviaza",
+          "Yunganza"
+        ]
+      },
+      {
+        "nombre": "Logroño",
+        "parroquias": [
+          "Logroño",
+          "Shimpis",
+          "Yaupi"
+        ]
+      },
+      {
+        "nombre": "Morona",
+        "parroquias": [
+          "Alshi",
+          "Cuchaentza",
+          "General Proaño",
+          "Macas",
+          "Río Blanco",
+          "San Isidro",
+          "Sinaí",
+          "Zona en Estudio Interparroquial Sinaí-cuchaentza",
+          "Zuña"
+        ]
+      },
+      {
+        "nombre": "Pablo Sexto",
+        "parroquias": [
+          "Pablo Sexto"
+        ]
+      },
+      {
+        "nombre": "Palora",
+        "parroquias": [
+          "16 de Agosto",
+          "Arapicos",
+          "Cumandá",
+          "Palora",
+          "Sangay"
+        ]
+      },
+      {
+        "nombre": "San Juan Bosco",
+        "parroquias": [
+          "Pan de Azúcar",
+          "San Carlos de Limón",
+          "San Jacinto de Wakambeis",
+          "San Juan Bosco",
+          "Santiago de Pananza"
+        ]
+      },
+      {
+        "nombre": "Santiago",
+        "parroquias": [
+          "Chupianza",
+          "Copal",
+          "Patuca",
+          "San Francisco de Chinimbimi",
+          "San Luis de el Acho",
+          "Santiago de Méndez",
+          "Tayuza"
+        ]
+      },
+      {
+        "nombre": "Sevilla Don Bosco",
+        "parroquias": [
+          "Sevilla Don Bosco"
+        ]
+      },
+      {
+        "nombre": "Sucúa",
+        "parroquias": [
+          "Asunción",
+          "Huambi",
+          "Santa Marianita de Jesús",
+          "Sucúa"
+        ]
+      },
+      {
+        "nombre": "Taisha",
+        "parroquias": [
+          "Huasaga",
+          "Macuma",
+          "Pumpuentsa",
+          "Taisha",
+          "Tuutinentsa"
+        ]
+      },
+      {
+        "nombre": "Tiwintza",
+        "parroquias": [
+          "San José de Morona",
+          "Santiago"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Napo",
+    "cantones": [
+      {
+        "nombre": "Archidona",
+        "parroquias": [
+          "Archidona",
+          "Cotundo",
+          "Hatun Sumaku",
+          "San Pablo de Ushpayacu"
+        ]
+      },
+      {
+        "nombre": "Carlos Julio Arosemena Tola",
+        "parroquias": [
+          "Carlos Julio Arosemena Tola"
+        ]
+      },
+      {
+        "nombre": "El Chaco",
+        "parroquias": [
+          "El Chaco",
+          "Gonzalo Díaz de Pineda",
+          "Linares",
+          "Oyacachi",
+          "Santa Rosa",
+          "Sardinas"
+        ]
+      },
+      {
+        "nombre": "Quijos",
+        "parroquias": [
+          "Baeza",
+          "Cosanga",
+          "Cuyuja",
+          "Papallacta",
+          "San Francisco de Borja",
+          "Sumaco"
+        ]
+      },
+      {
+        "nombre": "Tena",
+        "parroquias": [
+          "Ahuano",
+          "Chontapunta",
+          "Pano",
+          "Puerto Misahuallí",
+          "Puerto Napo",
+          "San Juan de Muyuna",
+          "Tena",
+          "Tálag"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Orellana",
+    "cantones": [
+      {
+        "nombre": "Aguarico",
+        "parroquias": [
+          "Capitán Augusto Rivadeneyra",
+          "Cononaco",
+          "Nuevo Rocafuerte",
+          "Santa María de Huiririma",
+          "Yasuní"
+        ]
+      },
+      {
+        "nombre": "Francisco de Orellana",
+        "parroquias": [
+          "Alejandro Labaka",
+          "Dayuma",
+          "El Coca",
+          "El Dorado",
+          "El Edén",
+          "García Moreno",
+          "Inés Arango",
+          "La Belleza",
+          "Nuevo Paraíso",
+          "San José de Guayusa",
+          "San Luis de Armenia",
+          "Taracoa"
+        ]
+      },
+      {
+        "nombre": "La Joya de los Sachas",
+        "parroquias": [
+          "Enokanqui",
+          "La Joya de los Sachas",
+          "Lago San Pedro",
+          "Pompeya",
+          "Rumipamba",
+          "San Carlos",
+          "San Sebastián del Coca",
+          "Tres de Noviembre",
+          "Unión Milagreña"
+        ]
+      },
+      {
+        "nombre": "Loreto",
+        "parroquias": [
+          "Loreto",
+          "Puerto Murialdo",
+          "San José de Dahuano",
+          "San José de Payamino",
+          "San Vicente de Huaticocha",
+          "Ávila"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Pastaza",
+    "cantones": [
+      {
+        "nombre": "Arajuno",
+        "parroquias": [
+          "Arajuno",
+          "Curaray"
+        ]
+      },
+      {
+        "nombre": "Mera",
+        "parroquias": [
+          "Madre Tierra",
+          "Mera",
+          "Shell"
+        ]
+      },
+      {
+        "nombre": "Pastaza",
+        "parroquias": [
+          "Canelos",
+          "Diez de Agosto",
+          "El Triunfo",
+          "Fátima",
+          "Montalvo",
+          "Pomona",
+          "Puyo",
+          "Río Corrientes",
+          "Río Tigre",
+          "Sarayacu",
+          "Simón Bolívar",
+          "Tarqui",
+          "Teniente Hugo Ortiz",
+          "Veracruz"
+        ]
+      },
+      {
+        "nombre": "Santa Clara",
+        "parroquias": [
+          "San José",
+          "Santa Clara"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Pichincha",
+    "cantones": [
+      {
+        "nombre": "Cayambe",
+        "parroquias": [
+          "Ascázubi",
+          "Cangahua",
+          "Cayambe",
+          "Juan Montalvo",
+          "Olmedo",
+          "Otón",
+          "San José de Ayora",
+          "Santa Rosa de Cuzubamba"
+        ]
+      },
+      {
+        "nombre": "Mejía",
+        "parroquias": [
+          "Aloag",
+          "Aloasí",
+          "Cutuglahua",
+          "El Chaupi",
+          "Machachi",
+          "Manuel Cornejo Astorga",
+          "Tambillo",
+          "Uyumbicho"
+        ]
+      },
+      {
+        "nombre": "Pedro Moncayo",
+        "parroquias": [
+          "La Esperanza",
+          "Malchinguí",
+          "Tabacundo",
+          "Tocachi",
+          "Tupigachi"
+        ]
+      },
+      {
+        "nombre": "Pedro Vicente Maldonado",
+        "parroquias": [
+          "Pedro Vicente Maldonado"
+        ]
+      },
+      {
+        "nombre": "Puerto Quito",
+        "parroquias": [
+          "Puerto Quito"
+        ]
+      },
+      {
+        "nombre": "Quito",
+        "parroquias": [
+          "Alangasí",
+          "Amaguaña",
+          "Atahualpa",
+          "Calacalí",
+          "Calderón",
+          "Chavezpamba",
+          "Checa",
+          "Conocoto",
+          "Cumbayá",
+          "El Quinche",
+          "Gualea",
+          "Guangopolo",
+          "Guayllabamba",
+          "La Merced",
+          "Llano Chico",
+          "Lloa",
+          "Nanegal",
+          "Nanegalito",
+          "Nayón",
+          "Nono",
+          "Pacto",
+          "Perucho",
+          "Pifo",
+          "Pomasqui",
+          "Puembo",
+          "Puéllaro",
+          "Píntag",
+          "Quito",
+          "San Antonio",
+          "San José de Minas",
+          "Tababela",
+          "Tumbaco",
+          "Yaruquí",
+          "Zámbiza"
+        ]
+      },
+      {
+        "nombre": "Rumiñahui",
+        "parroquias": [
+          "Cotogchoa",
+          "Rumipamba",
+          "Sangolquí"
+        ]
+      },
+      {
+        "nombre": "San Miguel de los Bancos",
+        "parroquias": [
+          "Mindo",
+          "San Miguel de los Bancos"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Santa Elena",
+    "cantones": [
+      {
+        "nombre": "La Libertad",
+        "parroquias": [
+          "La Libertad"
+        ]
+      },
+      {
+        "nombre": "Salinas",
+        "parroquias": [
+          "Anconcito",
+          "José Luis Tamayo",
+          "Salinas"
+        ]
+      },
+      {
+        "nombre": "Santa Elena",
+        "parroquias": [
+          "Atahualpa",
+          "Chanduy",
+          "Colonche",
+          "Manglaralto",
+          "San José de Ancón",
+          "Santa Elena",
+          "Simón Bolívar"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Santo Domingo de los Tsáchilas",
+    "cantones": [
+      {
+        "nombre": "La Concordia",
+        "parroquias": [
+          "La Concordia",
+          "La Villegas",
+          "Monterrey",
+          "Plan Piloto"
+        ]
+      },
+      {
+        "nombre": "Santo Domingo",
+        "parroquias": [
+          "Alluriquín",
+          "El Esfuerzo",
+          "Luz de América",
+          "Puerto Limón",
+          "San Jacinto del Búa",
+          "Santa María del Toachi",
+          "Santo Domingo de los Colorados",
+          "Valle Hermoso"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Sucumbíos",
+    "cantones": [
+      {
+        "nombre": "Cascales",
+        "parroquias": [
+          "El Dorado de Cascales",
+          "Nueva Troncal",
+          "Santa Rosa de Sucumbíos",
+          "Sevilla"
+        ]
+      },
+      {
+        "nombre": "Cuyabeno",
+        "parroquias": [
+          "Aguas Negras",
+          "Cuyabeno",
+          "Tarapoa"
+        ]
+      },
+      {
+        "nombre": "Gonzalo Pizarro",
+        "parroquias": [
+          "El Reventador",
+          "Gonzalo Pizarro",
+          "Lumbaquí",
+          "Puerto Libre"
+        ]
+      },
+      {
+        "nombre": "Lago Agrio",
+        "parroquias": [
+          "10 de Agosto",
+          "Dureno",
+          "El Eno",
+          "General Farfán",
+          "Jambelí",
+          "Nueva Loja",
+          "Pacayacu",
+          "Santa Cecilia"
+        ]
+      },
+      {
+        "nombre": "Putumayo",
+        "parroquias": [
+          "Palma Roja",
+          "Puerto Bolívar",
+          "Puerto Rodríguez",
+          "Puerto el Carmen de Putumayo",
+          "Sansahuari",
+          "Santa Elena"
+        ]
+      },
+      {
+        "nombre": "Shushufindi",
+        "parroquias": [
+          "La Magdalena",
+          "La Primavera",
+          "Limoncocha",
+          "Pañacocha",
+          "San Pedro de los Cofánes",
+          "San Roque",
+          "Shushufindi",
+          "Siete de Julio"
+        ]
+      },
+      {
+        "nombre": "Sucumbíos",
+        "parroquias": [
+          "El Playón de San Francisco",
+          "La Bonita",
+          "La Sofía",
+          "Rosa Florida",
+          "Santa Bárbara"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Tungurahua",
+    "cantones": [
+      {
+        "nombre": "Ambato",
+        "parroquias": [
+          "Ambatillo",
+          "Ambato",
+          "Atahualpa",
+          "Augusto N. Martínez",
+          "Constantino Fernández",
+          "Cunchibamba",
+          "Huachi Grande",
+          "Izamba",
+          "Juan Benigno Vela",
+          "Montalvo",
+          "Pasa",
+          "Picaihua",
+          "Pilagüín",
+          "Quisapincha",
+          "San Bartolomé de Pinllo",
+          "San Fernando",
+          "Santa Rosa",
+          "Totoras",
+          "Unamuncho"
+        ]
+      },
+      {
+        "nombre": "Baños de Agua Santa",
+        "parroquias": [
+          "Baños",
+          "Lligua",
+          "Río Negro",
+          "Río Verde",
+          "Ulba"
+        ]
+      },
+      {
+        "nombre": "Cevallos",
+        "parroquias": [
+          "Cevallos"
+        ]
+      },
+      {
+        "nombre": "Mocha",
+        "parroquias": [
+          "Mocha",
+          "Pinguilí"
+        ]
+      },
+      {
+        "nombre": "Patate",
+        "parroquias": [
+          "El Triunfo",
+          "Los Andes",
+          "Patate",
+          "Sucre"
+        ]
+      },
+      {
+        "nombre": "Quero",
+        "parroquias": [
+          "Quero",
+          "Rumipamba",
+          "Yanayacu Mochapata"
+        ]
+      },
+      {
+        "nombre": "San Pedro de Pelileo",
+        "parroquias": [
+          "Benítez",
+          "Bolívar",
+          "Chiquicha",
+          "Cotaló",
+          "El Rosario",
+          "García Moreno",
+          "Guambaló",
+          "Pelileo",
+          "Salasaca"
+        ]
+      },
+      {
+        "nombre": "Santiago de Píllaro",
+        "parroquias": [
+          "Baquerizo Moreno",
+          "Emilio María Terán",
+          "Marcos Espinel",
+          "Presidente Urbina",
+          "Píllaro",
+          "San Andrés",
+          "San José de Poaló",
+          "San Miguelito"
+        ]
+      },
+      {
+        "nombre": "Tisaleo",
+        "parroquias": [
+          "Quinchicoto",
+          "Tisaleo"
+        ]
+      }
+    ]
+  },
+  {
+    "nombre": "Zamora Chinchipe",
+    "cantones": [
+      {
+        "nombre": "Centinela del Cóndor",
+        "parroquias": [
+          "Panguintza",
+          "Triunfo Dorado",
+          "Zumbi"
+        ]
+      },
+      {
+        "nombre": "Chinchipe",
+        "parroquias": [
+          "Chito",
+          "El Chorro",
+          "La Chonta",
+          "Pucapamba",
+          "San Andrés",
+          "Zumba"
+        ]
+      },
+      {
+        "nombre": "El Pangui",
+        "parroquias": [
+          "El Guisme",
+          "El Pangui",
+          "Pachicutza",
+          "Tundayme"
+        ]
+      },
+      {
+        "nombre": "Nangaritza",
+        "parroquias": [
+          "Guayzimi",
+          "Nankais",
+          "Nuevo Paraíso",
+          "Zurmi"
+        ]
+      },
+      {
+        "nombre": "Palanda",
+        "parroquias": [
+          "El Porvenir del Carmen",
+          "La Canela",
+          "Palanda",
+          "San Francisco del Vergel",
+          "Valladolid"
+        ]
+      },
+      {
+        "nombre": "Paquisha",
+        "parroquias": [
+          "Bellavista",
+          "Nuevo Quito",
+          "Paquisha"
+        ]
+      },
+      {
+        "nombre": "Yacuambi",
+        "parroquias": [
+          "28 de Mayo",
+          "La Paz",
+          "Tutupali"
+        ]
+      },
+      {
+        "nombre": "Yantzaza",
+        "parroquias": [
+          "Chicaña",
+          "Los Encuentros",
+          "Yantzaza"
+        ]
+      },
+      {
+        "nombre": "Zamora",
+        "parroquias": [
+          "Cumbaratza",
+          "Guadalupe",
+          "Imbana",
+          "Sabanilla",
+          "San Carlos de las Minas",
+          "Timbara",
+          "Zamora"
+        ]
+      }
+    ]
+  }
+]

@@ -33,7 +33,7 @@ function shortDay(iso: string): string {
 
 /** Detalle de una reserva para el cliente, en vivo. */
 export default function BookingDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, aviso, mensaje, chat } = useLocalSearchParams<{ id: string;aviso?:string;mensaje?:string;chat?:string }>();
   const [b, setB] = useState<ClientBooking | null | undefined>(undefined);
 
   useEffect(() => {
@@ -47,6 +47,7 @@ export default function BookingDetailScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <BackButton />
+          {aviso && <Card><Body>{aviso}</Body>{mensaje && <Body muted>{mensaje}</Body>}</Card>}
         {b === undefined && <Body muted>Cargando…</Body>}
         {b === null && <Body>No encontramos esta reserva.</Body>}
         {b && <Detail b={b} />}
@@ -56,6 +57,7 @@ export default function BookingDetailScreen() {
 }
 
 function Detail({ b }: { b: ClientBooking }) {
+  const {chat:focusChat}=useLocalSearchParams<{chat?:string}>();
   const me = useUser();
   const cat = getCategory(b.category);
   const first = b.professionalName.split(' ')[0];
@@ -75,10 +77,16 @@ function Detail({ b }: { b: ClientBooking }) {
 
   return (
     <View style={{ gap: 16 }}>
+{focusChat === '1' && <View>{b.status !== 'cancelada' && me && (
+        <Card style={{ gap: 10 }}>
+          <Text style={s.boxTitle}>💬 Chat con {first}</Text>
+          <Chat bookingId={b.id} uid={me.uid} me="cliente" otherName={first} open={['pendiente', 'confirmada', 'en_camino', 'en_curso', 'por_aprobar'].includes(b.status)} />
+</Card>)} </View>}
       <View style={{ gap: 4 }}>
         <H1 style={{ fontSize: 24 }}>{cat?.name ?? b.category} con {b.professionalName}</H1>
         <Text style={s.when}>{shortDay(b.date)} · {b.slot}</Text>
       </View>
+      {['pendiente', 'confirmada'].includes(b.status) && <Reschedule id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="cliente" other={first} />}
       {['confirmada', 'en_camino'].includes(b.status) && <ArrivalCode id={b.id} pro={first} />}
       {['confirmada', 'en_camino'].includes(b.status) && <DelayClient id={b.id} slot={b.slot} delay={b.delay} pro={first} />}
       {alert && (
@@ -88,15 +96,15 @@ function Detail({ b }: { b: ClientBooking }) {
       )}
       <Card style={{ gap: 14 }}>
         <Body>{message[b.status] ?? ''}</Body>
-        {b.status !== 'cancelada' && STEPS.map((st, i) => {
-          const done = idx > i || ['por_aprobar', 'completada'].includes(b.status);
+        {!['cancelada', 'en_disputa'].includes(b.status) && STEPS.map((st, i) => {
+          const done = idx > i || b.status === 'completada';
           const now = idx === i && !done;
           return (
-            <View key={st.status} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={[s.dot, done && { backgroundColor: c.success, borderColor: c.success }, now && { borderColor: c.copper }]}>
+            <View key={st.status} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: 12, backgroundColor: now ? c.primary : 'transparent' }}>
+              <View style={[s.dot, done && { backgroundColor: c.success, borderColor: c.success }, now && { borderColor: '#fff', backgroundColor: '#fff' }]}>
                 {done && <Icon name="check" size={13} color="#fff" strokeWidth={3} />}
               </View>
-              <Text style={[s.step, (done || now) && { color: c.text }]}>{st.t}</Text>
+              <Text style={[s.step, done && { color: c.text }, now && { color: '#fff', fontFamily: font.bodyBold }]}>{now ? 'AHORA · ' : ''}{st.status === 'en_camino' && b.arrivedAt ? 'En tu dirección' : st.t}</Text>
             </View>
           );
         })}
@@ -139,13 +147,7 @@ function Detail({ b }: { b: ClientBooking }) {
           {HOME_SAFETY_NOTICE.map((t) => <Body key={t} style={{ fontSize: 13.5 }}>• {t}</Body>)}
         </View>
       )}
-      {b.status !== 'cancelada' && me && (
-        <Card style={{ gap: 10 }}>
-          <Text style={s.boxTitle}>💬 Chat con {first}</Text>
-          <Chat bookingId={b.id} uid={me.uid} me="cliente" otherName={first} open={['pendiente', 'confirmada', 'en_camino', 'en_curso', 'por_aprobar'].includes(b.status)} />
-        </Card>
-      )}
-      {['pendiente', 'confirmada'].includes(b.status) && <Reschedule id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="cliente" other={first} />}
+
       <Card style={{ gap: 6 }}>
         {b.address ? <Body>📍 {b.address}</Body> : null}
         {b.notes ? <Body muted>{b.notes}</Body> : null}
@@ -156,6 +158,11 @@ function Detail({ b }: { b: ClientBooking }) {
         )}
         <Body>{b.visit ? `Visita ${formatUSD(b.visit)} · ` : ''}{b.surcharge ? `${b.surchargeKind === 'feriado' ? 'Recargo de feriado' : 'Recargo nocturno'} ${formatUSD(b.surcharge)} · ` : ''}Total: {formatUSD(b.total)} · Código {b.id.slice(0, 8).toUpperCase()}</Body>
       </Card>
+      {focusChat !== '1' && <View>{b.status !== 'cancelada' && me && (
+        <Card style={{ gap: 10 }}>
+          <Text style={s.boxTitle}>💬 Chat con {first}</Text>
+          <Chat bookingId={b.id} uid={me.uid} me="cliente" otherName={first} open={['pendiente', 'confirmada', 'en_camino', 'en_curso', 'por_aprobar'].includes(b.status)} />
+</Card>)} </View>}
       <CancelBox row={b} onDone={() => {}} />
     </View>
   );

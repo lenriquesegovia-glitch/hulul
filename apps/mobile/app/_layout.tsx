@@ -24,7 +24,7 @@ function Navigator({ fontsLoaded }: { fontsLoaded: boolean }) {
   const { ready, consent } = usePrivacy();
   const segments = useSegments();
   const loaded = fontsLoaded && ready;
-  usePushNotifications();
+  usePushNotifications(loaded && !!consent);
 
   useEffect(() => {
     if (!loaded) return;

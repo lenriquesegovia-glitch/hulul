@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import {ClientSummary} from '@/components/ClientSummary';
 import { COMMISSION_RATE, departPlan, durationLabel, formatUSD, getCategory, hhmmEcuador, serviceCopy, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS, MIN_DIAGNOSIS_CHARS, MIN_DIAGNOSIS_PHOTOS, travelEstimate, type JobOutcome, type ProviderStatus } from '@hulul/shared';
 import { RescheduleBox } from '@/components/RescheduleBox';
 import type { ProAction, ProBooking, VisitReport as Report } from '@hulul/shared/firebase';
@@ -228,7 +229,7 @@ function directions(b: ProBooking) {
 }
 
 
-function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking; highlight?: boolean; compact?: boolean }) {
+export function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking; highlight?: boolean; compact?: boolean }) {
   const cat = getCategory(b.category);
   const first = (b.contactName ?? '').split(' ')[0];
   const accepted = ['confirmada', 'en_camino', 'en_curso'].includes(b.status);
@@ -238,6 +239,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
   const [asking, setAsking] = useState<'' | 'rechazar' | 'no_puedo' | 'cliente_ausente'>('');
   const [finishing, setFinishing] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  useEffect(()=>{const q=new URLSearchParams(window.location.search);if(q.get('reserva')===b.id || window.location.pathname.endsWith('/reserva/'+b.id)){if(q.get('chat'))setChatOpen(true);document.getElementById('reserva-'+b.id)?.scrollIntoView({block:'start'});}},[b.id]);
   const [reason, setReason] = useState('');
 
   const [code, setCode] = useState('');
@@ -258,7 +260,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
   };
 
   return (
-    <article className="card stack gap-12" style={{ padding: 16, borderColor: highlight ? 'var(--primary)' : undefined, borderWidth: highlight ? 2 : undefined }}>
+    <article id={`reserva-${b.id}`} className="card stack gap-12" style={{ scrollMarginTop:140, padding: 16, borderColor: highlight ? 'var(--primary)' : undefined, borderWidth: highlight ? 2 : undefined }}>
       <div className="row gap-12" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div className="stack gap-4">
           <strong style={{ fontSize: 17 }}>{dayTitle(b.date)} · {b.slot}</strong>
@@ -267,6 +269,7 @@ function BookingCard({ b, highlight = false, compact = false }: { b: ProBooking;
         <span className={`pill ${b.status === 'pendiente' ? 'pill-warm' : accepted ? 'pill-success' : ''}`}>{STATUS[b.status] ?? b.status}</span>
       </div>
 
+      <ClientSummary bookingId={b.id} />
       {!compact && b.notes && <p style={{ color: 'var(--text-2)', fontSize: 15 }}>{b.notes}</p>}
       {!compact && !!b.photos?.length && (
         <div className="row gap-8" style={{ flexWrap: 'wrap' }} aria-label="Fotos del cliente">

@@ -1,3 +1,7 @@
+import {useCity} from '@/lib/city';
+import {serviceCity} from '@hulul/shared';
+import {CitySelector} from '@/components/CitySelector';
+import {Inbox} from '@/components/Inbox';
 import { BrandLogo } from '@/components/BrandLogo';
 import { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,6 +19,7 @@ import { useProviderStatus } from '@/lib/pros';
 
 
 export default function Home() {
+  const {city}=useCity();
   const [discovery, setDiscovery] = useState(featuredHomeServices);
   useEffect(() => {
     let active = true;
@@ -36,8 +41,8 @@ export default function Home() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top']}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <View style={s.header}>
-          <BrandLogo />
-          <Pressable accessibilityRole="button" accessibilityLabel="Mi cuenta" onPress={() => router.push('/cuenta')} style={s.location}>
+          <View style={{flex:1}}><BrandLogo /><CitySelector /></View>
+          <Inbox /><Pressable accessibilityRole="button" accessibilityLabel="Mi cuenta" onPress={() => router.push('/cuenta')} style={s.location}>
             <Icon name="user" size={18} />
             <Text style={s.locationText}>Mi cuenta</Text>
           </Pressable>
@@ -57,7 +62,7 @@ export default function Home() {
         <ActiveBooking />
 
         <View style={{ gap: 6 }}>
-          <Body muted style={{ fontSize: 12 }}>{homeCopy.coverage}</Body>
+          <Body muted style={{ fontSize: 12 }}>{`Buscando servicios en ${serviceCity(city)?.name || 'tu ciudad'}`}</Body>
           <H1 style={s.homeTitle}>{homeCopy.headline}</H1>
           <Body style={s.homeDescription}>{homeCopy.description}</Body>
           <Body style={s.homeProcess}>{homeCopy.process}</Body>
