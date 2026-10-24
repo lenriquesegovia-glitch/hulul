@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { formatPrice, proHref, ratingLabel, type Professional } from '@hulul/shared';
+import { ProAvatar } from './ProAvatar';
 import { Icon } from './Icon';
 
 /** `job`: trabajo elegido en la categoría; se pasa a la reserva. */
@@ -7,9 +8,9 @@ export function ProCard({ pro, job }: { pro: Professional; job?: string }) {
   const bookHref = proHref('reservar', pro, job);
   return (
     <article className="card pro-card">
-      <Link href={proHref('profesional', pro)} className="stack gap-12" style={{ textDecoration: 'none', color: 'inherit' }}>
+      <Link href={proHref('profesional', pro, job)} className="stack gap-12" style={{ textDecoration: 'none', color: 'inherit' }}>
         <div className="row gap-12">
-          <span className="avatar" style={{ width: 52, height: 52, fontSize: 17 }}>{pro.initials}</span>
+          <ProAvatar name={pro.name} initials={pro.initials} photoUrl={pro.photoUrl}/>
           <div className="stack gap-4" style={{ minWidth: 0 }}>
             <strong className="row gap-8" style={{ fontSize: 16 }}>
               {pro.name}

@@ -1,5 +1,5 @@
 import { BrandLogo } from '@/components/BrandLogo';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,8 +15,6 @@ import { useProviderStatus } from '@/lib/pros';
 
 
 export default function Home() {
-  const scroll = useRef<ScrollView>(null);
-  const [catalogY, setCatalogY] = useState(0);
   const [discovery, setDiscovery] = useState(featuredHomeServices);
   useEffect(() => {
     let active = true;
@@ -36,7 +34,7 @@ export default function Home() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top']}>
-      <ScrollView ref={scroll} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <View style={s.header}>
           <BrandLogo />
           <Pressable accessibilityRole="button" accessibilityLabel="Mi cuenta" onPress={() => router.push('/cuenta')} style={s.location}>
@@ -92,19 +90,20 @@ export default function Home() {
             ))}
           </View>
         )}
-        {q.trim().length > 0 && suggestions.length === 0 && <Body muted>No encontramos ese servicio. Mira todas las categorías abajo.</Body>}
+        {q.trim().length > 0 && suggestions.length === 0 && <Body muted>No encontramos ese servicio. Toca Explorar los 18 servicios.</Body>}
 
-        <Pressable accessibilityRole="button" style={s.explore} onPress={() => scroll.current?.scrollTo({ y: catalogY, animated: false })}>
+        <Pressable accessibilityRole="button" style={s.explore} onPress={() => router.push('/servicios')}>
           <Text style={s.exploreText}>Explorar los {categories.length} servicios →</Text>
         </Pressable>
 
+        <View><Image source={require('../assets/hulul-tranquilidad.webp')} style={s.calmImage} resizeMode="cover" accessibilityLabel="Una mujer disfruta un momento tranquilo en casa" /><Body muted style={{fontSize:11,marginTop:6}}>Imagen ilustrativa</Body></View>
         <View style={{ gap: 12 }}>
           <H2>{discoveryTitle(discovery.mode)}</H2>
-          <ScrollView horizontal contentContainerStyle={{ gap: 16 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16 }}>
           {discovery.items.map((p) => {
             const category = getCategory(p.categoryId);
             if (!category) return null;
-            return <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={p.label} onPress={() => router.push({ pathname: '/categoria/[slug]', params: { slug: p.categoryId, trabajo: p.label } })} style={s.featuredCard}>
+            return <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={p.label} onPress={() => router.push({ pathname: '/profesionales-disponibles/[slug]', params: { slug: p.categoryId, trabajo: p.label } })} style={s.featuredCard}>
               <Image source={{ uri: categoryImage(category.slug, 500) }} style={s.featuredImage} resizeMode="cover" accessible={false} />
               <View style={s.featuredCaption}>
                 <Text style={[s.listTitle, { flex: 1 }]}>{p.label}</Text>
@@ -113,27 +112,10 @@ export default function Home() {
             </Pressable>;
           })}
           </ScrollView>
+          {discovery.mode !== 'popular' && <Body muted style={{fontSize:12}}>Estamos reuniendo solicitudes de esta semana. Mientras tanto, explora esta selección.</Body>}
           <Body muted style={{ fontSize: 12 }}>Fotos de referencia</Body>
         </View>
 
-        <View onLayout={event => setCatalogY(event.nativeEvent.layout.y)} style={{ gap: 16 }}>
-          <H2>Servicios a domicilio</H2>
-          <Body muted style={{ fontSize: 13 }}>Explora las {categories.length} categorías. Fotos de referencia.</Body>
-        <View style={s.grid}>
-          {categories.map((cat) => (
-            <Pressable
-              key={cat.slug}
-              accessibilityRole="button"
-              accessibilityLabel={cat.name}
-              onPress={() => router.push(`/categoria/${cat.slug}`)}
-              style={({ pressed }) => [s.photo, pressed && { opacity: 0.85 }]}
-            >
-              <Image source={{ uri: categoryImage(cat.slug, 500) }} style={s.photoImage} resizeMode="cover" />
-              <Text style={s.photoText} numberOfLines={2}>{cat.name}</Text>
-            </Pressable>
-          ))}
-        </View>
-        </View>
 
         <Pressable accessibilityRole="button" onPress={() => (isPro ? router.push('/agenda') : Linking.openURL('https://hululec.com/profesionales/registro'))} style={({ pressed }) => [s.proCard, pressed && { opacity: 0.9 }]}>
           <Image source={{ uri: categoryImage('electricidad', 700) }} style={s.proImg} resizeMode="cover" />
@@ -176,13 +158,14 @@ export default function Home() {
 }
 
 const s = StyleSheet.create({
-  featuredCard: { width: 164, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
+  featuredCard: { width: 224, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   featuredImage: { width: '100%', aspectRatio: 3 / 2 },
-  featuredCaption: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 64, padding: 12 },
+  featuredCaption: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 76, padding: 14 },
   homeTitle: { fontSize: 38, lineHeight: 42, letterSpacing: -1.4, color: c.primary, fontFamily: font.displayHeavy, marginVertical: 10 },
   homeDescription: { fontSize: 16, lineHeight: 25 },
   homeProcess: { fontSize: 14, lineHeight: 22, color: c.textSecondary, marginTop: 8 },
-  explore: { minHeight: 48, justifyContent: 'center' },
+  calmImage: {width:'100%', height:200, borderRadius:24},
+  explore: { minHeight: 48, justifyContent: 'center', alignItems:'center', borderWidth:1, borderColor:c.primary, borderRadius:12, backgroundColor:c.surface },
   exploreText: { fontFamily: font.bodyBold, fontSize: 16, color: c.primary },
   content: { padding: 20, paddingBottom: 40, gap: 24 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

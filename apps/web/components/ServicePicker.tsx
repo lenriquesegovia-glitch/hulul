@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { formatPrice, type Category } from '@hulul/shared';
+import { serviceIcon, formatPrice, type Category } from '@hulul/shared';
 import { usePros } from '@/lib/pros';
 import { Icon } from './Icon';
 import { ProCard } from './ProCard';
@@ -14,31 +14,32 @@ export const OTHER_JOB = 'Otro';
  * pedidos como guía (y "Otro trabajo"), luego los profesionales. El trabajo
  * elegido viaja a la reserva (?trabajo=…).
  */
-export function ServicePicker({ cat, city, cityName }: { cat: Category; city?: string; cityName?: string }) {
+export function ServicePicker({ cat, city, cityName, providersOnly = false, initialJob = '' }: { cat: Category; city?: string; cityName?: string; providersOnly?: boolean; initialJob?: string }) {
   const { pros: all } = usePros(cat.slug, city);
-  const [job, setJob] = useState('');
+  const job = cat.servicios.includes(initialJob) || initialJob === OTHER_JOB ? initialJob : '';
+  const router = useRouter();
   // Si eligió un trabajo, primero quienes lo marcaron.
   const pros = all && job && job !== OTHER_JOB
     ? [...all].sort((a, b) => Number((b.services ?? []).includes(job)) - Number((a.services ?? []).includes(job)))
     : all;
-  const list = useRef<HTMLDivElement>(null);
   // "Visita desde $X": la tarifa más baja de los profesionales de la categoría.
   const rates = (all ?? []).map((p) => p.visitRate).filter((r) => r > 0);
   const from = rates.length ? Math.min(...rates) : 0;
 
   const pick = (j: string) => {
-    setJob(j);
-    setTimeout(() => list.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    const params = new URLSearchParams({trabajo:j});
+    if(city) params.set('ciudad',city);
+    router.push(`/servicios/${cat.slug}/profesionales?${params}`);
   };
 
   return (
     <div className="stack gap-32">
-      <div className="stack gap-12">
+      {!providersOnly && <div className="stack gap-12">
         <h2 style={{ fontSize: 24 }}>¿Qué necesitas?</h2>
         <div className="job-grid">
           {[...cat.servicios, OTHER_JOB].map((s) => (
-            <button key={s} type="button" aria-pressed={job === s} className={`job-card ${job === s ? 'on' : ''}`} onClick={() => pick(s)}>
-              <span className="job-icon"><Icon name={s === OTHER_JOB ? 'chat' : cat.icon} size={22} color={job === s ? '#fff' : '#685943'} /></span>
+            <button key={s} type="button" className={`job-card ${job === s ? 'on' : ''}`} onClick={() => pick(s)}>
+              <span className="job-icon"><Icon name={serviceIcon(s,cat.icon)} size={22} color={job === s ? '#fff' : '#685943'} /></span>
               <span className="stack" style={{ minWidth: 0, flex: 1 }}>
                 <strong>{s}</strong>
                 <span className="muted" style={{ fontSize: 13 }}>
@@ -49,9 +50,9 @@ export function ServicePicker({ cat, city, cityName }: { cat: Category; city?: s
             </button>
           ))}
         </div>
-      </div>
+      </div>}
 
-      <div className="stack gap-16" ref={list} style={{ scrollMarginTop: 90 }}>
+      {providersOnly && <div className="stack gap-16" style={{ scrollMarginTop: 90 }}>
         <h2 style={{ fontSize: 24 }}>{job ? `Profesionales para: ${job}` : 'Profesionales destacados'}</h2>
         {!job && <p className="muted" style={{ fontSize: 14.5, marginTop: -8 }}>Elige arriba qué necesitas, o reserva directo con un profesional.</p>}
         {pros === null && <p className="muted">Buscando profesionales…</p>}
@@ -70,7 +71,7 @@ export function ServicePicker({ cat, city, cityName }: { cat: Category; city?: s
             </div>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

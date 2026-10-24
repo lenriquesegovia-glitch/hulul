@@ -22,3 +22,5 @@ export * from './logo';
 
 export * from './home';
 export * from './home-discovery';
+
+export * from './service-icons';

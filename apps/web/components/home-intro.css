@@ -64,3 +64,25 @@
  .hh-catalog .photo-text strong { font-size:16px; }
  .hh-catalog .photo-text span { display:none; }
 }
+
+/* V4: clear navigation, unbroken labels and mobile lifestyle image. */
+.hh-explore { border:1px solid var(--hh-ink);border-radius:12px;padding:0 18px;background:#fff;justify-content:center; }
+.hh-discovery ul { scrollbar-width:none; }
+.hh-discovery ul::-webkit-scrollbar { display:none; }
+.hh-discovery li { flex-basis:260px; }
+.hh-featured-card strong { min-width:0;flex:1;word-break:normal;overflow-wrap:normal; }
+.hh-catalog .photo-text { display:grid;grid-template-columns:minmax(0,1fr) 20px;align-items:center; }
+.hh-catalog .photo-text strong { overflow-wrap:normal;word-break:normal;font-size:clamp(14px,1.8vw,18px); }
+.category-arrow { font-size:22px;color:var(--hh-ink); }
+.hh-catalog .photo-text > span { grid-column:1/-1; }
+@media(max-width:760px){
+ .hh-visual {display:block;margin:24px 0 0;}
+ .hh-visual img {height:220px;object-position:58% 38%;border-radius:24px;}
+ .hh-hero::before {display:none;}
+ .hh-explore {width:100%;}
+ .hh-discovery li {flex-basis:224px;}
+ .hh-catalog .photo-grid {grid-template-columns:1fr;}
+ .hh-catalog .photo-card {display:block;}
+ .hh-catalog .photo-card img {height:auto;width:100%;aspect-ratio:16/7;}
+ .hh-catalog .photo-text strong {font-size:16px;}
+}

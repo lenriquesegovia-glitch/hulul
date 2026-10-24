@@ -73,7 +73,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   const isoAt = (d: number) => { const x = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
   /** Anticipación + horario de la categoría + horario del profesional. */
   const lead = leadMinutes(pro.category);
-  const okWith = (d: number, k: number, h: number) => tester ? timeAvailable(d, slots[k], now, 5) : slotAvailable(d, k, now, lead) && checkSlot({ category: pro.category, date: isoAt(d), slot: slots[k], hours: h, pro }).ok;
+  const okWith = (d: number, k: number, h: number) => tester ? timeAvailable(d, slots[k], now, 0) : slotAvailable(d, k, now, lead) && checkSlot({ category: pro.category, date: isoAt(d), slot: slots[k], hours: h, pro }).ok;
   const first = useMemo(() => {
     const f = tester ? { day: 0, slot: 0 } : firstAvailable(now, lead);
     for (let d = f.day; d < BOOKING_DAYS; d++) {
@@ -173,7 +173,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
     if (sending) return;
     if (check && !check.ok) { setError(check.reason ?? 'Ese horario no está disponible.'); return; }
     if (check && check.warnings.length && !ack) { setError('Lee el aviso sobre el horario y marca que lo entiendes.'); return; }
-    if (slot < 0 || (tester ? !timeAvailable(day, slots[slot], new Date(), 5) : !slotAvailable(day, slot, new Date(), lead))) {
+    if (slot < 0 || (tester ? !timeAvailable(day, slots[slot], new Date(), 0) : !slotAvailable(day, slot, new Date(), lead))) {
       setError('Esa hora ya no está disponible. Elige otra hora de llegada.');
       return;
     }
@@ -281,6 +281,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
           <View style={{ gap: 10 }}>
             <Text style={s.label}>Hora de llegada</Text>
             {tester && <Body style={{ fontSize: 12.5, color: c.copper }}>Modo prueba: cualquier hora, sin reglas de horario.</Body>}
+            {!tester && <Body muted style={{fontSize:13,lineHeight:20}}>Horario de {pro.name.split(' ')[0]}: {pro.from || '08:00'}–{pro.to || '18:00'}. Puedes solicitar una hora futura sin anticipación mínima; el profesional confirma si puede atenderte. La visita dura aproximadamente {minH} h y debe terminar dentro de su horario. Una hora tachada no significa necesariamente que tenga una reserva.</Body>}
             <View style={s.slots}>
               {slots.map((t, i) => {
                 if (!tester && !slotInWindow(pro.category, t, pro)) return null;

@@ -66,8 +66,8 @@ export function nextDays(n = BOOKING_DAYS, from: Date = new Date()): BookingDay[
   });
 }
 
-/** Anticipación mínima por defecto para reservar hoy (urgentes: 30 min, ver leadMinutes en schedule.ts). */
-export const LEAD_TIME_HOURS = 2;
+/** Sin anticipación mínima para solicitar una hora futura. */
+export const LEAD_TIME_HOURS = 0;
 
 /** ¿Se puede reservar esa hora? Las de hoy deben empezar al menos `leadMin` minutos después de ahora. */
 export function slotAvailable(dayIndex: number, slotIndex: number, now: Date = new Date(), leadMin = LEAD_TIME_HOURS * 60): boolean {

@@ -11,6 +11,7 @@ export interface Professional {
   id: string;
   name: string;
   initials: string;
+  photoUrl?: string;
   /** true = empresa con varios técnicos */
   isCompany: boolean;
   category: CategorySlug;

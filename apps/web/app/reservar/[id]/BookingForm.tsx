@@ -166,7 +166,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
 
   /** ¿Se puede ese día y hora? Anticipación + horario de la categoría + horario del profesional. */
   function okWith(n: Date, d: number, sIdx: number, h: number): boolean {
-    if (tester) return timeAvailable(d, slots[sIdx], n, 5);
+    if (tester) return timeAvailable(d, slots[sIdx], n, 0);
     return slotAvailable(d, sIdx, n, leadMinutes(pro.category)) && checkSlot({ category: pro.category, date: isoDay(n, d), slot: slots[sIdx], hours: h, pro }).ok;
   }
 
@@ -359,6 +359,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         </div>
         <span className="muted" style={{ fontSize: 14, fontWeight: 700 }}>Hora de llegada</span>
         {tester && <p className="pill pill-warm" style={{ alignSelf: 'flex-start' }}>Modo prueba: cualquier hora, sin reglas de horario</p>}
+        {!tester && <p className="muted" style={{fontSize:13}}>Horario de {pro.name.split(' ')[0]}: {pro.from || '08:00'}–{pro.to || '18:00'}. Puedes solicitar una hora futura sin anticipación mínima; el profesional confirma si puede atenderte. La visita debe terminar dentro de su horario.</p>}
         <div className="slot-grid" role="radiogroup" aria-label="Hora de llegada">
           {slots.map((t, i) => (tester || slotInWindow(pro.category, t, pro)) && (
             <button key={t} type="button" role="radio" aria-checked={i === slot}

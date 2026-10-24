@@ -23,7 +23,7 @@ export function HomeIntro({ search, activeBooking, roleChoice, categoryCount, ca
         <p className="hh-description">{homeCopy.description}</p>
         <p className="hh-process">{homeCopy.process}</p>
         <div className="hh-search">{search}</div>
-        <a className="hh-explore" href="#servicios">Explorar los {categoryCount} servicios <span aria-hidden="true">→</span></a>
+        <a className="hh-explore" href="/servicios">Explorar los {categoryCount} servicios <span aria-hidden="true">→</span></a>
       </div>
       <figure className="hh-visual">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -33,10 +33,6 @@ export function HomeIntro({ search, activeBooking, roleChoice, categoryCount, ca
     </section>
     {roleChoice}
     <LiveDiscovery />
-    <section id="servicios" className="hh-catalog" aria-labelledby="hh-catalog-title" tabIndex={-1}>
-      <h2 id="hh-catalog-title">Servicios a domicilio</h2>
-      <p>Explora las {categoryCount} categorías. Fotos de referencia.</p>
-      {catalog}
-    </section>
+
   </div>;
 }
