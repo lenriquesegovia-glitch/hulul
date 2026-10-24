@@ -10,6 +10,7 @@ export function usePros(category: CategorySlug, city?: string): { pros: Professi
   useEffect(() => {
     let off = false;
     setPros(null);
+    setError(false);
     import('@hulul/shared/firebase')
       .then(({ listPros }) => listPros(category, city))
       .then((l) => { if (!off) setPros(l); })

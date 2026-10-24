@@ -1,3 +1,4 @@
+import {ClientSummary} from '@/components/ClientSummary';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,7 +24,7 @@ const errText = (e: unknown) => (e as { message?: string }).message || 'No se pu
 
 /** Un trabajo del profesional, en vivo, con todas sus acciones (todo dentro de la app). */
 export default function JobScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, aviso, mensaje, chat } = useLocalSearchParams<{ id: string;aviso?:string;mensaje?:string;chat?:string }>();
   const user = useUser();
   const b = useBooking(id);
 
@@ -32,6 +33,7 @@ export default function JobScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
           <BackButton />
+          {aviso && <Card><Body>{aviso}</Body>{mensaje && <Body muted>{mensaje}</Body>}</Card>}
           {b === undefined && <ActivityIndicator color={c.primary} style={{ marginTop: 40 }} />}
           {b === null && <Body>No encontramos este trabajo.</Body>}
           {b && user && <Job b={b} uid={user.uid} />}
@@ -42,6 +44,7 @@ export default function JobScreen() {
 }
 
 function Job({ b, uid }: { b: ProBooking; uid: string }) {
+  const {chat:focusChat}=useLocalSearchParams<{chat?:string}>();
   const cat = getCategory(b.category);
   const first = String(b.contactName ?? 'el cliente').split(' ')[0];
   const [busy, setBusy] = useState<ProAction | ''>('');
@@ -76,6 +79,13 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
 
   return (
     <View style={{ gap: 16 }}>
+{focusChat === '1' && <View>{b.status !== 'cancelada' && (
+        <Card style={{ gap: 10 }}>
+          <Text style={s.label}>💬 Chat con {first}</Text>
+          <Chat bookingId={b.id} uid={uid} me="profesional" otherName={first} open={CHAT_OPEN.includes(b.status)} />
+          {live && <AskPhotosHint />}
+        </Card>
+      )}</View>}
       <View style={{ gap: 4 }}>
         <Text style={[s.badge, b.status === 'pendiente' && s.badgeHot]}>{STATUS_LABEL[b.status] ?? b.status}</Text>
         <H1 style={{ fontSize: 24 }}>{cat?.name} · {first}</H1>
@@ -85,6 +95,7 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
       </View>
 
       <Card style={{ gap: 10 }}>
+        <ClientSummary bookingId={b.id} />
         <Text style={s.label}>Qué necesita</Text>
         <Body>{b.notes || 'Sin descripción.'}</Body>
         {!!b.photos?.length && (
@@ -164,13 +175,13 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
 
       {['pendiente', 'confirmada'].includes(b.status) && <Reschedule id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="profesional" other={first} />}
 
-      {b.status !== 'cancelada' && (
+      {focusChat !== '1' && <View>{b.status !== 'cancelada' && (
         <Card style={{ gap: 10 }}>
           <Text style={s.label}>💬 Chat con {first}</Text>
           <Chat bookingId={b.id} uid={uid} me="profesional" otherName={first} open={CHAT_OPEN.includes(b.status)} />
           {live && <AskPhotosHint />}
         </Card>
-      )}
+      )}</View>}
     </View>
   );
 }
@@ -387,7 +398,7 @@ function ExtraPro({ b }: { b: ProBooking }) {
   );
 }
 
-/** El profesional califica al cliente (privado). */
+/** El profesional califica al cliente; el promedio es visible para sus profesionales, los comentarios siguen privados. */
 function RateClient({ id, name }: { id: string; name: string }) {
   const [n, setN] = useState(0);
   const [text, setText] = useState('');
@@ -396,7 +407,7 @@ function RateClient({ id, name }: { id: string; name: string }) {
   return (
     <Card style={{ gap: 8 }}>
       <Text style={s.label}>Califica a {name}</Text>
-      <Body muted style={{ fontSize: 12.5 }}>Solo lo ve HULUL. Nos ayuda a cuidar la comunidad.</Body>
+      <Body muted style={{ fontSize: 12.5 }}>El promedio y la cantidad de calificaciones serán visibles para los profesionales de sus reservas. Tu comentario queda privado para HULUL.</Body>
       <StarInput value={n} onChange={setN} size={28} label="Calificación del cliente" />
       {n > 0 && <TextInput value={text} onChangeText={setText} maxLength={600} placeholder="Comentario (opcional)" placeholderTextColor={c.textMuted} style={s.input} />}
       {msg ? <Body style={{ color: c.primary, fontSize: 13 }}>{msg}</Body> : null}

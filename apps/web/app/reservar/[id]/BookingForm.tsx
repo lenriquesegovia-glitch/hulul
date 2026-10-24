@@ -25,7 +25,7 @@ import {
   visitLabel,
   nextDays,
   PAYMENT_OPTIONS,
-  quote,
+  quoteVisit,
   SLOTS,
   slotAvailable,
   TEST_SLOTS,
@@ -208,7 +208,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
 
   // Recargo nocturno o de feriado del profesional (monto fijo), si aplica.
   const sc = !tester && now && slot >= 0 ? surchargeFor(isoDay(now, day), slots[slot], pro) : { kind: null, amount: 0 };
-  const q = quote(pro.visitRate, sc.amount, pro.taxRegime);
+  const q = quoteVisit(pro.visitRate, sc.amount, pro.taxRegime);
   // Se calcula una vez (no en cada letra que se escribe en la descripción).
   const okDays = useMemo(() => (now ? days.map((_, i) => slots.some((_, sIdx) => okWith(now, i, sIdx, hours))) : []), [now, days, hours, pro, tester]); // eslint-disable-line react-hooks/exhaustive-deps
   const okSlots = useMemo(() => (now ? slots.map((_, i) => okWith(now, day, i, hours)) : []), [now, day, hours, pro, tester]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -261,6 +261,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         slot: slots[slot],
         hours,
         pricing: 'visita',
+        pricingVersion: 2,
         visit: q.visit,
         ...(sc.kind ? { surcharge: q.surcharge, surchargeKind: sc.kind } : {}),
         ...(check?.noisy ? { noiseAccepted: true as const } : {}),
@@ -369,10 +370,10 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
           ))}
         </div>
         {!tester && (pro.offHours?.length ?? 0) > 0 && (
-          <span className="muted" style={{ fontSize: 13.5 }}>🌙 Fuera de horario (antes de las 08:00 o desde las 18:00): recargo nocturno de {formatUSD(pro.surcharges?.nocturno ?? 0)}.</span>
+          <span className="muted" style={{ fontSize: 13.5 }}>🌙 Fuera de horario (antes de las 08:00 o desde las 18:00): tarifa nocturna de {formatUSD(pro.surcharges?.nocturno || pro.visitRate)}.</span>
         )}
         {sc.kind && sc.amount > 0 && (
-          <p className="notice" style={{ fontSize: 14 }}><strong>{SURCHARGE_LABEL[sc.kind]}: {formatUSD(sc.amount)}.</strong> Lo fija {pro.name.split(' ')[0]} para atender {sc.kind === 'feriado' ? 'en feriado' : 'fuera de horario'}. Ya está incluido en el total.</p>
+          <p className="notice" style={{ fontSize: 14 }}><strong>{SURCHARGE_LABEL[sc.kind]}: {formatUSD(sc.amount)}.</strong> Lo fija {pro.name.split(' ')[0]} para atender {sc.kind === 'feriado' ? 'en feriado' : 'fuera de horario'}. Reemplaza la tarifa normal; no se suma.</p>
         )}
         {check && (
           <span className="muted" style={{ fontSize: 14 }}>

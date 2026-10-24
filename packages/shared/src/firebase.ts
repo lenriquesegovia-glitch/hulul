@@ -9,7 +9,7 @@
  * no guardan datos no carguen Firebase.
  */
 import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
-import { addDoc, collection, doc, getDoc, getDocs, getFirestore, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, where, type Firestore, type Timestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, getFirestore, limit, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where, type Firestore, type Timestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { PRIVACY_VERSION } from './legal';
 import type { CategorySlug } from './categories';
@@ -104,6 +104,7 @@ export interface NewBooking {
   hours: number;
   /** Precio por cita (desde el 18-oct-2026). */
   pricing: 'visita';
+  pricingVersion?: 2;
   /** Tarifa por visita del profesional. */
   visit: number;
   /** Recargo nocturno o de feriado (monto fijo del profesional), si aplica. */
@@ -628,3 +629,13 @@ export async function reschedule(id: string, action: RescheduleAction, date?: st
   const fn = callable<{ id: string; action: RescheduleAction; date?: string; slot?: string }, { ok: boolean }>('reprogramarReserva');
   await fn({ id, action, date, slot });
 }
+
+export interface ClientSummaryData {name:string;count:number;rating:number|null}
+export async function loadClientSummary(bookingId:string):Promise<ClientSummaryData> {
+ return (await callable<{bookingId:string},ClientSummaryData>('resumenCliente')({bookingId})).data;
+}
+export interface InboxItem {id:string;title:string;body:string;read:boolean;createdAt?:Timestamp;data:{bookingId?:string;to?:string;chat?:boolean;url?:string}}
+export function watchInbox(uid:string,onData:(items:InboxItem[])=>void,onError:()=>void) {
+ return onSnapshot(query(collection(firestore(),'inboxes',uid,'items'),orderBy('createdAt','desc'),limit(100)),snap=>onData(snap.docs.map(d=>({id:d.id,...d.data()} as InboxItem))),onError);
+}
+export async function readInboxItem(uid:string,id:string) {await updateDoc(doc(firestore(),'inboxes',uid,'items',id),{read:true});}

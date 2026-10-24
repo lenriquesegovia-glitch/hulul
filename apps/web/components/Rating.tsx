@@ -81,7 +81,7 @@ export function RatingBox({ id, proName }: { id: string; proName: string }) {
   );
 }
 
-/** El profesional califica al cliente (privado). */
+/** El profesional califica al cliente; el promedio es visible para sus profesionales, los comentarios siguen privados. */
 export function RateClientBox({ id, clientName }: { id: string; clientName: string }) {
   const [n, setN] = useState(0);
   const [text, setText] = useState('');
@@ -103,7 +103,7 @@ export function RateClientBox({ id, clientName }: { id: string; clientName: stri
   return (
     <div className="stack gap-8" style={{ width: '100%', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
       <strong>Califica a {clientName || 'el cliente'}</strong>
-      <span className="muted" style={{ fontSize: 13 }}>Solo lo ve HULUL. Nos ayuda a cuidar la comunidad.</span>
+      <span className="muted" style={{ fontSize: 13 }}>El promedio y la cantidad de calificaciones serán visibles para los profesionales de sus reservas. Tu comentario queda privado para HULUL.</span>
       <StarInput value={n} onChange={setN} label="Calificación del cliente" size={28} />
       {n > 0 && <textarea rows={2} maxLength={600} value={text} onChange={(e) => setText(e.target.value)} placeholder="Comentario (opcional)" aria-label="Comentario sobre el cliente" />}
       {msg && <p role="alert" className="form-error">{msg}</p>}

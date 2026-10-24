@@ -1,19 +1,21 @@
+import {useCity} from './city';
 import { useEffect, useState } from 'react';
 import type { CategorySlug, Professional } from '@hulul/shared';
 import { listPros, loadPro } from '@hulul/shared/firebase';
 
 /** Profesionales aprobados de una categoría. `null` mientras carga. */
 export function usePros(category?: CategorySlug): { pros: Professional[] | null; error: boolean } {
+  const {city,ready}=useCity();
   const [pros, setPros] = useState<Professional[] | null>(null);
   const [error, setError] = useState(false);
   useEffect(() => {
-    if (!category) return;
+    if (!category || !ready) return;
     let off = false;
     setPros(null);
     setError(false);
-    listPros(category).then((l) => { if (!off) setPros(l); }).catch(() => { if (!off) { setError(true); setPros([]); } });
+    listPros(category,city).then((l) => { if (!off) setPros(l); }).catch(() => { if (!off) { setError(true); setPros([]); } });
     return () => { off = true; };
-  }, [category]);
+  }, [category,city,ready]);
   return { pros, error };
 }
 

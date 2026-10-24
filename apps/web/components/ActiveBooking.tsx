@@ -30,7 +30,7 @@ export function ActiveBooking() {
         <strong>Tu reserva · {getCategory(b.category)?.name}</strong>
         <span className="muted" style={{ fontSize: 13 }}>{b.date} · {b.slot}</span>
       </div>
-      <div className="ab-steps">
+      <strong>AHORA · {b.status === 'por_aprobar' ? 'Terminado · pendiente de tu revisión' : steps.find(s=>s.status===b.status)?.label || 'En revisión'}</strong><div className="ab-steps">
         {steps.map((s, i) => (
           <div key={s.status} className={`ab-step ${i < idx ? 'done' : i === idx ? 'now' : ''}`}>
             <span className="ab-bar" />

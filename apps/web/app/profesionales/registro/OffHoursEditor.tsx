@@ -37,7 +37,7 @@ export function OffHoursEditor({ value, onChange, noisy }: { value: OffHoursValu
     <div className="card stack gap-12" style={{ padding: 18 }}>
       <strong style={{ fontSize: 16 }}>Fuera de horario y feriados (opcional)</strong>
       <p className="muted" style={{ fontSize: 13.5, margin: 0 }}>
-        El horario normal de HULUL es de 08:00 a 18:00. Si quieres atender urgencias de noche, de madrugada o en feriados, marca a qué horas puedes llegar y cuánto cobras de recargo. Es un monto fijo que tú decides y que se suma a tu tarifa por visita. El cliente lo ve antes de confirmar, y HULUL retiene la misma comisión del 15 %.
+        El horario normal de HULUL es de 08:00 a 18:00. Si quieres atender urgencias de noche, de madrugada o en feriados, marca a qué horas puedes llegar y cuál es tu tarifa completa. Reemplaza la tarifa normal, no se suma a ella. El cliente lo ve antes de confirmar, y HULUL retiene la misma comisión del 15 %.
       </p>
       <label className="check">
         <input type="checkbox" checked={on} onChange={(e) => onChange({ ...value, offHours: e.target.checked ? [18, 19, 20] : [] })} />
@@ -50,7 +50,7 @@ export function OffHoursEditor({ value, onChange, noisy }: { value: OffHoursValu
           <span className="field-label">Madrugada y temprano</span>
           {chips(EARLY)}
           <div className="form-2">
-            <Field id="sc-noche" label="Recargo nocturno (USD)" hint="Se suma a tu tarifa por visita. Puede ser $0.">
+            <Field id="sc-noche" label="Tarifa nocturna completa (USD)" hint="Reemplaza la tarifa normal. Si pones $0, se mantiene tu tarifa normal.">
               <input id="sc-noche" type="text" inputMode="numeric" maxLength={3} placeholder="Ej.: 15"
                 value={value.surcharges.nocturno ?? ''} onChange={(e) => setSc('nocturno', e.target.value)} />
             </Field>
@@ -63,7 +63,7 @@ export function OffHoursEditor({ value, onChange, noisy }: { value: OffHoursValu
       </label>
       {value.holidays && (
         <div className="form-2">
-          <Field id="sc-feriado" label="Recargo de feriado (USD)" hint="Si es feriado y de noche, se cobra solo el mayor de los dos.">
+          <Field id="sc-feriado" label="Tarifa completa de feriado (USD)" hint="Si es feriado y de noche, se cobra solo el mayor de los dos.">
             <input id="sc-feriado" type="text" inputMode="numeric" maxLength={3} placeholder="Ej.: 10"
               value={value.surcharges.feriado ?? ''} onChange={(e) => setSc('feriado', e.target.value)} />
           </Field>

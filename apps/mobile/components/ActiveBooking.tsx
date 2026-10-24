@@ -26,7 +26,7 @@ export function ActiveBooking() {
         <Text style={s.title}>Tu reserva · {getCategory(b.category)?.name}</Text>
         <Body muted style={{ fontSize: 12.5 }}>{b.date} · {b.slot}</Body>
       </View>
-      <View style={s.steps}>
+      <Body style={{fontFamily:font.bodyBold}}>AHORA · {b.status === 'por_aprobar' ? 'Terminado · pendiente de tu revisión' : TRACK_STEPS.find(s=>s.status===b.status)?.label || 'En revisión'}</Body><View style={s.steps}>
         {TRACK_STEPS.map((st, i) => (
           <View key={st.status} style={{ flex: 1, gap: 5 }}>
             <View style={[s.bar, i < idx && { backgroundColor: c.success }, i === idx && { backgroundColor: c.copper }]} />

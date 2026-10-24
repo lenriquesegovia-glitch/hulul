@@ -7,12 +7,12 @@
  * Los APK armados antes de las notificaciones no traen el módulo nativo: en
  * ellos todo esto no hace nada (y la app no se cae al recibir esta versión).
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform } from 'react-native';
-import { router } from 'expo-router';
+import { router, useRootNavigationState } from 'expo-router';
 import Constants from 'expo-constants';
 import { requireOptionalNativeModule } from 'expo-modules-core';
-import { registerPushToken } from '@hulul/shared/firebase';
+import { registerPushToken, readInboxItem } from '@hulul/shared/firebase';
 import { useUser } from '@/lib/auth';
 
 type NotificationsModule = typeof import('expo-notifications');
@@ -70,12 +70,12 @@ function openFrom(data: Record<string, unknown> | undefined) {
   const id = typeof data.bookingId === 'string' && /^[A-Za-z0-9]{10,40}$/.test(data.bookingId) ? data.bookingId : '';
   // Avisos del profesional: su trabajo dentro de la app (ya no la web).
   if (data.to === 'pro') {
-    if (id) router.push({ pathname: '/agenda/[id]', params: { id } });
+    if (id) router.push({ pathname: '/agenda/[id]', params: { id, aviso: typeof data.aviso === 'string' ? data.aviso : '', mensaje: typeof data.mensaje === 'string' ? data.mensaje : '', chat: data.chat ? '1' : '' } });
     else router.push('/agenda');
     return;
   }
   if (id) {
-    router.push({ pathname: '/reserva/[id]', params: { id } });
+    router.push({ pathname: '/reserva/[id]', params: { id, aviso: typeof data.aviso === 'string' ? data.aviso : '', mensaje: typeof data.mensaje === 'string' ? data.mensaje : '', chat: data.chat ? '1' : '' } });
     return;
   }
   if (typeof data.url === 'string' && data.url.startsWith('https://hululec.com/')) Linking.openURL(data.url).catch(() => {});
@@ -85,9 +85,26 @@ function openFrom(data: Record<string, unknown> | undefined) {
  * Registra este celular para recibir avisos de la cuenta con sesión abierta y
  * abre la pantalla correcta al tocar una notificación. Va una vez, en el layout.
  */
-export function usePushNotifications() {
+export function usePushNotifications(ready = true) {
   const user = useUser();
   const last = useRef('');
+  const navigation = useRootNavigationState();
+  const [pending, setPending] = useState<import('expo-notifications').NotificationResponse | null>(null);
+  const handled = useRef('');
+  const prompted=useRef(false);
+  useEffect(()=>{if(pending && ready && navigation?.key && user===null && !prompted.current){prompted.current=true;router.push('/notificaciones');}},[pending,ready,navigation?.key,user]);
+
+  useEffect(() => {
+    if (!pending || !ready || !navigation?.key || !user) return;
+    const request = pending.notification.request;
+    if (handled.current === request.identifier) return;
+    handled.current = request.identifier;
+    const data = request.content.data as Record<string, unknown>;
+    if(typeof data.notificationId === 'string') readInboxItem(user.uid,data.notificationId).catch(()=>{});
+    openFrom({...data, aviso: request.content.title, mensaje: request.content.body});
+    notifications()?.clearLastNotificationResponseAsync().catch(() => {});
+    setPending(null);
+  }, [pending, ready, navigation?.key, user]);
 
   useEffect(() => {
     const N = notifications();
@@ -110,10 +127,9 @@ export function usePushNotifications() {
     if (!N) return;
     // Si la app se abrió tocando una notificación.
     N.getLastNotificationResponseAsync()
-      // Pequeña espera para que la navegación esté lista.
-      .then((r) => { if (r) setTimeout(() => openFrom(r.notification.request.content.data as Record<string, unknown> | undefined), 600); })
+      .then((r) => { if (r) setPending(r); })
       .catch(() => {});
-    const sub = N.addNotificationResponseReceivedListener((r) => openFrom(r.notification.request.content.data as Record<string, unknown> | undefined));
+    const sub = N.addNotificationResponseReceivedListener(setPending);
     return () => sub.remove();
   }, []);
 }

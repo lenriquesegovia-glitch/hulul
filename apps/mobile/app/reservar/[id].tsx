@@ -9,7 +9,7 @@ import { ClientGate } from '@/components/ClientGate';
 import { Icon } from '@/components/Icon';
 import { MapPicker } from '@/components/MapPicker';
 import type { ClientProfile } from '@hulul/shared/firebase';
-import { serviceCopy, HOME_SAFETY_ACCEPT, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, surchargeFor, isOffHour, SURCHARGE_LABEL, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quote, type Professional, slotAvailable, TEST_SLOTS, testPeriodOpen, timeAvailable, MAX_REQUEST_PHOTOS, type PaymentMethod } from '@hulul/shared';
+import { serviceCopy, HOME_SAFETY_ACCEPT, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, surchargeFor, isOffHour, SURCHARGE_LABEL, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quoteVisit, type Professional, slotAvailable, TEST_SLOTS, testPeriodOpen, timeAvailable, MAX_REQUEST_PHOTOS, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
@@ -157,7 +157,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
   // Recargo nocturno o de feriado del profesional (monto fijo), si aplica.
   const sc = !tester && slot >= 0 ? surchargeFor(isoAt(day), slots[slot], pro) : { kind: null, amount: 0 };
-  const q = quote(pro.visitRate, sc.amount, pro.taxRegime);
+  const q = quoteVisit(pro.visitRate, sc.amount, pro.taxRegime);
 
   /** Día sin horas libres (por anticipación, horario del servicio o del profesional). */
   const dayOff = (i: number) => offDays[i] ?? true;
@@ -212,6 +212,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
         slot: slots[slot],
         hours,
         pricing: 'visita',
+        pricingVersion: 2,
         visit: q.visit,
         ...(sc.kind ? { surcharge: q.surcharge, surchargeKind: sc.kind } : {}),
         ...(check?.noisy ? { noiseAccepted: true as const } : {}),
@@ -295,10 +296,10 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
               })}
             </View>
             {!tester && (pro.offHours?.length ?? 0) > 0 && (
-              <Body muted style={{ fontSize: 12.5 }}>🌙 Fuera de horario (antes de las 08:00 o desde las 18:00): recargo nocturno de {formatUSD(pro.surcharges?.nocturno ?? 0)}.</Body>
+              <Body muted style={{ fontSize: 12.5 }}>🌙 Fuera de horario (antes de las 08:00 o desde las 18:00): tarifa nocturna de {formatUSD(pro.surcharges?.nocturno || pro.visitRate)}.</Body>
             )}
             {sc.kind && sc.amount > 0 && (
-              <Body style={{ fontSize: 13, color: c.copper }}>{SURCHARGE_LABEL[sc.kind]}: {formatUSD(sc.amount)}. Lo fija {pro.name.split(' ')[0]} para atender {sc.kind === 'feriado' ? 'en feriado' : 'fuera de horario'}; ya está incluido en el total.</Body>
+              <Body style={{ fontSize: 13, color: c.copper }}>{SURCHARGE_LABEL[sc.kind]}: {formatUSD(sc.amount)}. Lo fija {pro.name.split(' ')[0]} para atender {sc.kind === 'feriado' ? 'en feriado' : 'fuera de horario'}. Reemplaza la tarifa normal; no se suma.</Body>
             )}
           </View>
 

@@ -1,3 +1,4 @@
+import {SelectedCityLabel} from './CitySelector';
 import type { ReactNode } from 'react';
 import { homeCopy } from '@hulul/shared';
 import './home-intro.css';
@@ -18,7 +19,7 @@ export function HomeIntro({ search, activeBooking, roleChoice, categoryCount, ca
     {activeBooking && <div className="hh-booking">{activeBooking}</div>}
     <section className="hh-hero" aria-labelledby="hh-title">
       <div className="hh-copy">
-        <p className="hh-coverage">{homeCopy.coverage}</p>
+        <p className="hh-coverage"><SelectedCityLabel/></p>
         <h1 id="hh-title">¿Qué necesitas<br />resolver <span>hoy?</span></h1>
         <p className="hh-description">{homeCopy.description}</p>
         <p className="hh-process">{homeCopy.process}</p>

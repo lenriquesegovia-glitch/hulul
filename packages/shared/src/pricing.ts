@@ -116,3 +116,6 @@ export function categoryPricing(slug: CategorySlug) {
 export function visitLabel(rate: number | undefined): string {
   return rate && rate > 0 ? `${formatPrice(rate)} por visita` : 'Tarifa por visita';
 }
+
+/** V2: a special rate replaces the normal visit. Zero keeps the normal rate. */
+export function quoteVisit(visitRate:number,specialRate=0,regime?:TaxRegime):Quote {return quote(specialRate>0?specialRate:visitRate,0,regime);}

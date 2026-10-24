@@ -99,7 +99,7 @@ export function surchargeFor(date: string, slot: string, pro?: ProSchedule): { k
   return holiday > night ? { kind: 'feriado', amount: holiday } : { kind: 'nocturno', amount: night };
 }
 
-export const SURCHARGE_LABEL: Record<SurchargeKind, string> = { nocturno: 'Recargo nocturno', feriado: 'Recargo de feriado' };
+export const SURCHARGE_LABEL: Record<SurchargeKind, string> = { nocturno: 'Tarifa nocturna', feriado: 'Tarifa de feriado' };
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const toMin = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + (m || 0); };

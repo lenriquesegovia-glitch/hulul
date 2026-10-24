@@ -69,7 +69,7 @@ interface Draft {
   from: string;
   to: string;
   acceptsCash: boolean;
-  /** Fuera de horario: horas en que acepta llegar (0–7, 18–23), feriados y recargos fijos. */
+  /** Fuera de horario: horas en que acepta llegar (0–7, 18–23), feriados y tarifas especiales fijos. */
   offHours: number[];
   holidays: boolean;
   surcharges: Surcharges;
@@ -178,7 +178,7 @@ function Wizard({ user }: { user: User }) {
       // Sin guardar categorías que ya no eligió.
       visitRates: Object.fromEntries(d.categories.filter((c) => d.visitRates[c]).map((c) => [c, d.visitRates[c]])),
       catEvidence: Object.fromEntries(d.categories.filter((c) => d.catEvidence[c]).map((c) => [c, d.catEvidence[c]])),
-      // Firestore no acepta campos vacíos: solo los recargos que puso.
+      // Firestore no acepta campos vacíos: solo los tarifas especiales que puso.
       surcharges: Object.fromEntries(Object.entries(d.surcharges).filter(([, v]) => typeof v === 'number')),
       // Firestore no acepta el régimen vacío: se omite hasta que lo elija.
       taxRegime: d.taxRegime || fs.deleteField(),
@@ -496,7 +496,7 @@ function StepZones({ d, set }: { d: Draft; set: SetField }) {
         </Field>
       </div>
       <div className="notice" style={{ fontSize: 13.5 }}>
-        <strong>Horario normal de HULUL: 08:00 a 18:00.</strong> Las visitas en horario normal deben terminar a más tardar a las 18:00. Si quieres trabajar de noche o en feriados, actívalo abajo con tu recargo.
+        <strong>Horario normal de HULUL: 08:00 a 18:00.</strong> Las visitas en horario normal deben terminar a más tardar a las 18:00. Si quieres trabajar de noche o en feriados, actívalo abajo con tu tarifa completa.
       </div>
       <OffHoursEditor value={{ offHours: d.offHours, holidays: d.holidays, surcharges: d.surcharges }} noisy={d.categories.some(isNoisy)}
         onChange={(v) => { set('offHours', v.offHours); set('holidays', v.holidays); set('surcharges', v.surcharges); }} />
@@ -607,8 +607,8 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
         <Row k="Servicios" v={d.categories.map((x) => `${getCategory(x)?.name} ($${d.visitRates[x]} por visita)`).join(' · ')} />
         <Row k="Ciudades" v={d.cities.map((x) => cities.find((y) => y.slug === x)?.name).join(', ')} />
         <Row k="Horario" v={`${d.days.map((i) => WEEKDAY_NAMES[i].slice(0, 3)).join(' ')} · ${d.from} a ${d.to}`} />
-        <Row k="Fuera de horario" v={d.offHours.length ? `${[...d.offHours].sort((a, b) => ((a + 6) % 24) - ((b + 6) % 24)).map((h) => `${String(h).padStart(2, '0')}:00`).join(' ')} · recargo $${d.surcharges.nocturno ?? 0}` : 'No'} />
-        <Row k="Feriados" v={d.holidays ? `Sí · recargo $${d.surcharges.feriado ?? 0}` : 'No'} />
+        <Row k="Fuera de horario" v={d.offHours.length ? `${[...d.offHours].sort((a, b) => ((a + 6) % 24) - ((b + 6) % 24)).map((h) => `${String(h).padStart(2, '0')}:00`).join(' ')} · tarifa completa $${d.surcharges.nocturno ?? 0}` : 'No'} />
+        <Row k="Feriados" v={d.holidays ? `Sí · tarifa completa $${d.surcharges.feriado ?? 0}` : 'No'} />
         <Row k="Efectivo" v={d.acceptsCash ? 'Acepta' : 'No acepta'} />
         <Row k="Régimen SRI" v={d.taxRegime ? `${TAX_REGIME_LABEL[d.taxRegime]}${d.eSignature ? ' · con firma electrónica' : ''}` : 'Sin elegir'} />
         <Row k="Documentos" v={`${Object.keys(d.docs).length} subidos`} />

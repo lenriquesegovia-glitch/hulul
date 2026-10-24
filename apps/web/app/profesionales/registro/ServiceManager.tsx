@@ -103,7 +103,7 @@ export function ServiceManager({ uid }: { uid: string }) {
     try {
       const { updateServices } = await import('@hulul/shared/firebase');
       await updateServices({ action: 'horario', offHours: off.offHours, holidays: off.holidays, surcharges: off.surcharges });
-      setOffMsg('Listo: tu horario fuera de horario y tus recargos quedaron guardados. Las reservas ya hechas mantienen su precio.');
+      setOffMsg('Listo: tu horario fuera de horario y tus tarifas especiales quedaron guardados. Las reservas ya hechas mantienen su precio.');
       await load();
     } catch (e) {
       setOffErr(errMsg(e));
@@ -154,7 +154,7 @@ export function ServiceManager({ uid }: { uid: string }) {
       {offErr && <p role="alert" className="form-error">{offErr}</p>}
       {offMsg && <p role="status" className="notice">{offMsg}</p>}
       <button type="button" className="btn btn-secondary" style={{ alignSelf: 'flex-start' }} disabled={offBusy} onClick={saveOff}>
-        {offBusy ? 'Guardando…' : 'Guardar horario y recargos'}
+        {offBusy ? 'Guardando…' : 'Guardar horario y tarifas especiales'}
       </button>
 
       {adding

@@ -44,6 +44,8 @@ export function BookingDetail({ id }: { id: string }) {
     return () => unsub();
   }, [user, id]);
 
+  useEffect(()=>{if(b?.id && window.location.hash === '#chat') document.getElementById('chat')?.scrollIntoView({block:'start'});},[b?.id]);
+
   if (user === null) return <div className="card stack gap-12"><p>Inicia sesión para ver tu reserva.</p><Link href="/cuenta" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>Entrar</Link></div>;
   if (b === undefined) return <p className="muted">Cargando…</p>;
   if (!b) return <div className="card stack gap-12"><p>No encontramos esta reserva.</p><Link href="/cuenta" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>Mis reservas</Link></div>;
@@ -76,6 +78,9 @@ export function BookingDetail({ id }: { id: string }) {
         <p style={{ fontSize: 17 }}><strong>{shortDay(b.date)} · {b.slot}</strong></p>
       </div>
 
+      {changeable && (
+        <RescheduleBox id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="cliente" other={first} />
+      )}
       {['confirmada', 'en_camino'].includes(b.status) && <ArrivalCode id={b.id} pro={first} />}
       {['confirmada', 'en_camino'].includes(b.status) && <DelayClient id={b.id} slot={b.slot} delay={b.delay} pro={first} />}
 
@@ -88,11 +93,11 @@ export function BookingDetail({ id }: { id: string }) {
         {b.status !== 'cancelada' && (
           <ol className="timeline">
             {STEPS.map((s, i) => {
-              const state = idx > i || ['por_aprobar', 'completada'].includes(b.status) ? 'done' : idx === i ? 'now' : '';
+              const state = idx > i || b.status === 'completada' ? 'done' : idx === i ? 'now' : '';
               return (
-                <li key={s.status} className={state}>
+                <li key={s.status} className={state} aria-current={state === 'now' ? 'step' : undefined}>
                   <span className="tl-dot">{state === 'done' && <Icon name="check" size={14} color="#fff" strokeWidth={3} />}</span>
-                  <div className="stack"><strong>{s.t}</strong></div>
+                  <div className="stack"><strong>{state === 'now' ? 'AHORA · ' : ''}{s.status === 'en_camino' && b.arrivedAt ? 'En tu dirección' : s.t}</strong></div>
                 </li>
               );
             })}
@@ -121,14 +126,12 @@ export function BookingDetail({ id }: { id: string }) {
 
       {b.status !== 'cancelada' && user && (
         <div className="card stack gap-8">
-          <strong style={{ fontSize: 17 }}>💬 Chat con {first}</strong>
+          <strong id="chat" style={{ fontSize: 17,scrollMarginTop:140 }}>💬 Chat con {first}</strong>
           <Chat bookingId={b.id} uid={user.uid} me="cliente" otherName={first} open={['pendiente', 'confirmada', 'en_camino', 'en_curso', 'por_aprobar'].includes(b.status)} />
         </div>
       )}
 
-      {changeable && (
-        <RescheduleBox id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="cliente" other={first} />
-      )}
+
 
       <div className="card stack gap-8" style={{ fontSize: 15 }}>
         {b.address && <span>📍 {b.address}</span>}
