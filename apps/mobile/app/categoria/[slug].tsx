@@ -4,7 +4,7 @@ import { usePros } from '@/lib/pros';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { categoryImage, formatPrice, getCategory, ratingLabel } from '@hulul/shared';
+import { serviceIcon, categoryImage, formatPrice, getCategory, ratingLabel } from '@hulul/shared';
 import { Icon } from '@/components/Icon';
 import { Avatar, BackButton, Body, Card, H1, Pill } from '@/components/ui';
 import { c, font, radius } from '@/theme';
@@ -18,12 +18,12 @@ const SORTS: { value: Sort; label: string }[] = [
   { value: 'price', label: 'Menor precio' },
 ];
 
-export default function CategoryScreen() {
+export default function CategoryScreen({ providersOnly = false }: { providersOnly?: boolean }) {
   const { slug, trabajo } = useLocalSearchParams<{ slug: string; trabajo?: string }>();
   const cat = getCategory(slug);
   const [sort, setSort] = useState<Sort>('rating');
   // Trabajo elegido en "¿Qué necesitas?": viaja al perfil y a la reserva.
-  const [job, setJob] = useState(trabajo && cat?.servicios.includes(trabajo) ? trabajo : '');
+  const job = trabajo && (cat?.servicios.includes(trabajo) || trabajo === OTHER) ? trabajo : '';
 
   const { pros: all } = usePros(cat?.slug);
   const pros = useMemo(() => {
@@ -48,7 +48,7 @@ export default function CategoryScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top']}>
       <ScrollView contentContainerStyle={s.content}>
         <BackButton />
-        <Image source={{ uri: categoryImage(cat.slug, 900) }} style={s.hero} resizeMode="cover" accessibilityIgnoresInvertColors />
+        {!providersOnly && <><Image source={{ uri: categoryImage(cat.slug, 900) }} style={s.hero} resizeMode="cover" accessibilityIgnoresInvertColors />
         <View style={{ gap: 6 }}>
           <H1>{cat.name}</H1>
           <Body muted>{cat.sub}</Body>
@@ -67,9 +67,9 @@ export default function CategoryScreen() {
             const rates = (all ?? []).map((p) => p.visitRate).filter((r) => r > 0);
             const from = rates.length ? Math.min(...rates) : 0;
             return (
-              <Pressable key={t} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => setJob(t)} style={[s.job, on && s.jobOn]}>
+              <Pressable key={t} accessibilityRole="button" onPress={() => router.push({pathname:'/profesionales-disponibles/[slug]',params:{slug:cat.slug,trabajo:t}})} style={[s.job, on && s.jobOn]}>
                 <View style={[s.jobIcon, on && { backgroundColor: 'rgba(255,255,255,0.14)' }]}>
-                  <Icon name={t === OTHER ? 'chat' : cat.icon} size={20} color={on ? '#fff' : c.copper} />
+                  <Icon name={serviceIcon(t, cat.icon)} size={20} color={on ? '#fff' : c.copper} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.jobTitle, on && { color: '#fff' }]}>{t}</Text>
@@ -77,12 +77,15 @@ export default function CategoryScreen() {
                     {t === OTHER ? 'Descríbelo al reservar' : from ? `Visita desde ${formatPrice(from)}` : 'Precio por visita'}
                   </Text>
                 </View>
-                {on && <Icon name="check" size={18} color="#fff" strokeWidth={2.4} />}
+                <Icon name="chevronRight" size={20} color={c.primary} />
               </Pressable>
             );
           })}
         </View>
 
+        </>}
+        {providersOnly && <>
+        <H1>Elige a tu profesional</H1>
         <Text style={s.section}>{job ? `Profesionales para: ${job}` : 'Profesionales'}</Text>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
@@ -116,7 +119,7 @@ export default function CategoryScreen() {
             {({ pressed }) => (
               <Card style={[{ gap: 12 }, pressed && { borderColor: c.copper }]}>
                 <View style={s.proHead}>
-                  <Avatar initials={p.initials} />
+                  <Avatar initials={p.initials} photoUrl={p.photoUrl} />
                   <View style={{ flex: 1, gap: 3 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={s.proName}>{p.name}</Text>
@@ -132,10 +135,12 @@ export default function CategoryScreen() {
                   <Text style={s.price}>{formatPrice(p.visitRate)}<Text style={s.perHour}> por visita</Text></Text>
                 </View>
                 {p.availableToday && <Pill label="Disponible hoy" />}
+                <View style={{minHeight:48,backgroundColor:c.primary,borderRadius:12,alignItems:"center",justifyContent:"center"}}><Text style={{fontFamily:font.bodyBold,color:c.onPrimary}}>Ver perfil y horarios →</Text></View>
               </Card>
             )}
           </Pressable>
         ))}
+        </>}
       </ScrollView>
     </SafeAreaView>
   );

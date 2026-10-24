@@ -59,9 +59,9 @@ export const HOLIDAYS: Record<string, string> = {
   '2027-07-25': 'Fundación de Guayaquil',
 };
 
-/** Anticipación mínima para reservar (minutos): urgentes 30, el resto 2 horas. */
-export function leadMinutes(category: CategorySlug): number {
-  return CATEGORY_SCHEDULE[category] === 'urgente' ? 30 : 120;
+/** Sin anticipación mínima: el profesional acepta o rechaza la solicitud. */
+export function leadMinutes(_category: CategorySlug): number {
+  return 0;
 }
 
 /** Lo que el horario necesita saber del profesional. */

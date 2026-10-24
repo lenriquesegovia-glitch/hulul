@@ -16,7 +16,7 @@ export const homeCopy = {
   tagline: 'Soluciones para tu día',
 };
 export function discoveryTitle(mode: HomeDiscovery['mode']) {
-  return mode === 'popular' ? 'Las más solicitadas' : 'Servicios destacados';
+  return 'Lo más solicitado esta semana';
 }
 
 /** SERVER ONLY input. A trusted adapter must establish these facts, never the client. */

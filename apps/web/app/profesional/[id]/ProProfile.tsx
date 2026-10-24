@@ -1,4 +1,5 @@
 'use client';
+import { ProAvatar } from '@/components/ProAvatar';
 
 import Link from 'next/link';
 import { formatPrice, formatRating, getCategory, proHref } from '@hulul/shared';
@@ -38,7 +39,7 @@ export function ProProfile({ id }: { id: string }) {
           </nav>
 
           <div className="row gap-24" style={{ flexWrap: 'wrap' }}>
-            <span className="avatar" style={{ width: 96, height: 96, fontSize: 30 }}>{pro.initials}</span>
+            <ProAvatar name={pro.name} initials={pro.initials} photoUrl={pro.photoUrl} size={96}/>
             <div className="stack gap-8">
               <h1 className="row gap-8" style={{ fontSize: 32 }}>
                 {pro.name}

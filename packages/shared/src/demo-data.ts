@@ -16,6 +16,7 @@ export interface PublicPro {
   uid: string;
   name: string;
   initials: string;
+  photoUrl?: string;
   isCompany: boolean;
   categories: CategorySlug[];
   services: Partial<Record<CategorySlug, string[]>>;
@@ -52,6 +53,7 @@ export function toProfessional(p: PublicPro, category?: CategorySlug): Professio
     id: p.uid,
     name: p.name,
     initials: p.initials,
+    photoUrl: typeof p.photoUrl === "string" && p.photoUrl.startsWith("https://") ? p.photoUrl : undefined,
     isCompany: p.isCompany,
     category: cat,
     categories: p.categories,

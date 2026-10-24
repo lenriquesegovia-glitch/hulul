@@ -35,7 +35,7 @@ export default function ProfessionalScreen() {
       <ScrollView contentContainerStyle={s.content}>
         <BackButton />
         <View style={s.hero}>
-          <Avatar initials={pro.initials} size={88} />
+          <Avatar initials={pro.initials} photoUrl={pro.photoUrl} size={88} />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <H1 style={{ fontSize: 22 }}>{pro.name}</H1>
             {pro.verified && <Icon name="shield" size={20} color={c.copper} />}

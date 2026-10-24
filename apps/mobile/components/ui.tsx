@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { Image, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { router } from 'expo-router';
 import { c, font, radius } from '@/theme';
 import { Icon } from './Icon';
@@ -20,7 +20,9 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
   return <View style={[s.card, style]}>{children}</View>;
 }
 
-export function Avatar({ initials, size = 48 }: { initials: string; size?: number }) {
+export function Avatar({ initials, size = 48, photoUrl }: { initials: string; size?: number; photoUrl?: string }) {
+  const [failed,setFailed] = useState(false);
+  if(photoUrl && !failed) return <Image onError={()=>setFailed(true)} source={{uri:photoUrl}} style={{width:size,height:size,borderRadius:size/2}} accessibilityLabel="Foto del profesional"/>;
   return (
     <View style={[s.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
       <Text style={[s.avatarText, { fontSize: size * 0.34 }]}>{initials}</Text>

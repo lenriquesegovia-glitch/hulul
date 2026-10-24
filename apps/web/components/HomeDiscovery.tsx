@@ -16,13 +16,14 @@ export function HomeDiscovery() {
       const category = getCategory(service.categoryId);
       if (!category) return null;
       return <li key={service.id}>
-        <Link href={`/servicios/${service.categoryId}`} className="hh-featured-card">
+        <Link href={`/servicios/${service.categoryId}/profesionales?trabajo=${encodeURIComponent(service.label)}`} className="hh-featured-card">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={categoryImage(category.slug, 600)} alt="" loading="lazy" decoding="async" width="600" height="400" />
-          <span>{service.label}<span aria-hidden="true">→</span></span>
+          <span><strong>{service.label}</strong><span aria-hidden="true">→</span></span>
         </Link>
       </li>;
     })}</ul>
+    {discovery.mode !== 'popular' && <p className="hh-photo-note">Estamos reuniendo solicitudes de esta semana. Mientras tanto, explora esta selección.</p>}
     <p className="hh-photo-note">Fotos de referencia</p>
   </section>;
 }

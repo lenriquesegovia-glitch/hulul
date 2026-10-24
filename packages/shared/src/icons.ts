@@ -13,9 +13,20 @@ export type IconShape =
 export type UiIconName =
   | IconName
   | 'pin' | 'search' | 'chevronRight' | 'chevronLeft' | 'check' | 'shield'
+  | 'broom' | 'office' | 'iron' | 'window' | 'sofa' | 'rug' | 'brush' | 'tool' | 'bulb' | 'box'
   | 'card' | 'clock' | 'home' | 'calendar' | 'chat' | 'user' | 'logo';
 
 export const icons: Record<UiIconName, IconShape[]> = {
+  broom: [{kind:'path',d:'M15 3l-4 10M8 12l7 3-3 7-8-3 4-7zM7 17l-1 3m4-2-1 3'}],
+  office: [{kind:'path',d:'M5 22V3h14v19M3 22h18M9 7h1m4 0h1M9 11h1m4 0h1M9 15h1m4 0h1M10 22v-4h4v4'}],
+  iron: [{kind:'path',d:'M3 18h18l-3-8H9c-3 0-5 3-6 8zM10 10V6h7l1 4M7 15h1m3 0h1'}],
+  window: [{kind:'path',d:'M4 3h16v18H4zM12 3v18M4 12h16M7 6l2 2m6 7 2 2'}],
+  sofa: [{kind:'path',d:'M5 12V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5M5 18H3v-6h3v3h12v-3h3v6H5zM5 18v3m14-3v3'}],
+  rug: [{kind:'path',d:'M5 5h14v14H5zM8 8h8v8H8zM7 2v3m5-3v3m5-3v3M7 19v3m5-3v3m5-3v3'}],
+  brush: [{kind:'path',d:'M9 3h6v10l5 3v5H4v-5l5-3V3zM4 16h16M8 17v4m4-4v4m4-4v4'}],
+  tool: [{kind:'path',d:'M14 3a6 6 0 0 0-7 8L3 17a2.8 2.8 0 0 0 4 4l6-6a6 6 0 0 0 8-7l-4 4-4-1-1-4 2-4z'}],
+  bulb: [{kind:'path',d:'M8 16c0-3-3-4-3-7a7 7 0 0 1 14 0c0 3-3 4-3 7M8 17h8M9 20h6M10 23h4'}],
+  box: [{kind:'path',d:'M3 7l9-4 9 4v11l-9 4-9-4V7zM3 7l9 4 9-4M12 11v11M7 5l9 4'}],
   snow: [{ kind: 'path', d: 'M12 2v20M4.2 6.5l15.6 11M4.2 17.5l15.6-11M9.5 3.5L12 6l2.5-2.5M9.5 20.5L12 18l2.5 2.5' }],
   drop: [{ kind: 'path', d: 'M12 3s6 6.6 6 11a6 6 0 0 1-12 0c0-4.4 6-11 6-11z' }],
   bolt: [{ kind: 'path', d: 'M13 2L4 14h7l-1 8 9-12h-7l1-8z' }],
