@@ -208,7 +208,7 @@ details p { margin-top: 10px; color: var(--text-2); }
 .fs { border: none; padding: 0; margin: 0; min-width: 0; }
 .fs-title { font-family: var(--font-display); font-weight: 700; font-size: 20px; padding: 0; margin-bottom: 4px; }
 .chip-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-.chip-day, .chip-slot, .stepper {
+.chip-day, .chip-slot {
   font: inherit; color: var(--text); background: var(--surface);
   border: 1px solid var(--border); cursor: pointer;
 }
@@ -219,7 +219,6 @@ details p { margin-top: 10px; color: var(--text-2); }
 .chip-day:disabled { text-decoration: none; }
 .chip-day.on, .chip-slot.on { background: var(--text); color: #fff; border-color: var(--text); }
 .chip-day:hover:not(.on), .chip-slot:hover:not(.on) { border-color: var(--copper); }
-.stepper { width: 44px; height: 44px; border-radius: 22px; font-size: 20px; }
 .form-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 16px; }
 .pay-option { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); cursor: pointer; font-weight: 600; }
 .pay-option.on { border-color: var(--copper); }
@@ -284,7 +283,6 @@ details p { margin-top: 10px; color: var(--text-2); }
 }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.stepper:disabled { opacity: .4; cursor: default; }
 
 /* Aviso importante (p. ej., Salud no atiende emergencias) */
 .notice { background: var(--copper-soft); border-left: 4px solid var(--primary); border-radius: 10px; padding: 12px 14px; font-size: 14.5px; color: var(--text); max-width: 680px; }
@@ -457,7 +455,8 @@ details p { margin-top: 10px; color: var(--text-2); }
 .city-dialog input { width:100%; min-width:0; min-height:48px; padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--surface); color:var(--text); font:inherit; }
 .city-results { overscroll-behavior:contain; }
 .stepper button { flex-shrink:0; width:48px; height:48px; }
-.stepper output { white-space:nowrap; overflow-wrap:normal; word-break:normal; font-variant-numeric:tabular-nums; min-width:3ch; }
+.stepper { width:100%; min-width:0; justify-content:space-between; }
+.stepper output { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; overflow-wrap:normal; word-break:normal; font-variant-numeric:tabular-nums; }
 .reschedule-time { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; }
 @media(max-width:1024px) { .nav-secondary { display:none; } .header { position:relative; background:var(--bg); backdrop-filter:none; } }
 @media(max-width:600px) {
