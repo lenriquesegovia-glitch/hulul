@@ -1,6 +1,13 @@
 # HULUL — Estado y registro de entregas
 
-## Estado vigente — V5.2 + V5.3 publicadas el 25 de octubre de 2026 (Claude)
+## Estado vigente — V5.4 publicada el 25 de octubre de 2026 (Claude)
+- PR #8 → main **8af30df**. Publicado con "Publicar HULUL", run 40231949744: verificar ✅ → backend ✅ → web ✅ (Vercel Production 7318877981) → android ✅ (OTA production).
+- Nuevo: **timbre al cliente** (función `timbrar`): hasta 3 avisos con sonido, cada 3 min, guardados en `bookings.rings`. "El cliente no está" exige 3 timbres + 10 min de espera. Términos (versión 2026-10-25) y FAQ actualizados.
+- Filtro de groserías: palabras de México (chingada, pinche…) y corrección de signos finales ("!!" ocultaba la palabra). Pruebas en `functions/profanity.test.js`.
+- Respaldo: main c94f59b (V5.3).
+- Pendiente: módulo de reclamos (protocolo en definición con el dueño).
+
+## Anterior — V5.2 + V5.3 publicadas el 25 de octubre de 2026 (Claude)
 - Integrado: PR #6 (V5.2 seguridad + publicador) → main ef81c38; PR #7 (V5.3 estado de cuenta y cabecera) → main **d87f931**.
 - Publicado con GitHub Actions "Publicar HULUL", run 40230652530 sobre d87f931: verificar ✅ → backend ✅ (reglas Firestore/Storage y funciones en hulul-59081) → web ✅ (Vercel Production 7318680133, https://hulul-lzfwwc5nn-hulul.vercel.app) → android ✅ (OTA canal production, runtime 0.1.0).
 - Grupo OTA: ver la salida del paso "eas update" del job android en ese run o el panel de Expo (la sesión de Claude no puede leer los logs).
