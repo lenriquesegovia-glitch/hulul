@@ -16,10 +16,15 @@ for (const slot of ['15:00','16:00']) {
   assert.equal(schedule.checkSlot({category:'mascotas',date:'2026-10-23',slot,hours:1,pro}).ok,true);
 }
 assert.equal(booking.timeAvailable(0,'14:00',now),false);
-assert.equal(schedule.checkSlot({category:'mascotas',date:'2026-10-23',slot:'17:00',hours:1,pro}).ok,false);
+assert.equal(schedule.checkSlot({category:'mascotas',date:'2026-10-23',slot:'17:00',hours:1,pro}).ok,true);
 assert.equal(schedule.surchargeFor('2026-10-23','16:00',pro).amount,0);
 assert.equal(schedule.surchargeFor('2026-10-23','18:00',pro).amount,30);
 assert.equal(schedule.leadMinutes('mascotas'),0);
 assert.equal(schedule.leadMinutes('cerrajeria'),0);
 assert.equal(booking.timeAvailable(0,'15:00',new Date(2026,9,23,14,59)),true);
-console.log('PASS: future requests allowed immediately, past hours blocked, provider end time and surcharges preserved.');
+for(const hours of [1,2,3]) assert.equal(schedule.checkSlot({category:'mascotas',date:'2026-10-23',slot:'16:30',hours,pro}).ok,true);
+assert.equal(booking.SLOTS.includes('16:30'),true);
+assert.equal(schedule.checkSlot({category:'mascotas',date:'2026-10-23',slot:'17:30',hours:1,pro}).ok,false);
+assert.equal(schedule.checkSlot({category:'mascotas',date:'2026-10-23',slot:'07:30',hours:1,pro}).ok,false);
+assert.equal(booking.timeAvailable(0,'16:30',new Date(2026,9,23,16,31)),false);
+console.log('PASS: future requests allowed immediately, past hours blocked, arrival window enforced without end-of-visit restriction; special tariffs preserved.');

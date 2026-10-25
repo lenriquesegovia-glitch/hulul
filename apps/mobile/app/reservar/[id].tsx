@@ -282,7 +282,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
           <View style={{ gap: 10 }}>
             <Text style={s.label}>Hora de llegada</Text>
             {tester && <Body style={{ fontSize: 12.5, color: c.copper }}>Modo prueba: cualquier hora, sin reglas de horario.</Body>}
-            {!tester && <Body muted style={{fontSize:13,lineHeight:20}}>Horario de {pro.name.split(' ')[0]}: {pro.from || '08:00'}–{pro.to || '18:00'}. Puedes solicitar una hora futura sin anticipación mínima; el profesional confirma si puede atenderte. La visita dura aproximadamente {minH} h y debe terminar dentro de su horario. Una hora tachada no significa necesariamente que tenga una reserva.</Body>}
+            {!tester && <Body muted style={{fontSize:13,lineHeight:20}}>Horario de {pro.name.split(' ')[0]}: {pro.from || '08:00'}–{pro.to || '18:00'}. Puedes solicitar una hora futura sin anticipación mínima; el profesional confirma si puede atenderte. La visita dura aproximadamente {minH} h y puede terminar después del horario si acepta la solicitud. Una hora tachada no significa necesariamente que tenga una reserva.</Body>}
             <View style={s.slots}>
               {slots.map((t, i) => {
                 if (!tester && !slotInWindow(pro.category, t, pro)) return null;
