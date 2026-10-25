@@ -1,5 +1,17 @@
 # HULUL — Estado y registro de entregas
 
+## Estado vigente — V5.1 publicada el 24 de octubre de 2026
+- Web: PR #5 integrado, commit e392844b0d12aaaf17dbefeb56122d12ea595549, Vercel SUCCESS. Dominio hululec.com verificado (HTTP 200, cabecera y estilos nuevos).
+- Android: canal production, runtime 0.1.0, grupo a070ca0c-8003-4845-bf54-e2ff154bf08c; update 01a17108-329d-7e3c-b576-49c4c1bdd30f. EAS confirmó Published después de web SUCCESS.
+- Código Android: 565aa84dcd72b70d27e37ce731708c15280cc883, integrado por PR #5. Incluye corrección concurrente de Claude al Stepper web.
+- Publicado: selector opaco, cabecera compacta sin superposición en móvil/tablet, hora/minutos adaptables y llegada cada 30 minutos sin exigir fin de visita antes del cierre.
+- Verificado: pruebas de horario y tarifas, TypeScript shared/mobile, compilación web y export Android. Falta solo comprobación del resultado en teléfono físico del usuario.
+- Backend V5 compatible: no se modificó ni se volvió a desplegar en V5.1.
+- Respaldo: web anterior c3dc7af (mismo código funcional V5); Android anterior ed19aca3-3e57-4923-b983-d76d1cf23e80. No recalcular registros históricos al revertir.
+- Pendientes reales: módulo de reclamos, identidad de correos y bloqueo automático contra publicaciones obsoletas. No están incluidos en V5.1.
+- Lo que sigue debajo conserva el historial; este bloque sustituye estados anteriores de publicación pendiente o Android no verificado.
+
+
 Documento compartido entre todas las personas e IAs que trabajan en el repositorio.
 **Antes de trabajar:** leer este archivo, consultar GitHub y anotar aquí cada entrega.
 
