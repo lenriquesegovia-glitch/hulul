@@ -1,11 +1,20 @@
 # HULUL — Estado y registro de entregas
 
-## Estado vigente — V5.4 publicada el 25 de octubre de 2026 (Claude)
+## Estado vigente — V5.5 publicada el 25 de octubre de 2026 (Claude)
+- PR #9 → main **49937f0**. "Publicar HULUL" run 40241447524: verificar ✅ (incluye reglas en emulador) → backend ✅ → web ✅ (Vercel Production 7320276990) → android ✅ (OTA production).
+- **Protocolo de reclamos** (decidido por el dueño): abren cliente o profesional hasta 48 h después; la otra parte responde en 24 h; HULUL decide en máximo 72 h. Si reclama el cliente, el pago queda retenido.
+- Datos: `reclamos/{reserva}` (solo servidor escribe; leen las dos partes), `reclamos/{id}/privado/textos` (originales sin moderar) y `reclamos/{id}/accesos` (registro de cada apertura, contacto mostrado y decisión). Fotos en Storage `reclamos/{uid}/{reserva}/`.
+- Funciones: `reportarProblema` (cliente), `reportarProblemaPro`, `responderReclamo`, `adminReclamos`, `adminReclamo`, `resolverReclamo`, `plazosReclamos` (cada 30 min: sin respuesta → revisión; correo 12 h antes de vencer y al vencer).
+- Panel privado: https://hululec.com/admin/reclamos — acceso por correo verificado en ADMIN_EMAILS (por defecto lenriquesegovia@gmail.com; para sumar a alguien: variable ADMIN_EMAILS en GitHub con los correos separados por coma y volver a publicar el backend).
+- Decisión: a favor de cliente (sin cobro, multa opcional al profesional, crédito opcional) o profesional (se paga); faltas opcionales a cualquiera. Motivo obligatorio, visible para ambos.
+- Privacidad: contacto enmascarado en el panel; política de privacidad versión 2026-10-25.
+- Respaldo: main 77c21b7 (V5.4).
+
+## Anterior — V5.4 publicada el 25 de octubre de 2026 (Claude)
 - PR #8 → main **8af30df**. Publicado con "Publicar HULUL", run 40231949744: verificar ✅ → backend ✅ → web ✅ (Vercel Production 7318877981) → android ✅ (OTA production).
 - Nuevo: **timbre al cliente** (función `timbrar`): hasta 3 avisos con sonido, cada 3 min, guardados en `bookings.rings`. "El cliente no está" exige 3 timbres + 10 min de espera. Términos (versión 2026-10-25) y FAQ actualizados.
 - Filtro de groserías: palabras de México (chingada, pinche…) y corrección de signos finales ("!!" ocultaba la palabra). Pruebas en `functions/profanity.test.js`.
 - Respaldo: main c94f59b (V5.3).
-- Pendiente: módulo de reclamos (protocolo en definición con el dueño).
 
 ## Anterior — V5.2 + V5.3 publicadas el 25 de octubre de 2026 (Claude)
 - Integrado: PR #6 (V5.2 seguridad + publicador) → main ef81c38; PR #7 (V5.3 estado de cuenta y cabecera) → main **d87f931**.
