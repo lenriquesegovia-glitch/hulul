@@ -27,6 +27,9 @@ export const BAD_WORDS = [
   'conchudo', 'conchuda', 'carishina', 'cholo', 'longuito', 'longuita', 'cagon', 'cagona', 'mierdoso', 'mierdosa', 'mierdero',
   'malparidos', 'mal parido', 'mal parida', 'hijo de perra', 'hija de perra', 'mariposon', 'mamarracho', 'sinverguenza', 'desgraciado', 'desgraciada',
   'lambon', 'lambona', 'ladilla', 'gil', 'gila', 'gilazo', 'cojudazo', 'pendejazo', 'huevonazo',
+  // México y otros países
+  'chingada', 'chingado', 'chingadera', 'chingaderas', 'chingar', 'chingate', 'chingues', 'chingon', 'chinga', 'chingatumadre', 'hdlch', 'hdlv',
+  'pinche', 'pinches', 'ojete', 'gilipollas', 'puneta', 'cabronazo', 'mamaguevo', 'hijo de puta', 'hija de puta', 'hijos de puta',
   // Inglés básico
   'fuck', 'fucking', 'fck', 'shit', 'bitch', 'asshole', 'motherfucker', 'dick',
 ];
@@ -37,7 +40,7 @@ export function normalizeText(text: string): string {
     .toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[0@4]/g, (c) => ({ '0': 'o', '@': 'a', '4': 'a' })[c] ?? c)
-    .replace(/[1!|]/g, 'i').replace(/3/g, 'e').replace(/\$|5/g, 's').replace(/7/g, 't')
+    .replace(/[1!|](?=[a-z])/g, 'i').replace(/3/g, 'e').replace(/\$|5/g, 's').replace(/7/g, 't')
     .replace(/([a-z])\1{2,}/g, '$1')
     .replace(/[^a-zñ\s]/g, ' ');
 }

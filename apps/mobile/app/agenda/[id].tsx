@@ -8,7 +8,7 @@ import {
   acceptedDelay, appointmentTime, departPlan, travelEstimate, extraQuote, formatUSD, getCategory, hhmmEcuador, serviceCopy, outcomeLabel, hasProfanity, PROFANITY_MESSAGE, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS,
   MAX_EXTRA, MIN_DIAGNOSIS_CHARS, MIN_EXTRA, POLICY, type JobOutcome,
 } from '@hulul/shared';
-import { EXTRA_STATUS_LABEL, extraCharge, proAction, rateClient, shareLivePosition, type ExtraAction, type ProAction, type ProBooking } from '@hulul/shared/firebase';
+import { EXTRA_STATUS_LABEL, extraCharge, proAction, rateClient, ringClient, shareLivePosition, type ExtraAction, type ProAction, type ProBooking } from '@hulul/shared/firebase';
 import { BackButton, Body, Card, H1, Button, PrimaryButton } from '@/components/ui';
 import { Chat } from '@/components/Chat';
 import { DelayPro } from '@/components/Delay';
@@ -161,7 +161,8 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
             </Card>
           )}
           {b.status === 'en_curso' && <PrimaryButton label="Terminar la visita" onPress={() => setFinishing(true)} />}
-          {b.status === 'en_camino' && b.arrivedAt && <AbsentButton startedAt={Math.max(b.arrivedAt.toMillis(), appointmentTime(b.date, b.slot).getTime() + acceptedDelay(b) * 60_000)} late={arrivedLate(b)} onPress={() => setAsking('cliente_ausente')} />}
+          {b.status === 'en_camino' && b.arrivedAt && <RingButton id={b.id} rings={b.rings ?? []} client={first} />}
+          {b.status === 'en_camino' && b.arrivedAt && <AbsentButton startedAt={Math.max(b.arrivedAt.toMillis(), appointmentTime(b.date, b.slot).getTime() + acceptedDelay(b) * 60_000)} rings={(b.rings ?? []).length} late={arrivedLate(b)} onPress={() => setAsking('cliente_ausente')} />}
           {(b.status === 'confirmada' || b.status === 'en_camino') && (
             <Button variant="danger" label="No puedo ir" onPress={() => setAsking('no_puedo')} />
           )}
@@ -275,13 +276,38 @@ function arrivedLate(b: ProBooking): boolean {
   return (b.arrivedAt?.toMillis?.() ?? 0) > at + POLICY.lateToleranceMinutes * 60_000;
 }
 
-function AbsentButton({ startedAt, late, onPress }: { startedAt?: number; late: boolean; onPress: () => void }) {
+function AbsentButton({ startedAt, rings, late, onPress }: { startedAt?: number; rings: number; late: boolean; onPress: () => void }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15_000); return () => clearInterval(t); }, []);
   const left = startedAt ? Math.ceil((startedAt + POLICY.clientNoShowWaitMinutes * 60_000 - now) / 60_000) : 0;
+  const missing = POLICY.ringsBeforeAbsent - rings;
   return (
-    <Button variant="danger" disabled={left > 0} onPress={onPress}
-      label={left > 0 ? `El cliente no está (en ${left} min)` : late ? 'El cliente no está (sin cobro: llegaste tarde)' : 'El cliente no está'} />
+    <Button variant="danger" disabled={left > 0 || missing > 0} onPress={onPress}
+      label={missing > 0 ? `El cliente no está (timbra ${missing} ${missing === 1 ? 'vez' : 'veces'} más)` : left > 0 ? `El cliente no está (en ${left} min)` : late ? 'El cliente no está (sin cobro: llegaste tarde)' : 'El cliente no está'} />
+  );
+}
+
+/** Timbrar: notificación con sonido al celular del cliente (hasta 3, cada 3 min). */
+function RingButton({ id, rings, client }: { id: string; rings: number[]; client: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 5_000); return () => clearInterval(t); }, []);
+  const n = rings.length;
+  const done = n >= POLICY.ringsBeforeAbsent;
+  const last = n ? Number(rings[n - 1]) : 0;
+  const left = last ? Math.ceil((last + POLICY.ringGapMinutes * 60_000 - now) / 60_000) : 0;
+  const ring = async () => {
+    setBusy(true); setErr('');
+    try { await ringClient(id); } catch (e) { setErr(errText(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Card style={{ gap: 8 }}>
+      <Button variant="secondary" disabled={busy || done || left > 0} onPress={ring}
+        label={busy ? 'Timbrando…' : done ? `🔔 Timbraste ${n} veces` : left > 0 ? `🔔 Timbrar otra vez (en ${left} min)` : `🔔 Timbrar a ${client} (${n}/${POLICY.ringsBeforeAbsent})`} />
+      <Body muted style={{ fontSize: 12.5 }}>{done ? 'Si no responde, espera el tiempo que falta y marca "El cliente no está".' : 'Le suena una alerta en el celular. Cada timbre queda registrado.'}</Body>
+      {!!err && <Body style={{ fontSize: 12.5, color: c.danger }}>{err}</Body>}
+    </Card>
   );
 }
 

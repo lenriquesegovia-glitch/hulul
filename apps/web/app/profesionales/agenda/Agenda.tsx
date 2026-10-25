@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {ClientSummary} from '@/components/ClientSummary';
-import { COMMISSION_RATE, departPlan, durationLabel, formatUSD, getCategory, hhmmEcuador, serviceCopy, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS, MIN_DIAGNOSIS_CHARS, MIN_DIAGNOSIS_PHOTOS, travelEstimate, type JobOutcome, type ProviderStatus } from '@hulul/shared';
+import { COMMISSION_RATE, POLICY, departPlan, durationLabel, formatUSD, getCategory, hhmmEcuador, serviceCopy, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS, MIN_DIAGNOSIS_CHARS, MIN_DIAGNOSIS_PHOTOS, travelEstimate, type JobOutcome, type ProviderStatus } from '@hulul/shared';
 import { RescheduleBox } from '@/components/RescheduleBox';
 import type { ProAction, ProBooking, VisitReport as Report } from '@hulul/shared/firebase';
 
@@ -358,7 +358,8 @@ export function BookingCard({ b, highlight = false, compact = false }: { b: ProB
             </div>
           )}
           {b.status === 'en_curso' && <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => setFinishing(true)}>Terminar la visita</button>}
-          {b.status === 'en_camino' && b.arrivedAt && <AbsentButton from={absentFrom(b)} late={arrivedLate(b)} disabled={!!busy} onClick={() => setAsking('cliente_ausente')} />}
+          {b.status === 'en_camino' && b.arrivedAt && <RingButton id={b.id} rings={b.rings ?? []} client={first || 'al cliente'} />}
+          {b.status === 'en_camino' && b.arrivedAt && <AbsentButton from={absentFrom(b)} rings={(b.rings ?? []).length} late={arrivedLate(b)} disabled={!!busy} onClick={() => setAsking('cliente_ausente')} />}
           {(b.status === 'confirmada' || b.status === 'en_camino') && (
             <button type="button" className="btn btn-danger" disabled={!!busy} onClick={() => setAsking('no_puedo')}>No puedo ir</button>
           )}
@@ -439,14 +440,42 @@ function absentFrom(b: ProBooking): number {
   return Math.max(b.arrivedAt?.toMillis?.() ?? 0, effectiveAt(b));
 }
 
-function AbsentButton({ from: startedAt, late, disabled, onClick }: { from?: number; late: boolean; disabled: boolean; onClick: () => void }) {
+function AbsentButton({ from: startedAt, rings, late, disabled, onClick }: { from?: number; rings: number; late: boolean; disabled: boolean; onClick: () => void }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15_000); return () => clearInterval(t); }, []);
-  const left = startedAt ? Math.ceil((startedAt + 10 * 60_000 - now) / 60_000) : 0;
+  const left = startedAt ? Math.ceil((startedAt + POLICY.clientNoShowWaitMinutes * 60_000 - now) / 60_000) : 0;
+  const missing = POLICY.ringsBeforeAbsent - rings;
   return (
-    <button type="button" className="btn btn-danger" disabled={disabled || left > 0} onClick={onClick}>
-      {left > 0 ? `El cliente no está (en ${left} min)` : late ? 'El cliente no está (sin cobro: llegaste tarde)' : 'El cliente no está'}
+    <button type="button" className="btn btn-danger" disabled={disabled || left > 0 || missing > 0} onClick={onClick}>
+      {missing > 0 ? `El cliente no está (timbra ${missing} ${missing === 1 ? 'vez' : 'veces'} más)` : left > 0 ? `El cliente no está (en ${left} min)` : late ? 'El cliente no está (sin cobro: llegaste tarde)' : 'El cliente no está'}
     </button>
+  );
+}
+
+/** Timbrar: notificación con sonido al celular del cliente (hasta 3, cada 3 min). */
+function RingButton({ id, rings, client }: { id: string; rings: number[]; client: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 5_000); return () => clearInterval(t); }, []);
+  const n = rings.length;
+  const done = n >= POLICY.ringsBeforeAbsent;
+  const last = n ? Number(rings[n - 1]) : 0;
+  const left = last ? Math.ceil((last + POLICY.ringGapMinutes * 60_000 - now) / 60_000) : 0;
+  const ring = async () => {
+    setBusy(true); setErr('');
+    try { const { ringClient } = await import('@hulul/shared/firebase'); await ringClient(id); }
+    catch (e) { setErr((e as { message?: string }).message || 'No se pudo timbrar. Inténtalo de nuevo.'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="stack gap-8" style={{ width: '100%' }}>
+      <button type="button" className="btn btn-ghost" disabled={busy || done || left > 0} onClick={ring}>
+        {busy ? 'Timbrando…' : done ? `🔔 Timbraste ${n} veces` : left > 0 ? `🔔 Timbrar otra vez (en ${left} min)` : `🔔 Timbrar a ${client} (${n}/${POLICY.ringsBeforeAbsent})`}
+      </button>
+      <span className="muted" style={{ fontSize: 13 }}>{done ? 'Si no responde, espera el tiempo que falta y marca "El cliente no está".' : 'Le suena una alerta en el celular. Cada timbre queda registrado.'}</span>
+      {err && <span style={{ fontSize: 13, color: 'var(--danger, #B42318)' }}>{err}</span>}
+    </div>
   );
 }
 
