@@ -12,9 +12,11 @@ import { useUser } from '@/lib/auth';
 import { c, font, radius } from '@/theme';
 
 type Period = 'semana' | 'mes' | 'tres';
-const PERIODS: [Period, string][] = [['semana', 'Últimos 7 días'], ['mes', 'Este mes'], ['tres', 'Últimos 3 meses']];
+const PERIODS: [Period, string][] = [['semana', '7 días'], ['mes', 'Este mes'], ['tres', '3 meses']];
 const ms = (t: unknown) => (t && typeof (t as { toMillis?: () => number }).toMillis === 'function' ? (t as { toMillis: () => number }).toMillis() : Number(t) || 0);
 const day = (t: number) => new Date(t - 5 * 3_600_000).toISOString().slice(0, 10).split('-').reverse().join('/');
+/** $15.74 / −$15.74 (signo antes del símbolo). */
+const money = (v: number) => (v < 0 ? `−${formatUSD(-v)}` : formatUSD(v));
 const code = (id?: string | null) => (id ? id.slice(0, 8).toUpperCase() : '');
 
 export interface ProFields { strikeLog?: number[]; strikesResetAt?: number; fines?: number; suspendedUntil?: number; strikes?: number }
@@ -97,8 +99,10 @@ export function StatementView({ ledger, payouts, pro, now: nowProp }: { ledger: 
                 <Text style={s.eyebrow}>SALDO CON HULUL</Text>
                 {bal.total >= 0 ? (
                   <>
-                    <Line label="Para tu próximo pago (lunes)" value={bal.available} strong />
-                    <Line label="En espera (48 h para reclamos)" value={bal.held} />
+                    <Line label="A tu favor (aún no pagado)" text={money(bal.total)} strong big />
+                    <Line label="Ya disponible para el lunes" text={money(bal.available)} />
+                    <Line label="En espera (48 h para reclamos)" text={money(bal.held)} />
+                    {bal.available < 0 && <Body muted style={s.note}>Lo disponible sale negativo por multas o por cargos de HULUL que cobraste en efectivo; se compensa con tus pagos con tarjeta en espera.</Body>}
                     <Body muted style={s.note}>HULUL te paga cada lunes por transferencia lo disponible, menos retenciones.</Body>
                   </>
                 ) : (
@@ -151,7 +155,7 @@ export function StatementView({ ledger, payouts, pro, now: nowProp }: { ledger: 
 }
 
 function Line({ label, value, text, sign, strong, big }: { label: string; value?: number; text?: string; sign?: '+' | '−'; strong?: boolean; big?: boolean }) {
-  const shown = text ?? `${sign && value ? sign : ''}${formatUSD(value ?? 0)}`;
+  const shown = text ?? `${sign && value ? sign : ''}${sign ? formatUSD(Math.abs(value ?? 0)) : money(value ?? 0)}`;
   return (
     <View style={s.line}>
       <Text style={[s.lineLabel, strong && { fontFamily: font.bodyBold, color: c.text }]}>{label}</Text>
