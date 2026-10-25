@@ -13,6 +13,8 @@ import { VisitReport } from '@/components/VisitReport';
 import { ExtraForPro } from '@/components/ExtraCharge';
 import { RateClientBox } from '@/components/Rating';
 import { Chat } from '@/components/Chat';
+import { ClaimCard, ProReportBox } from '@/components/Claim';
+import { proCanReport } from '@hulul/shared/firebase';
 import { DelayPro } from '@/components/Delay';
 import { SignIn } from '@/components/SignIn';
 import { logout, useUser } from '@/lib/auth';
@@ -312,6 +314,8 @@ export function BookingCard({ b, highlight = false, compact = false }: { b: ProB
       {!compact && <ExtraForPro id={b.id} status={b.status} extra={b.extra} taxRegime={b.taxRegime} />}
       {b.rating ? <span className="muted" style={{ fontSize: 13.5 }}>El cliente te calificó {'★'.repeat(b.rating)}</span> : null}
       {(!compact || b.cancelledBy === 'cliente_ausente') && (['por_aprobar', 'completada'].includes(b.status) || b.cancelledBy === 'cliente_ausente') && !b.clientRating && <RateClientBox id={b.id} clientName={first} />}
+      {(b.claimId || b.dispute) && <ClaimCard id={b.id} side="profesional" />}
+      {!compact && proCanReport(b) && <ProReportBox id={b.id} />}
       {b.status === 'pendiente' && !compact && <span className="muted" style={{ fontSize: 13.5 }}>Lee bien qué necesita el cliente y acepta solo si sabes hacerlo. Cobras la visita; lo que haga falta después lo acuerdas con el cliente.</span>}
 
       {msg && <p role="alert" className="form-error">{msg}</p>}

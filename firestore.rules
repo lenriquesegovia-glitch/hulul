@@ -308,6 +308,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Reclamos: los escribe solo el servidor. El cliente y el profesional de la
+    // reserva ven el expediente (motivo, versiones, plazos y decisión). Los
+    // textos originales sin moderar y el registro de accesos (subcolecciones)
+    // solo se leen desde el panel de HULUL, por funciones del servidor.
+    match /reclamos/{bookingId} {
+      allow read: if request.auth != null
+        && (resource.data.clientId == request.auth.uid || resource.data.proId == request.auth.uid);
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

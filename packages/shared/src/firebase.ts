@@ -228,7 +228,8 @@ export async function createClientProfile(uid: string, p: ClientProfile): Promis
 export interface ClientBooking {
   id: string;
   arrivedAt?: { toMillis: () => number };
-  dispute?: { kind: string; text: string; status: string };
+  dispute?: { kind: string; text: string; status: string; by?: string; outcome?: string };
+  claimId?: string;
   delay?: Delay;
   /** Falta del profesional que causó la cancelación (no salió, muy tarde, no se presentó). */
   proFault?: string;
@@ -467,17 +468,136 @@ export const ABSENT_PROBLEM_OPTIONS: { value: 'si_estaba' | 'otro'; label: strin
   { value: 'otro', label: 'Otra cosa' },
 ];
 
-export const PROBLEM_OPTIONS: { value: 'no_vino' | 'incompleto' | 'cobro' | 'otro'; label: string }[] = [
+export const PROBLEM_OPTIONS: { value: 'no_vino' | 'incompleto' | 'cobro' | 'trato' | 'dano' | 'otro'; label: string }[] = [
   { value: 'no_vino', label: 'No hizo el trabajo o se fue sin hacerlo' },
   { value: 'incompleto', label: 'Marcó como resuelto, pero no quedó resuelto' },
   { value: 'cobro', label: 'Me cobró algo distinto a lo acordado' },
+  { value: 'trato', label: 'Me trató mal o fue irrespetuoso' },
+  { value: 'dano', label: 'Dañó algo de mi casa' },
   { value: 'otro', label: 'Otro problema' },
 ];
 
+/** Lo que puede reportar el profesional sobre el cliente. */
+export const PRO_PROBLEM_OPTIONS: { value: 'agresion' | 'no_pago' | 'dano' | 'adicional' | 'no_dejo' | 'otro'; label: string }[] = [
+  { value: 'agresion', label: 'Me trató mal o fue agresivo' },
+  { value: 'no_pago', label: 'No me pagó lo acordado' },
+  { value: 'dano', label: 'Dañó mis herramientas o equipo' },
+  { value: 'adicional', label: 'Rechazó un cobro adicional justificado' },
+  { value: 'no_dejo', label: 'No me dejó trabajar o no me abrió' },
+  { value: 'otro', label: 'Otra cosa' },
+];
+
+/** Plazos del protocolo de reclamos (los aplica el servidor). */
+export const CLAIM_RULES = { windowHours: 48, responseHours: 24, resolveHours: 72, maxPhotos: 6 } as const;
+
+export const CLAIM_STATUS_LABEL: Record<string, string> = {
+  esperando_respuesta: 'Esperando la versión de la otra parte',
+  en_revision: 'En revisión por HULUL',
+  resuelto: 'Resuelto',
+};
+
+export interface ClaimDecision {
+  outcome: 'cliente' | 'profesional';
+  note: string;
+  multaPro?: number;
+  creditoCliente?: number;
+  faltaPro?: boolean;
+  faltaCliente?: boolean;
+  at: number;
+}
+
+export interface Claim {
+  id: string;
+  code: string;
+  bookingId: string;
+  openedBy: 'cliente' | 'profesional';
+  clientId: string;
+  proId: string;
+  clientName: string;
+  proName: string;
+  category: string;
+  date: string;
+  slot: string;
+  kind: string;
+  kindLabel: string;
+  text: string;
+  photos: string[];
+  status: 'esperando_respuesta' | 'en_revision' | 'resuelto';
+  openedAt: number;
+  responseDueAt: number;
+  resolveDueAt: number;
+  response: { text: string; photos: string[]; at: number; late?: boolean } | null;
+  responseMissed?: boolean;
+  decision: ClaimDecision | null;
+  moneyHeld?: boolean;
+}
+
+/** Expediente del reclamo de una reserva (lo ven el cliente y el profesional). null si no hay. */
+export function watchClaim(bookingId: string, cb: (c: Claim | null) => void): () => void {
+  return onSnapshot(doc(firestore(), 'reclamos', bookingId),
+    (snap) => cb(snap.exists() ? ({ id: snap.id, ...snap.data() } as Claim) : null), () => cb(null));
+}
+
 /** El cliente reporta un problema (hasta 48 h después): el pago queda retenido y HULUL revisa. */
-export async function reportProblem(data: { id: string; kind: string; text: string }): Promise<void> {
+export async function reportProblem(data: { id: string; kind: string; text: string; photos?: string[] }): Promise<void> {
   const fn = callable<typeof data, { ok: boolean }>('reportarProblema');
   await fn(data);
+}
+
+/** El profesional reporta un problema con el cliente (hasta 48 h después). */
+export async function reportProblemPro(data: { id: string; kind: string; text: string; photos?: string[] }): Promise<void> {
+  await callable<typeof data, { ok: boolean }>('reportarProblemaPro')(data);
+}
+
+/** La otra parte da su versión del reclamo (texto y fotos). */
+export async function respondClaim(data: { id: string; text: string; photos?: string[] }): Promise<void> {
+  await callable<typeof data, { ok: boolean }>('responderReclamo')(data);
+}
+
+/** ¿Puede el profesional reportar un problema con el cliente en esta reserva? */
+export function proCanReport(b: { status: string; dispute?: unknown; claimId?: string; cancelledBy?: string; finishedAt?: { toMillis: () => number } | null; cancelledAt?: { toMillis: () => number } | null }, now = Date.now()): boolean {
+  if (b.dispute || b.claimId) return false;
+  const win = CLAIM_RULES.windowHours * 3_600_000;
+  const fin = b.finishedAt?.toMillis?.() ?? 0;
+  const can = b.cancelledAt?.toMillis?.() ?? 0;
+  if (b.status === 'por_aprobar') return true;
+  if (b.status === 'completada') return !!fin && now - fin < win;
+  if (b.status === 'cancelada') return ['cliente', 'cliente_ausente'].includes(String(b.cancelledBy)) && !!can && now - can < win;
+  return false;
+}
+
+/* ------------------------- Panel de reclamos (HULUL) ------------------------- */
+
+export interface ClaimListItem {
+  id: string; code: string; openedBy: 'cliente' | 'profesional'; kindLabel: string; status: Claim['status']; openedAt: number;
+  responseDueAt: number; resolveDueAt: number; hasResponse: boolean; decision: 'cliente' | 'profesional' | null;
+  clientName: string; proName: string; category: string; date: string; slot: string; moneyHeld: boolean;
+}
+
+export interface ClaimFile {
+  claim: Claim & { privado?: { apertura?: string; respuesta?: string } };
+  booking: Record<string, unknown> & {
+    status: string; address: string; notes: string; paymentMethod: string; contactName: string; contactPhone: string; contactEmail: string; professionalName: string;
+    diagnosis: string; diagnosisPhotos: string[]; photos: string[]; rings: number[]; arrivedPos: { distance?: number; accuracy?: number } | null;
+  };
+  parties: { client: { reclamos: number; strikes: number }; pro: { reclamos: number; strikes: number; rating: number | null; phone: string } };
+  messages: { id: string; from: string; kind: string; text: string; photo: string; at: number; original: string | null }[];
+  stats: Record<'cliente' | 'profesional', { count: number; replies: number; avgMin: number | null; maxMin: number | null }>;
+  timeline: { at: number; who: string; what: string; detail: string }[];
+  accesses: { email: string; action: string; at: number }[];
+  revealed: boolean;
+}
+
+export async function adminListClaims(): Promise<ClaimListItem[]> {
+  return (await callable<Record<string, never>, { items: ClaimListItem[] }>('adminReclamos')({})).data.items;
+}
+
+export async function adminGetClaim(id: string, reveal = false): Promise<ClaimFile> {
+  return (await callable<{ id: string; reveal: boolean }, ClaimFile>('adminReclamo')({ id, reveal })).data;
+}
+
+export async function adminResolveClaim(data: { id: string; outcome: 'cliente' | 'profesional'; note: string; multaPro?: number; creditoCliente?: number; faltaPro?: boolean; faltaCliente?: boolean }): Promise<void> {
+  await callable<typeof data, { ok: boolean }>('resolverReclamo')(data);
 }
 
 /* ------------------------------ Calificaciones ------------------------------ */
@@ -598,7 +718,10 @@ export interface ProBooking {
   arrivedAt?: { toMillis: () => number };
   /** Timbres enviados al cliente después de llegar (milisegundos). */
   rings?: number[];
-  dispute?: { kind: string; text: string; status: string };
+  dispute?: { kind: string; text: string; status: string; by?: string; outcome?: string };
+  claimId?: string;
+  finishedAt?: { toMillis: () => number } | null;
+  cancelledAt?: { toMillis: () => number } | null;
   delay?: Delay;
   /** Cuándo marcó "Llegué" (para esperar al cliente 10 minutos). */
   startedAt?: { toMillis: () => number };
