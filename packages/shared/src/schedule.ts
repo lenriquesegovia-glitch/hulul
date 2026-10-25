@@ -3,8 +3,8 @@ import type { CategorySlug } from './categories';
 /**
  * Horarios (decidido el 19-oct-2026).
  *
- * - Horario normal: todos los días de 08:00 a 18:00 (la visita empieza y
- *   termina dentro de ese horario). Sin recargo.
+ * - Horario normal: todos los días de 08:00 a 18:00 (la visita empieza dentro de ese horario;
+ *   el profesional decide si acepta según su tiempo disponible). Sin recargo.
  * - Fuera de horario (antes de las 08:00 o desde las 18:00) y feriados: solo
  *   con profesionales que lo activan en su perfil. Cada uno elige a qué horas
  *   atiende y fija su recargo en monto fijo (nocturno y feriado), sin tope. El
@@ -84,7 +84,7 @@ export type SurchargeKind = 'nocturno' | 'feriado';
 /** ¿Se muestra esa hora de llegada para este profesional? (para no mostrar horas imposibles) */
 export function slotInWindow(_category: CategorySlug, slot: string, pro?: ProSchedule): boolean {
   const h = Number(slot.split(':')[0]);
-  if (!isOffHour(slot)) return h + 1 <= NORMAL_HOURS.end;
+  if (!isOffHour(slot)) return true;
   return !!pro?.offHours?.includes(h);
 }
 
@@ -148,8 +148,7 @@ export function checkSlot(input: {
     if (!pro?.offHours?.includes(h)) return no(`${first} no atiende a las ${input.slot}. El horario normal es de ${pad(NORMAL_HOURS.start)}:00 a ${pad(NORMAL_HOURS.end)}:00.`);
   } else {
     if (pro?.from && start < toMin(pro.from)) return no(`${first} empieza a atender a las ${pro.from}.`);
-    if (endMin > NORMAL_HOURS.end * 60) return no(`Terminaría a las ${end}. En horario normal la visita debe terminar a más tardar a las ${pad(NORMAL_HOURS.end)}:00: elige una hora más temprano${pro?.offHours?.includes(NORMAL_HOURS.end) ? ' o desde las 18:00 (con recargo)' : ''}.`);
-    if (pro?.to && endMin > toMin(pro.to)) return no(`Terminaría a las ${end} y ${first} atiende hasta las ${pro.to}: elige una hora más temprano.`);
+    if (pro?.to && start > toMin(pro.to)) return no(`${first} recibe solicitudes hasta las ${pro.to}: elige una hora de llegada dentro de su horario.`);
   }
 
   const noisy = isNoisy(input.category) && (off || !!holiday || wd === 0);

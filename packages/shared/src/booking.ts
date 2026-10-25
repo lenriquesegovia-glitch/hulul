@@ -1,11 +1,11 @@
 import type { PaymentMethod } from './models';
 
 /**
- * Horas de llegada: cada hora del día (00:00 a 23:00). Se muestran las de
- * 08:00 a 17:00 (horario normal) y, fuera de ese horario, solo las que el
+ * Horas de llegada: cada 30 minutos del día (00:00 a 23:30). Se muestran las de
+ * 08:00 a 17:30 (horario normal) y, fuera de ese horario, solo las que el
  * profesional activó (schedule.ts: slotInWindow / checkSlot).
  */
-export const SLOTS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
+export const SLOTS = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
 
 /**
  * Modo prueba: los profesionales marcados con `tester: true` en

@@ -88,3 +88,5 @@
  .hh-catalog .photo-text strong {font-size:14px;line-height:19px;hyphens:manual;}
  .hh-catalog .category-arrow {font-size:18px;}
 }
+
+@media(max-width:1024px){.hh-hero::before{display:none;}}

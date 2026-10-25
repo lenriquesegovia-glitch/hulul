@@ -360,7 +360,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         </div>
         <span className="muted" style={{ fontSize: 14, fontWeight: 700 }}>Hora de llegada</span>
         {tester && <p className="pill pill-warm" style={{ alignSelf: 'flex-start' }}>Modo prueba: cualquier hora, sin reglas de horario</p>}
-        {!tester && <p className="muted" style={{fontSize:13}}>Horario de {pro.name.split(' ')[0]}: {pro.from || '08:00'}–{pro.to || '18:00'}. Puedes solicitar una hora futura sin anticipación mínima; el profesional confirma si puede atenderte. La visita debe terminar dentro de su horario.</p>}
+        {!tester && <p className="muted" style={{fontSize:13}}>Horario de {pro.name.split(' ')[0]}: {pro.from || '08:00'}–{pro.to || '18:00'}. Puedes solicitar una hora futura sin anticipación mínima; el profesional confirma si puede atenderte. El horario indica cuándo puede llegar; el trabajo puede terminar después si acepta la solicitud.</p>}
         <div className="slot-grid" role="radiogroup" aria-label="Hora de llegada">
           {slots.map((t, i) => (tester || slotInWindow(pro.category, t, pro)) && (
             <button key={t} type="button" role="radio" aria-checked={i === slot}

@@ -15,7 +15,7 @@ export function Header() {
           <Link href="/profesionales" className="nav-pro"><span className="np-full">Soy profesional</span><span className="np-short">Soy pro</span></Link>
           <Link href="/#descargar" className="nav-secondary">Descargar app</Link>
           <Inbox /><AccountLink />
-          <Link href="/servicios" className="btn btn-primary" style={{ minHeight: 44 }}>
+          <Link href="/servicios" className="btn btn-primary nav-reserve">
             Reservar
           </Link>
         </nav>

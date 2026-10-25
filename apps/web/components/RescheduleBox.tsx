@@ -81,10 +81,10 @@ export function RescheduleBox({ id, date, slot, proposal, me, other }: {
       <span className="muted" style={{ fontSize: 13.5 }}>Puedes adelantar o atrasar. {other} debe aceptar; hasta entonces vale la hora original.</span>
       <Stepper label="Día" value={di === 0 ? 'Hoy' : di === 1 ? 'Mañana' : shortDay(days[di])}
         onMinus={() => setD(days[di - 1])} onPlus={() => setD(days[di + 1])} canMinus={di > 0} canPlus={di < days.length - 1} minusLabel="Día anterior" plusLabel="Día siguiente" />
-      <div className="row gap-12">
+      <div className="reschedule-time">
         <Stepper label="Hora" value={RESCHEDULE_HOURS[hi]} onMinus={() => setH(hi - 1)} onPlus={() => setH(hi + 1)}
           canMinus={hi > 0} canPlus={hi < RESCHEDULE_HOURS.length - 1} minusLabel="Hora anterior" plusLabel="Hora siguiente" />
-        <Stepper label="Minutos" value={`:${RESCHEDULE_MINUTES[mi]}`} onMinus={() => setM(mi - 1)} onPlus={() => setM(mi + 1)}
+        <Stepper label="Minutos" value={RESCHEDULE_MINUTES[mi]} onMinus={() => setM(mi - 1)} onPlus={() => setM(mi + 1)}
           canMinus={mi > 0} canPlus={mi < RESCHEDULE_MINUTES.length - 1} minusLabel="Menos minutos" plusLabel="Más minutos" />
       </div>
       <span style={{ textAlign: 'center', fontSize: 14.5 }}>Nueva hora: <strong>{shortDay(d)} · {s}</strong></span>

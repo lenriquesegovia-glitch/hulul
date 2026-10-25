@@ -58,10 +58,10 @@ export function Reschedule({ id, date, slot, proposal, me, other }: {
       <Body muted style={{ fontSize: 13 }}>Puedes adelantar o atrasar. {other} debe aceptar.</Body>
       <Stepper label="Día" value={di === 0 ? 'Hoy' : di === 1 ? 'Mañana' : shortDay(days[di])}
         onMinus={() => setD(days[di - 1])} onPlus={() => setD(days[di + 1])} canMinus={di > 0} canPlus={di < days.length - 1} minusLabel="Día anterior" plusLabel="Día siguiente" />
-      <View style={{ flexDirection: 'row', gap: 10 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         <Stepper label="Hora" value={RESCHEDULE_HOURS[hi]} onMinus={() => setH(hi - 1)} onPlus={() => setH(hi + 1)}
           canMinus={hi > 0} canPlus={hi < RESCHEDULE_HOURS.length - 1} minusLabel="Hora anterior" plusLabel="Hora siguiente" />
-        <Stepper label="Minutos" value={`:${RESCHEDULE_MINUTES[mi]}`} onMinus={() => setM(mi - 1)} onPlus={() => setM(mi + 1)}
+        <Stepper label="Minutos" value={RESCHEDULE_MINUTES[mi]} onMinus={() => setM(mi - 1)} onPlus={() => setM(mi + 1)}
           canMinus={mi > 0} canPlus={mi < RESCHEDULE_MINUTES.length - 1} minusLabel="Menos minutos" plusLabel="Más minutos" />
       </View>
       <Body style={{ fontSize: 14, textAlign: 'center' }}>Nueva hora: <Text style={{ fontFamily: font.bodyBold }}>{shortDay(d)} · {sl}</Text></Body>
