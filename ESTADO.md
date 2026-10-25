@@ -1,5 +1,13 @@
 # HULUL — Estado y registro de entregas
 
+## En revisión — V5.2 seguridad (NO publicada) · 24 oct 2026, Claude
+- PR #6, rama `claude/seguridad-v5-2`, commit 19a792c. Basada en main acb1123. Cambia **backend** (reglas y funciones); web y app sin cambios de código.
+- Corrige: reservas sin cuenta o a nombre de otro (regla de bookings), correos con lista de destinatarios (reglas + `functions/mail-safety.js`), cruces al aceptar un cambio de hora, reservas en horas pasadas, nodemailer/body-parser vulnerables.
+- Agrega el bloqueo contra publicaciones antiguas: `scripts/verificar-copia.cjs` en los dos .bat y publicador `.github/workflows/publicar.yml` (solo desde el último main; orden backend → web → Android).
+- Verificado en GitHub Actions (run 40158788633): TypeScript, horarios/tarifas, funciones (dinero, ranking, correos), **reglas en emulador** (19 comprobaciones) y build web: success.
+- Para publicar: 1) Firebase (reglas+funciones) desde el publicador de Actions (requiere secrets FIREBASE_SERVICE_ACCOUNT y variables MAIL_PROVIDER/FROM_EMAIL/NOTIFY_TO) o con `publicar-firebase.bat` desde una copia igual a main; 2) integrar PR #6 (Vercel recompila la web sin cambios); 3) Android OTA no es necesario (sin cambios de app).
+- Pendientes que no corrige: restringir la clave de Google Maps de app.json al paquete com.hulul.app en Google Cloud; activar App Check (limitar abuso de solicitudes/registros); actualizar dependencias del cliente en la próxima build nativa; `check-home-preservation.cjs` compara contra V2 y está desactualizado; renombrar a mano el `publicar-app.bat` de la carpeta raíz antigua.
+
 ## Estado vigente — V5.1 publicada el 24 de octubre de 2026
 - Web: PR #5 integrado, commit e392844b0d12aaaf17dbefeb56122d12ea595549, Vercel SUCCESS. Dominio hululec.com verificado (HTTP 200, cabecera y estilos nuevos).
 - Android: canal production, runtime 0.1.0, grupo a070ca0c-8003-4845-bf54-e2ff154bf08c; update 01a17108-329d-7e3c-b576-49c4c1bdd30f. EAS confirmó Published después de web SUCCESS.
