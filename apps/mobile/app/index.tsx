@@ -5,7 +5,7 @@ import {Inbox} from '@/components/Inbox';
 import { BrandLogo } from '@/components/BrandLogo';
 import { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { categories, categoryImage, getCategory, suggestServices, homeCopy, featuredHomeServices, discoveryTitle } from '@hulul/shared';
@@ -33,6 +33,10 @@ export default function Home() {
   useEffect(() => { AsyncStorage.getItem('hulul.modo').then((v) => { if (v === 'cliente' || v === 'pro') setMode(v); }).catch(() => {}); }, []);
   const pickMode = (m: 'pro' | 'cliente') => { setMode(m); AsyncStorage.setItem('hulul.modo', m).catch(() => {}); };
   const proMode = isPro && mode === 'pro';
+  // Cabecera: espacio para el logo = ancho − márgenes − campana (~72) − Mi cuenta (48 solo ícono / ~124 con texto) − separaciones.
+  const { width: screenW } = useWindowDimensions();
+  const compact = screenW < 400;
+  const logoW = Math.max(104, Math.min(168, screenW - 40 - 72 - (compact ? 48 : 124) - 16));
   const [q, setQ] = useState('');
   // Mismo buscador que la web: sugerencias desde la primera letra.
   const suggestions = useMemo(() => suggestServices(q), [q]);
@@ -40,12 +44,16 @@ export default function Home() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top']}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+        {/* El logo se ajusta al espacio libre: la campana y Mi cuenta nunca lo tapan. En pantallas angostas, Mi cuenta queda solo con el ícono. */}
         <View style={s.header}>
-          <View style={{flex:1}}><BrandLogo /><CitySelector /></View>
-          <Inbox /><Pressable accessibilityRole="button" accessibilityLabel="Mi cuenta" onPress={() => router.push('/cuenta')} style={s.location}>
-            <Icon name="user" size={18} />
-            <Text style={s.locationText}>Mi cuenta</Text>
-          </Pressable>
+          <View style={{flex:1,minWidth:0}}><BrandLogo width={logoW} /><CitySelector /></View>
+          <View style={{flexDirection:'row',alignItems:'center',gap:8,flexShrink:0}}>
+            <Inbox />
+            <Pressable accessibilityRole="button" accessibilityLabel="Mi cuenta" onPress={() => router.push('/cuenta')} style={[s.location, compact && s.locationIcon]}>
+              <Icon name="user" size={18} />
+              {!compact && <Text style={s.locationText}>Mi cuenta</Text>}
+            </Pressable>
+          </View>
         </View>
 
         {isPro && (
@@ -173,7 +181,8 @@ const s = StyleSheet.create({
   explore: { minHeight: 48, justifyContent: 'center', alignItems:'center', borderWidth:1, borderColor:c.primary, borderRadius:12, backgroundColor:c.surface },
   exploreText: { fontFamily: font.bodyBold, fontSize: 16, color: c.primary },
   content: { padding: 20, paddingBottom: 40, gap: 24 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  locationIcon: { width: 48, height: 48, borderRadius: 24, paddingHorizontal: 0, justifyContent: 'center' },
   seg: { flexDirection: 'row', padding: 4, borderRadius: radius.md, backgroundColor: c.surfaceWarm, borderWidth: 1, borderColor: c.border, marginTop: -8 },
   segBtn: { flex: 1, paddingVertical: 10, borderRadius: radius.sm, alignItems: 'center' },
   segOn: { backgroundColor: c.primary },
