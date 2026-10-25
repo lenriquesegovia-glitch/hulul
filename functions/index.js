@@ -726,6 +726,9 @@ export function cancelFee(b, now = new Date()) {
 const LATE_TOLERANCE_MIN = 15;
 const VERY_LATE_MIN = 30;
 const CLIENT_WAIT_MIN = 10;
+// Antes de marcar "cliente ausente", el profesional timbra 3 veces (cada 3 min como mínimo).
+const RINGS_BEFORE_ABSENT = 3;
+const RING_GAP_MIN = 3;
 const PRO_LATE_FINE = 5;
 const PRO_NOSHOW_FINE = 10;
 const LATE_CREDIT = 5;
@@ -965,6 +968,8 @@ export const gestionarReserva = onCall(
         const from = Math.max(arrived, effectiveMs(cur));
         const wait = CLIENT_WAIT_MIN * 60_000 - (Date.now() - from);
         if (wait > 0) throw new HttpsError('failed-precondition', `Espera ${Math.ceil(wait / 60_000)} min más: el cliente tiene ${CLIENT_WAIT_MIN} minutos desde la hora de la cita (o desde que llegaste, si llegaste tarde).`);
+        const rings = Array.isArray(cur.rings) ? cur.rings.length : 0;
+        if (rings < RINGS_BEFORE_ABSENT) throw new HttpsError('failed-precondition', `Antes de cancelar, timbra al cliente ${RINGS_BEFORE_ABSENT} veces (llevas ${rings}). Así queda constancia de que lo buscaste.`);
         // Si llegó tarde (más de 15 min después de la hora, contando el retraso
         // aceptado), no es culpa del cliente: no se le cobra y es falta del profesional.
         const arrivedLate = arrived > effectiveMs(cur) + LATE_TOLERANCE_MIN * 60_000;
@@ -1040,6 +1045,45 @@ export const gestionarReserva = onCall(
     return { status: rule.to };
   },
 );
+
+/**
+ * "Timbrar": el profesional, ya en la dirección, avisa al cliente con una
+ * notificación con sonido. Hasta 3 timbres, con al menos 3 minutos entre uno y
+ * otro. Cada timbre queda guardado en la reserva (rings) como respaldo para un
+ * reclamo. Al tercero sin respuesta (y cumplida la espera) puede marcar
+ * "El cliente no está".
+ */
+export const timbrar = onCall({ region: REGION }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const id = String(req.data?.id ?? '');
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('invalid-argument', 'Reserva no válida.');
+  const ref = db().doc(`bookings/${id}`);
+  const { b, n } = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
+    const cur = snap.data();
+    if (cur.professionalId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
+    if (cur.status !== 'en_camino' || !cur.arrivedAt) throw new HttpsError('failed-precondition', 'Primero marca "Estoy en la dirección".');
+    const rings = Array.isArray(cur.rings) ? cur.rings.map(Number) : [];
+    if (rings.length >= RINGS_BEFORE_ABSENT) throw new HttpsError('failed-precondition', 'Ya timbraste 3 veces. Si el cliente no responde, marca "El cliente no está".');
+    const last = rings.length ? rings[rings.length - 1] : 0;
+    const wait = last + RING_GAP_MIN * 60_000 - Date.now();
+    if (wait > 0) throw new HttpsError('failed-precondition', `Puedes volver a timbrar en ${Math.ceil(wait / 60_000)} min.`);
+    tx.update(ref, { rings: [...rings, Date.now()] });
+    return { b: cur, n: rings.length + 1 };
+  });
+  const pro = String(b.professionalName ?? 'Tu profesional').split(' ')[0];
+  const last = n >= RINGS_BEFORE_ABSENT;
+  const late = (b.arrivedAt?.toMillis?.() ?? 0) > effectiveMs(b) + LATE_TOLERANCE_MIN * 60_000;
+  await pushTo(b.clientId, `🔔 ${pro} está en tu puerta (aviso ${n} de ${RINGS_BEFORE_ABSENT})`,
+    last
+      ? `Último aviso: te espera en ${String(b.address ?? 'tu dirección').slice(0, 80)}. Si no respondes, podrá cancelar la visita${late ? '' : ' y se cobrará la visita'}. Escríbele por el chat si necesitas un momento.`
+      : `Te espera en ${String(b.address ?? 'tu dirección').slice(0, 80)}. Recíbelo y dale tu código de llegada, o escríbele por el chat.`,
+    { bookingId: id, to: 'cliente', ring: n });
+  logger.info('Timbre al cliente', { id, n });
+  return { rings: n };
+});
 
 /* ------------------------ Servicios del profesional ------------------------ */
 

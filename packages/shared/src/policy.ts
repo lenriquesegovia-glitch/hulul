@@ -20,6 +20,10 @@ export const POLICY = {
   lateCancelFee: 3,
   /** Minutos que espera el profesional antes de marcar "cliente ausente". */
   clientNoShowWaitMinutes: 10,
+  /** Timbres (avisos al celular del cliente) antes de poder marcar "cliente ausente". */
+  ringsBeforeAbsent: 3,
+  /** Minutos mínimos entre un timbre y el siguiente. */
+  ringGapMinutes: 3,
   /** Parte de los cargos al cliente que va al profesional. */
   proShareOfClientFees: 0.8,
   /** Tolerancia de llegada del profesional (minutos). */

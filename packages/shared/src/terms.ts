@@ -10,7 +10,7 @@ import { CATEGORY_PRICING, RATE_BAND, rateRange } from './provider';
  * Los montos y plazos salen de `policy.ts` y `provider.ts`.
  */
 
-export const TERMS_VERSION = '2026-10-19';
+export const TERMS_VERSION = '2026-10-25';
 export const TERMS_UPDATED = '18 de octubre de 2026';
 
 const suggestedList = categories.map((c) => { const r = rateRange(c.slug); return `${c.name}: sugerida ${usd(CATEGORY_PRICING[c.slug].suggested)} (de ${usd(r.min)} a ${usd(r.max)})`; });
@@ -75,7 +75,7 @@ export const termsOfService: LegalSection[] = [
         `Sin costo: hasta ${P.freeCancelHoursBefore} horas antes de la hora reservada, en reservas programadas.`,
         `Con menos de ${P.freeCancelHoursBefore} horas de anticipación y la reserva ya confirmada por el profesional, o con el profesional en camino: cargo de ${usd(P.lateCancelFee)}. Si el profesional ya marcó que está en la dirección (y llegó a tiempo), cancelar cuesta la tarifa por visita completa. La app o la web muestran el cargo antes de confirmar la cancelación.`,
         'Con tarjeta, el cargo se descuenta del monto retenido. Con efectivo o transferencia, queda como saldo pendiente y se suma a la próxima reserva.',
-        `Si el profesional llega y el cliente no está, no responde en el chat o no permite el ingreso, después de ${P.clientNoShowWaitMinutes} minutos de espera el profesional puede cancelar la reserva: se cobra la tarifa por visita y el profesional califica al cliente. La espera se cuenta desde la hora de la cita: si el profesional llega antes, debe esperar a esa hora. Si el cliente sí estaba, puede reportarlo en la app dentro de ${P.claimWindowHours} horas: el cobro queda retenido hasta que HULUL revise la ubicación, el chat y las marcas de llegada.`,
+        `Si el profesional llega y el cliente no está, no responde en el chat o no permite el ingreso, después de ${P.clientNoShowWaitMinutes} minutos de espera y de avisarle ${P.ringsBeforeAbsent} veces con el timbre de la app (cada aviso queda registrado), el profesional puede cancelar la reserva: se cobra la tarifa por visita y el profesional califica al cliente. La espera se cuenta desde la hora de la cita: si el profesional llega antes, debe esperar a esa hora. Si el cliente sí estaba, puede reportarlo en la app dentro de ${P.claimWindowHours} horas: el cobro queda retenido hasta que HULUL revise la ubicación, el chat y las marcas de llegada.`,
         `De los cargos de esta sección, el ${pct(P.proShareOfClientFees)} es para el profesional que se trasladó.`,
       ] },
     ],

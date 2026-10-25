@@ -67,7 +67,7 @@ export const faqGroups: { title: string; items: Q[] }[] = [
       },
       {
         q: '¿Puedo cancelar?',
-        a: `Sí, sin costo hasta ${P.freeCancelHoursBefore} horas antes de la cita, o hasta ${P.freeCancelMinutes} minutos después de que el profesional acepte si pediste para lo antes posible. Después, si el profesional ya confirmó o va en camino, hay un cargo de ${usd(P.lateCancelFee)}; te lo mostramos antes de que confirmes. Si llega y no estás, tras ${P.clientNoShowWaitMinutes} minutos de espera se cobra la visita del profesional.`,
+        a: `Sí, sin costo hasta ${P.freeCancelHoursBefore} horas antes de la cita, o hasta ${P.freeCancelMinutes} minutos después de que el profesional acepte si pediste para lo antes posible. Después, si el profesional ya confirmó o va en camino, hay un cargo de ${usd(P.lateCancelFee)}; te lo mostramos antes de que confirmes. Si llega y no estás, te avisa ${P.ringsBeforeAbsent} veces con el timbre de la app; si tras ${P.clientNoShowWaitMinutes} minutos de espera no respondes, se cobra la visita del profesional.`,
       },
       {
         q: '¿Qué pasa si el profesional llega tarde o no llega?',

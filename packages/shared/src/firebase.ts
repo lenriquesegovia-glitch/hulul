@@ -577,10 +577,17 @@ export async function proAction(id: string, action: ProAction, reason = '', repo
   return (await fn({ id, action, reason, ...(report ?? {}), ...(code ? { code } : {}), ...(pos ? { pos } : {}) })).data;
 }
 
+/** El profesional, ya en la dirección, timbra al cliente: le llega una notificación con sonido. */
+export async function ringClient(id: string): Promise<{ rings: number }> {
+  return (await callable<{ id: string }, { rings: number }>('timbrar')({ id })).data;
+}
+
 export interface ProBooking {
   id: string;
   /** Cuándo marcó "Estoy en la dirección". */
   arrivedAt?: { toMillis: () => number };
+  /** Timbres enviados al cliente después de llegar (milisegundos). */
+  rings?: number[];
   dispute?: { kind: string; text: string; status: string };
   delay?: Delay;
   /** Cuándo marcó "Llegué" (para esperar al cliente 10 minutos). */
