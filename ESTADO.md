@@ -1,11 +1,19 @@
 # HULUL — Estado y registro de entregas
 
+## Integrada — V5.2 seguridad (main ef81c38, backend aún NO desplegado) · 24 oct 2026, Claude
+- PR #6, rama `claude/seguridad-v5-2`, commit 19a792c. Basada en main acb1123. Cambia **backend** (reglas y funciones); web y app sin cambios de código.
+- Corrige: reservas sin cuenta o a nombre de otro (regla de bookings), correos con lista de destinatarios (reglas + `functions/mail-safety.js`), cruces al aceptar un cambio de hora, reservas en horas pasadas, nodemailer/body-parser vulnerables.
+- Agrega el bloqueo contra publicaciones antiguas: `scripts/verificar-copia.cjs` en los dos .bat y publicador `.github/workflows/publicar.yml` (solo desde el último main; orden backend → web → Android).
+- Verificado en GitHub Actions (run 40158788633): TypeScript, horarios/tarifas, funciones (dinero, ranking, correos), **reglas en emulador** (19 comprobaciones) y build web: success.
+- Para publicar: 1) Firebase (reglas+funciones) desde el publicador de Actions (requiere secrets FIREBASE_SERVICE_ACCOUNT y variables MAIL_PROVIDER/FROM_EMAIL/NOTIFY_TO) o con `publicar-firebase.bat` desde una copia igual a main; 2) integrar PR #6 (Vercel recompila la web sin cambios); 3) Android OTA no es necesario (sin cambios de app).
+- Pendientes que no corrige: restringir la clave de Google Maps de app.json al paquete com.hulul.app en Google Cloud; activar App Check (limitar abuso de solicitudes/registros); actualizar dependencias del cliente en la próxima build nativa; `check-home-preservation.cjs` compara contra V2 y está desactualizado; renombrar a mano el `publicar-app.bat` de la carpeta raíz antigua.
+
 ## En revisión — V5.3 app (NO publicada) · 24 oct 2026, Claude
-- Rama `claude/cuenta-profesional-v5-3`, basada en main acb1123. Solo app Android (y módulo compartido); sin cambios de backend ni de web visibles.
+- Rama `claude/cuenta-profesional-v5-3`, actualizada con main ef81c38 (incluye V5.2). Solo app Android (y módulo compartido); sin cambios de backend ni de web visibles.
 - Corrige: cabecera de la app (la campana y "Mi cuenta" tapaban el logo HULUL en teléfonos de ~360 dp; ahora el logo se ajusta y "Mi cuenta" queda solo como ícono en pantallas angostas) y montos partidos en el panel del profesional ("$337.4 / 5").
 - Nuevo: **Estado de cuenta del profesional** (`apps/mobile/app/estado-cuenta.tsx`, cálculo en `packages/shared/src/statement.ts`): ganado, comisión, multas, retenciones, neto por periodo; saldo a favor / disponible / en espera; faltas (x de 3 en 30 días) y suspensión; pagos semanales; movimientos. Lee `ledger`, `payouts` y `providers/{uid}`, ya permitidos por las reglas. Acceso desde la tarjeta "Ganado en 7 días" y el botón "Estado de cuenta".
 - Verificado: TypeScript, `scripts/check-statement.mjs` (con movimientos reales de functions/money.js), horarios/tarifas, build web, export Android y revisión visual (exportación web temporal) a 360 y 412 px.
-- Publicar: solo OTA Android (canal production) después de integrar; no requiere backend. Independiente de V5.2 (PR #6).
+- Publicar: solo OTA Android (canal production) después de integrar; no requiere backend. Se publica junto con V5.2 (PR #6 integrado en main ef81c38).
 
 ## Estado vigente — V5.1 publicada el 24 de octubre de 2026
 - Web: PR #5 integrado, commit e392844b0d12aaaf17dbefeb56122d12ea595549, Vercel SUCCESS. Dominio hululec.com verificado (HTTP 200, cabecera y estilos nuevos).

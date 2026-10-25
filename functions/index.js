@@ -24,6 +24,7 @@ import homeCatalog from './home-catalog.js';
 import { buildRanking } from './home-ranking-core.js';
 import { normalizeRankingBooking } from './home-ranking.js';
 import { hasProfanity, maskProfanity, PROFANITY_MESSAGE } from './profanity.js';
+import { safeMessage } from './mail-safety.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
 
 /** Debe coincidir con la ubicación de la base de datos Firestore. */
@@ -173,7 +174,26 @@ function waNumber(phone) {
   return '593' + digits.replace(/^0/, '');
 }
 
+/**
+ * Transporte de correo con filtro de destinatarios (mail-safety.js): cada aviso
+ * a clientes o profesionales sale a un único correo válido. Los avisos internos
+ * (a notifyTo, configurado por HULUL) se envían tal cual.
+ */
 function transport() {
+  const t = rawTransport();
+  const send = t.sendMail.bind(t);
+  t.sendMail = (m) => {
+    const safe = safeMessage({ ...m, trusted: !!m && m.to === senders().notifyTo });
+    if (!safe) {
+      logger.warn('Correo no enviado: destinatario no válido', { subject: String(m?.subject ?? '').slice(0, 80) });
+      return Promise.resolve(null);
+    }
+    return send(safe);
+  };
+  return t;
+}
+
+function rawTransport() {
   if (MAIL_PROVIDER.value() === 'resend') {
     return nodemailer.createTransport({
       host: 'smtp.resend.com',
@@ -416,13 +436,15 @@ export const avisoReserva = onDocumentCreated(
     // El precio lo vuelve a calcular el servidor con la tarifa real del
     // profesional: si alguien lo alteró desde el celular, la reserva se anula.
     try {
-      const priced = await checkPrice(b);
+      // Una hora que ya pasó no se reserva (la app y la web ya lo impiden; esto cubre llamadas directas).
+      const past = appointmentMs(b.date, b.slot) < Date.now() - 10 * 60_000;
+      const priced = past ? { ok: false, total: Number(b.total ?? 0), reason: 'La hora elegida ya pasó.' } : await checkPrice(b);
       if (!priced.ok) {
         await event.data.ref.update({ status: 'cancelada', cancelledBy: 'sistema', cancelledAt: FieldValue.serverTimestamp(), cancelFee: 0,
           cancelReason: priced.reason ? `${priced.reason} Elige otra hora: no se te cobró nada.` : 'El precio de la reserva no coincide con la tarifa del profesional. Vuelve a reservar para ver el precio correcto.', expectedTotal: priced.total });
         await pushTo(b.clientId, 'Revisa tu reserva', priced.reason ? `${priced.reason} Vuelve a reservar: no se te cobró nada.` : 'El precio no coincidía con la tarifa actual del profesional. Vuelve a reservar: no se te cobró nada.', { bookingId: event.params.id, to: 'cliente' }).catch(() => {});
         const { from, notifyTo } = senders();
-        await mail.sendMail({ from, to: notifyTo, subject: `Reserva anulada por precio ${code(event.params.id)}`,
+        await mail.sendMail({ from, to: notifyTo, subject: `Reserva anulada ${past ? '(hora pasada)' : 'por precio'} ${code(event.params.id)}`,
           html: layout('Precio alterado o desactualizado', rows([['Código', code(event.params.id)], ['Cliente', esc(b.contactName)], ['Profesional', esc(b.professionalName)], ['Enviado', usd(b.total)], ['Correcto', usd(priced.total)]])) }).catch(() => {});
         logger.warn('Reserva anulada: precio no coincide', { id: event.params.id, sent: b.total, expected: priced.total });
         return;
@@ -668,6 +690,26 @@ const appointmentMs = (date, slot) => {
 };
 /** Hora efectiva de la cita: la reservada más el retraso que el cliente aceptó. */
 const effectiveMs = (b) => appointmentMs(b.date, b.slot) + (b.delay?.status === 'aceptado' ? Number(b.delay.minutes || 0) * 60_000 : 0);
+
+/**
+ * ¿Choca un horario con otro trabajo confirmado del mismo profesional ese día?
+ * Deja al menos TRAVEL_GAP_MIN de traslado. Devuelve la reserva que choca o null.
+ * La usan aceptar una reserva y aceptar un cambio de hora.
+ */
+async function findClash(tx, proId, id, date, startMs, hours) {
+  const mine = await tx.get(db().collection('bookings').where('professionalId', '==', proId).where('date', '==', date));
+  const end = startMs + Number(hours ?? 1) * 3_600_000;
+  const gap = TRAVEL_GAP_MIN * 60_000;
+  const hit = mine.docs.find((d) => {
+    if (d.id === id) return false;
+    const o = d.data();
+    if (!['confirmada', 'en_camino', 'en_curso'].includes(o.status)) return false;
+    const os = effectiveMs(o);
+    const oe = os + Number(o.hours ?? 1) * 3_600_000;
+    return startMs < oe + gap && os < end + gap;
+  });
+  return hit ? hit.data() : null;
+}
 const hhmm = (ms) => { const e = new Date(ms - 5 * 3_600_000); return `${String(e.getUTCHours()).padStart(2, '0')}:${String(e.getUTCMinutes()).padStart(2, '0')}`; };
 
 export function cancelFee(b, now = new Date()) {
@@ -902,19 +944,8 @@ export const gestionarReserva = onCall(
       }
       if (action === 'aceptar') {
         // No se aceptan dos trabajos que se crucen (con 30 min de traslado entre uno y otro).
-        const mine = await tx.get(db().collection('bookings').where('professionalId', '==', uid).where('date', '==', cur.date));
-        const start = effectiveMs(cur);
-        const end = start + Number(cur.hours ?? 1) * 3_600_000;
-        const clash = mine.docs.find((d) => {
-          if (d.id === id) return false;
-          const o = d.data();
-          if (!['confirmada', 'en_camino', 'en_curso'].includes(o.status)) return false;
-          const os = effectiveMs(o);
-          const oe = os + Number(o.hours ?? 1) * 3_600_000;
-          return start < oe + TRAVEL_GAP_MIN * 60_000 && os < end + TRAVEL_GAP_MIN * 60_000;
-        });
-        if (clash) {
-          const o = clash.data();
+        const o = await findClash(tx, uid, id, cur.date, effectiveMs(cur), cur.hours);
+        if (o) {
           throw new HttpsError('failed-precondition', `Ese día ya tienes ${CATEGORIES[o.category] ?? o.category} a las ${o.slot} (unas ${o.hours ?? 1} h). Entre un trabajo y otro deja al menos ${TRAVEL_GAP_MIN} min de traslado. Propón otra hora al cliente o recházala.`);
         }
       }
@@ -1174,6 +1205,11 @@ export const reprogramarReserva = onCall(
       if (p.by === who) throw new HttpsError('failed-precondition', 'Espera la respuesta de la otra parte.');
       if (action === 'aceptar') {
         if (appointmentMs(p.date, p.slot) < Date.now() + 5 * 60_000) throw new HttpsError('failed-precondition', 'Esa hora ya pasó. Propón otra.');
+        // Si el trabajo ya estaba aceptado, la nueva hora no puede chocar con otro trabajo del profesional.
+        if (b.status === 'confirmada') {
+          const o = await findClash(tx, b.professionalId, id, p.date, appointmentMs(p.date, p.slot), b.hours);
+          if (o) throw new HttpsError('failed-precondition', `${who === 'profesional' ? 'Ese día ya tienes' : 'El profesional ya tiene'} ${CATEGORIES[o.category] ?? o.category} a las ${o.slot} (unas ${o.hours ?? 1} h). Propón otra hora.`);
+        }
         tx.update(ref, { date: p.date, slot: p.slot, proposal: FieldValue.delete(), rescheduledAt: FieldValue.serverTimestamp(), previousDate: b.date, previousSlot: b.slot });
       } else {
         tx.update(ref, { proposal: FieldValue.delete(), lastRejectedProposal: { date: p.date, slot: p.slot, by: p.by } });
