@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ConfirmationResult } from 'firebase/auth';
 import { e164Ecuador } from '@hulul/shared';
-import { authErrorMessage, resetPassword, sendSmsCode, signInEmail, signInSocial } from '@/lib/auth';
+import { authErrorMessage, completeRedirectSignIn, inAppBrowser, pendingLink, PROVIDER_LABEL, resetPassword, sendSmsCode, signInEmail, signInSocial, type SocialProvider } from '@/lib/auth';
 
-/** Inicio de sesión o registro con Google o celular (SMS). Sirve para clientes y profesionales. */
+/** Inicio de sesión o registro con Google, Outlook, Facebook, correo o celular (SMS). Sirve para clientes y profesionales. */
 
 export function SignIn({ title, lead }: { title: string; lead: string }) {
   const [phone, setPhone] = useState('');
@@ -17,6 +17,23 @@ export function SignIn({ title, lead }: { title: string; lead: string }) {
   const [create, setCreate] = useState(true);
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
+  const [going, setGoing] = useState<SocialProvider | null>(null);
+  const [inApp, setInApp] = useState<string | null>(null);
+  const [linkWait, setLinkWait] = useState<ReturnType<typeof pendingLink>>(null);
+
+  // Al volver de Google, Outlook o Facebook (celular), muestra el error si lo hubo.
+  useEffect(() => {
+    setInApp(inAppBrowser());
+    setLinkWait(pendingLink());
+    completeRedirectSignIn()
+      .catch((e) => setError(authErrorMessage(e)))
+      .finally(() => setLinkWait(pendingLink()));
+  }, []);
+
+  const social = (name: SocialProvider) => {
+    setGoing(name);
+    run(() => signInSocial(name)).finally(() => { setGoing(null); setLinkWait(pendingLink()); });
+  };
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -31,18 +48,30 @@ export function SignIn({ title, lead }: { title: string; lead: string }) {
         <p className="muted">{lead}</p>
       </div>
 
+      {inApp && (
+        <p role="note" className="muted" style={{ fontSize: 14 }}>
+          Estás dentro de {inApp}. Para entrar con Google, Outlook o Facebook, toca ⋮ o ··· arriba y elige «Abrir en el navegador». Aquí mismo puedes entrar con tu correo o celular.
+        </p>
+      )}
+
+      {linkWait && (
+        <p role="note" className="muted" style={{ fontSize: 14 }}>
+          {linkWait.email ? `${linkWait.email} ya` : 'Ese correo ya'} tiene cuenta. Entra con el método que usaste la primera vez y {PROVIDER_LABEL[linkWait.provider]} quedará unido a tu cuenta.
+        </p>
+      )}
+
       <div className="stack gap-8">
-        <button type="button" className="btn btn-ghost social-btn" disabled={busy} onClick={() => run(() => signInSocial('google'))}>
-          <GoogleMark /> Continuar con Google
+        <button type="button" className="btn btn-ghost social-btn" disabled={busy} aria-busy={going === 'google'} onClick={() => social('google')}>
+          <GoogleMark /> {going === 'google' ? 'Abriendo Google…' : 'Continuar con Google'}
         </button>
-        <button type="button" className="btn btn-ghost social-btn" disabled={busy} onClick={() => run(() => signInSocial('microsoft'))}>
-          <MicrosoftMark /> Continuar con Outlook / Hotmail
+        <button type="button" className="btn btn-ghost social-btn" disabled={busy} aria-busy={going === 'microsoft'} onClick={() => social('microsoft')}>
+          <MicrosoftMark /> {going === 'microsoft' ? 'Abriendo Outlook…' : 'Continuar con Outlook / Hotmail'}
         </button>
-        <button type="button" className="btn btn-ghost social-btn" disabled={busy} onClick={() => run(() => signInSocial('facebook'))}>
-          <FacebookMark /> Continuar con Facebook
+        <button type="button" className="btn btn-ghost social-btn" disabled={busy} aria-busy={going === 'facebook'} onClick={() => social('facebook')}>
+          <FacebookMark /> {going === 'facebook' ? 'Abriendo Facebook…' : 'Continuar con Facebook'}
         </button>
-        <button type="button" className="btn btn-ghost social-btn" disabled={busy} onClick={() => setMode(mode === 'email' ? 'phone' : 'email')}>
-          <MailMark /> {mode === 'email' ? 'Mejor con mi celular' : 'Con correo y contraseña'}
+        <button type="button" className="btn btn-ghost social-btn" disabled={busy} onClick={() => { setError(''); setMode(mode === 'email' ? 'phone' : 'email'); }}>
+          {mode === 'email' ? <><PhoneMark /> Mejor con mi celular</> : <><MailMark /> Con correo y contraseña</>}
         </button>
       </div>
 
@@ -129,6 +158,14 @@ function FacebookMark() {
     <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden>
       <circle cx="12" cy="12" r="12" fill="#1877F2" />
       <path fill="#fff" d="M13.4 19.5v-6.1h2.1l.3-2.4h-2.4V9.5c0-.7.2-1.2 1.2-1.2h1.3V6.2c-.2 0-1-.1-1.9-.1-1.9 0-3.1 1.1-3.1 3.2v1.8H8.8v2.4h2.1v6.1h2.5z" />
+    </svg>
+  );
+}
+
+function PhoneMark() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="6" y="2.5" width="12" height="19" rx="2.5" /><path d="M10.5 18.5h3" />
     </svg>
   );
 }

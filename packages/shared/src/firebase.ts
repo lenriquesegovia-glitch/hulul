@@ -30,9 +30,19 @@ export async function loadHomeDiscovery() {
   }
 }
 
+/**
+ * Dominio de las ventanas de Google, Outlook y Facebook. Por defecto el de
+ * Firebase. En la web, al poner NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=hululec.com en
+ * Vercel, esas ventanas dicen "hululec.com" y el acceso funciona en Safari y en
+ * navegadores que bloquean cookies de terceros (next.config.ts reenvía /__/auth).
+ * Antes de activarlo, agregar https://hululec.com/__/auth/handler como URI de
+ * redirección en Google Cloud, Microsoft Entra y Meta for Developers.
+ */
+const authDomain = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) || 'hulul-59081.firebaseapp.com';
+
 export const firebaseConfig = {
   apiKey: 'AIzaSyAR2w6K7JXPHyPvfLb3piv--48T3gvlL2o',
-  authDomain: 'hulul-59081.firebaseapp.com',
+  authDomain,
   projectId: 'hulul-59081',
   storageBucket: 'hulul-59081.firebasestorage.app',
   messagingSenderId: '1070795690327',
