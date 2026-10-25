@@ -68,7 +68,7 @@ export function ProHome({ uid, name }: { uid: string; name: string }) {
       <View style={s.stats}>
         <Stat n={rows ? String(data.pending.length) : '…'} label="Solicitudes nuevas" hot={data.pending.length > 0} />
         <Stat n={rows ? String(data.todayCount) : '…'} label="Trabajos hoy" />
-        <Stat n={rows ? formatUSD(data.week) : '…'} label="Ganado en 7 días" />
+        <Stat n={rows ? formatUSD(data.week) : '…'} label="Ganado en 7 días" onPress={() => router.push('/estado-cuenta')} />
       </View>
 
       {data.pending.length > 0 && (
@@ -129,8 +129,9 @@ export function ProHome({ uid, name }: { uid: string; name: string }) {
         </View>
       )}
 
-      <View style={{ flexDirection: 'row', gap: 10 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         <Pressable accessibilityRole="button" onPress={open} style={s.tile}><Icon name="calendar" size={22} color={c.primary} /><Text style={s.tileText}>Mi agenda</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/estado-cuenta')} style={s.tile}><Icon name="card" size={22} color={c.primary} /><Text style={s.tileText}>Estado de cuenta</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={() => Linking.openURL(SERVICES_URL)} style={s.tile}><Icon name="card" size={22} color={c.primary} /><Text style={s.tileText}>Servicios y tarifas</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/profesional/[id]', params: { id: uid } })} style={s.tile}><Icon name="user" size={22} color={c.primary} /><Text style={s.tileText}>Mi perfil</Text></Pressable>
       </View>
@@ -138,13 +139,18 @@ export function ProHome({ uid, name }: { uid: string; name: string }) {
   );
 }
 
-function Stat({ n, label, hot = false }: { n: string; label: string; hot?: boolean }) {
-  return (
-    <View style={[s.stat, hot && { borderColor: c.primary, backgroundColor: c.copperSoft }]}>
-      <Text style={[s.statN, hot && { color: c.primary }]}>{n}</Text>
-      <Text style={s.statL}>{label}</Text>
-    </View>
+function Stat({ n, label, hot = false, onPress }: { n: string; label: string; hot?: boolean; onPress?: () => void }) {
+  const body = (
+    <>
+      {/* El valor nunca se parte en dos líneas: si no cabe, se achica. */}
+      <Text style={[s.statN, hot && { color: c.primary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{n}</Text>
+      <Text style={s.statL}>{label}{onPress ? ' ›' : ''}</Text>
+    </>
   );
+  const style = [s.stat, hot && { borderColor: c.primary, backgroundColor: c.copperSoft }];
+  return onPress
+    ? <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${n}. Ver estado de cuenta`} onPress={onPress} style={style}>{body}</Pressable>
+    : <View style={style}>{body}</View>;
 }
 
 const s = StyleSheet.create({
@@ -170,6 +176,6 @@ const s = StyleSheet.create({
   rowTitle: { fontFamily: font.bodyBold, fontSize: 14.5, color: c.text },
   badge: { overflow: 'hidden', paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: c.successSoft, color: c.success, fontFamily: font.bodyBold, fontSize: 11 },
   badgeHot: { backgroundColor: c.copperSoft, color: c.copper },
-  tile: { flex: 1, alignItems: 'center', gap: 6, paddingVertical: 14, borderRadius: radius.md, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
+  tile: { flexGrow: 1, flexBasis: '45%', alignItems: 'center', gap: 6, paddingVertical: 14, borderRadius: radius.md, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border },
   tileText: { fontFamily: font.bodySemi, fontSize: 12, color: c.text, textAlign: 'center' },
 });

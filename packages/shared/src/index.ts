@@ -26,3 +26,4 @@ export * from './home-discovery';
 export * from './service-icons';
 
 export * from './locations';
+export * from './statement';
