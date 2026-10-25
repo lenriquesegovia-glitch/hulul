@@ -9,7 +9,7 @@
 - Incluye tarifas especiales completas (no sumadas), selector nacional, resumen restringido de calificaciones del cliente, buzón persistente y tracker AHORA.
 - Consultar despliegues actuales antes de asumir que siguen activos: otra herramienta puede publicar después.
 
-## Trabajo más reciente: V5.1 EN REVISIÓN, NO PUBLICADO
+## Trabajo más reciente: V5.1 VERIFICADA, PUBLICACIÓN EN CURSO
 Rama: codex/ajustes-capturas-v5, basada en origin/main vigente al iniciar.
 - Selector de ciudad: fondo opaco correcto, input y cierre contenidos, nombre accesible.
 - Cabecera compacta para móvil/tablet; en esos tamaños deja de ser sticky para no tapar reservas. Campana con contador y cuenta arriba; Soy pro y Reservar abajo en teléfonos.
@@ -21,7 +21,7 @@ Rama: codex/ajustes-capturas-v5, basada en origin/main vigente al iniciar.
 
 ## Verificación y pendientes
 - Typecheck shared/mobile correcto. Pruebas check-booking-window y check-user-feedback correctas tras cambio de horario.
-- Build web correcto antes del último cambio de horario; repetir build final.
+- Build web final correcto después del cambio de horario.
 - Selector y cabecera revisados a 390x844 y 768x1024. Falta revisión final de reprogramación y export Android.
 - No desplegar hasta cerrar verificación. Web SUCCESS antes de Android OTA. No requiere cambio de backend para quitar restricción de finalización: esa restricción estaba en checkSlot compartido.
 - Correo todavía conserva identidad vino. Se detectó en captura; usuario aclaró que el enfoque inmediato es presentación y superposiciones. No se modificó functions/index.js en esta rama.
@@ -37,3 +37,5 @@ Propuesta por desarrollar: número de caso, vínculo a reserva, motivo, evidenci
 - Raíz C:\Users\lsego\Hulul contiene copia vieja con cambios ajenos. NO ejecutar su publicar-app.bat ni publicar desde allí.
 - Control automático contra publicación obsoleta todavía NO implementado.
 - Actualizar este documento después de cada publicación con commit, PR y grupo OTA.
+
+Registro canónico de despliegues: ESTADO.md. Consultar ese archivo para los identificadores de publicación posteriores a este punto de control.
