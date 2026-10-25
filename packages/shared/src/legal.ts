@@ -23,7 +23,7 @@ export const company = {
  * Versión de la política. Al cambiarla, la web y la app vuelven a pedir
  * la aceptación a todos los usuarios.
  */
-export const PRIVACY_VERSION = '2026-10-24';
+export const PRIVACY_VERSION = '2026-10-25';
 export const PRIVACY_UPDATED = '14 de octubre de 2026';
 
 export type LegalBlock = { p: string } | { ul: string[] };
@@ -91,7 +91,7 @@ export const privacyPolicy: LegalSection[] = [
         'Crear y administrar tu cuenta, gestionar reservas, conectar al cliente con el profesional, procesar pagos, liberar el pago al profesional y gestionar cancelaciones o reembolsos. Base: ejecución del contrato que aceptas al usar la Plataforma.',
         'Emitir facturas electrónicas y conservar registros contables y tributarios. Base: cumplimiento de obligaciones legales ante el Servicio de Rentas Internas (SRI).',
         'Verificar la identidad y experiencia de los profesionales, prevenir fraudes y proteger la seguridad de clientes y profesionales. Base: interés legítimo de HULUL y de los usuarios en una plataforma segura.',
-        'Dar soporte y resolver reclamos. Base: ejecución del contrato.',
+        'Dar soporte y resolver reclamos. Para decidir un reclamo, solo el equipo autorizado de HULUL revisa el expediente de esa reserva: horas y ubicación de llegada, avisos de timbre, código de llegada, fotos, informe, chat y la versión de cada parte. Cada acceso al expediente queda registrado. La otra parte del reclamo ve tu versión y tus fotos, pero no tus datos de contacto. Base: ejecución del contrato.',
         'Enviarte avisos sobre tus reservas (confirmaciones, recordatorios, cambios) por notificación, SMS, WhatsApp o correo. Base: ejecución del contrato.',
         'Medir el uso de la Plataforma con herramientas de analítica para mejorarla. Base: tu consentimiento, que puedes retirar en cualquier momento.',
         'Enviarte promociones y novedades de HULUL. Base: tu consentimiento, que se pide por separado y que puedes retirar en cualquier momento.',

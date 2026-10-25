@@ -51,5 +51,20 @@ await no('otro usuario no lee la cuenta bancaria de un profesional', getDoc(doc(
 await no('nadie escribe el directorio público', setDoc(doc(cli1, 'pros/pro1'), { name: 'X' }));
 await no('nadie lee buzones ajenos', getDoc(doc(cli2, 'inboxes/cli1/items/x')));
 
+console.log('Reclamos');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await setDoc(doc(db, 'reclamos/b1'), { clientId: 'cli1', proId: 'pro1', status: 'esperando_respuesta', text: 'No terminó el trabajo' });
+  await setDoc(doc(db, 'reclamos/b1/privado/textos'), { apertura: 'texto original' });
+  await setDoc(doc(db, 'reclamos/b1/accesos/a1'), { email: 'admin@x.com' });
+});
+await ok('el cliente ve su reclamo', getDoc(doc(cli1, 'reclamos/b1')));
+await ok('el profesional ve el reclamo', getDoc(doc(env.authenticatedContext('pro1').firestore(), 'reclamos/b1')));
+await no('otro usuario no ve el reclamo', getDoc(doc(cli2, 'reclamos/b1')));
+await no('nadie cambia un reclamo desde la app', updateDoc(doc(cli1, 'reclamos/b1'), { status: 'resuelto' }));
+await no('nadie crea un reclamo desde la app', setDoc(doc(cli1, 'reclamos/b2'), { clientId: 'cli1', proId: 'pro1' }));
+await no('las partes no leen los textos originales', getDoc(doc(cli1, 'reclamos/b1/privado/textos')));
+await no('las partes no leen el registro de accesos', getDoc(doc(cli1, 'reclamos/b1/accesos/a1')));
+
 await env.cleanup();
 console.log(`\nReglas: ${n} comprobaciones correctas.`);

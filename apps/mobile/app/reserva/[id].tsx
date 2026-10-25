@@ -12,6 +12,7 @@ import { Chat } from '@/components/Chat';
 import { DelayClient } from '@/components/Delay';
 import { Reschedule } from '@/components/Reschedule';
 import { ArrivalCode, ProblemBox } from '@/components/ArrivalCode';
+import { ClaimCard } from '@/components/Claim';
 import { useUser } from '@/lib/auth';
 import { BackButton, Body, Button, Card, H1, PrimaryButton } from '@/components/ui';
 import { CancelBox } from '../cuenta';
@@ -139,6 +140,7 @@ function Detail({ b }: { b: ClientBooking }) {
       {['por_aprobar', 'completada'].includes(b.status) && !b.rating && b.extra?.status !== 'propuesto' && <RatingBox id={b.id} proName={first} />}
       {b.rating ? <Body muted>Calificaste a {first} con {'★'.repeat(b.rating)}. ¡Gracias!</Body> : null}
       {b.status === 'por_aprobar' && !b.rating && b.extra?.status !== 'propuesto' && <ConfirmBox id={b.id} />}
+      {(b.claimId || b.dispute) && <ClaimCard id={b.id} side="cliente" />}
       {['por_aprobar', 'completada'].includes(b.status) && !b.dispute && <ProblemBox id={b.id} category={b.category} />}
       {b.status === 'cancelada' && b.cancelledBy === 'cliente_ausente' && !b.dispute && Date.now() - (b.cancelledAt?.toMillis?.() ?? 0) < 48 * 3_600_000 && <ProblemBox id={b.id} category={b.category} absent />}
       {['confirmada', 'en_camino', 'en_curso'].includes(b.status) && (

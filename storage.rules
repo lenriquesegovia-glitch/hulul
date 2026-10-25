@@ -38,6 +38,14 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
       allow update, delete: if false;
     }
+    // Fotos de respaldo de un reclamo (las sube quien reclama o responde).
+    match /reclamos/{uid}/{bookingId}/{file} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
     match /{allPaths=**} {
       allow read, write: if false;
     }

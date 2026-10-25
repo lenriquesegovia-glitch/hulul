@@ -25,6 +25,7 @@ import { buildRanking } from './home-ranking-core.js';
 import { normalizeRankingBooking } from './home-ranking.js';
 import { hasProfanity, maskProfanity, PROFANITY_MESSAGE } from './profanity.js';
 import { safeMessage } from './mail-safety.js';
+import { CLAIM_STATUS, CLIENT_KINDS, PRO_KINDS, RESOLVE_HOURS, RESPONSE_HOURS, REMIND_BEFORE_HOURS, claimBlocked, cleanClaimPhotos, decisionPatch, deadlines, dueActions, isAdminToken, maskContact, responseStats, timeline } from './reclamos-core.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
 
 /** Debe coincidir con la ubicación de la base de datos Firestore. */
@@ -1702,60 +1703,272 @@ export const avisarRetraso = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }
 });
 
 /* --------------------------------- Reclamos --------------------------------- */
+// Protocolo completo en reclamos-core.js. Los expedientes (reclamos/{reserva})
+// los escribe solo el servidor; cada parte ve el suyo. El panel de HULUL los lee
+// por estas funciones, que dejan registrado cada acceso (reclamos/{id}/accesos).
 
-const PROBLEMS = {
-  si_estaba: 'El cliente sí estaba en casa',
-  no_vino: 'No se realizó el servicio',
-  incompleto: 'Se marcó como terminado, pero no se completó',
-  cobro: 'El cobro no fue el acordado',
-  otro: 'Otra cosa',
-};
+const ADMIN_EMAILS = defineString('ADMIN_EMAILS', { default: '', description: 'Correos (separados por coma) que pueden ver y resolver reclamos' });
+const ADMIN_URL = 'https://hululec.com/admin/reclamos';
+const BOOKING_ID = /^[A-Za-z0-9]{10,40}$/;
 
-/**
- * El cliente reporta un problema con una visita terminada (hasta 48 h). La
- * reserva pasa a "en revisión": el pago queda retenido (no se libera al
- * profesional ni se cierra sola) hasta que HULUL revise la evidencia (código de
- * llegada, ubicación, fotos, diagnóstico y chat) y decida.
- */
-export const reportarProblema = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, async (req) => {
+function requireAdmin(req) {
+  if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  if (!isAdminToken(req.auth.token, ADMIN_EMAILS.value())) throw new HttpsError('permission-denied', 'No tienes acceso al panel de reclamos.');
+  return { uid: req.auth.uid, email: String(req.auth.token.email).toLowerCase() };
+}
+
+const logAccess = (id, admin, action) => db().collection(`reclamos/${id}/accesos`).add({ uid: admin.uid, email: admin.email, action, at: FieldValue.serverTimestamp() });
+
+/** Texto que verá la otra parte: sin groserías. El original queda solo para HULUL. */
+function claimText(raw) {
+  const text = String(raw ?? '').trim().slice(0, 1500);
+  if (text.length < 15) throw new HttpsError('invalid-argument', 'Cuéntanos qué pasó (al menos 15 caracteres).');
+  return { text: hasProfanity(text) ? maskProfanity(text) : text, original: text };
+}
+
+async function notifyAdmin(subject, title, pairs, id) {
+  try {
+    const { from, notifyTo } = senders();
+    await transport().sendMail({ from, to: notifyTo, subject, html: layout(title, rows(pairs) + button(`${ADMIN_URL}?caso=${encodeURIComponent(id)}`, 'Abrir el expediente')) });
+  } catch (e) {
+    logger.warn('No se pudo avisar a HULUL del reclamo', { id, e: String(e) });
+  }
+}
+
+/** Abre un reclamo (cliente o profesional). */
+async function openClaim(req, side) {
   const uid = req.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
   const id = String(req.data?.id ?? '');
   const kind = String(req.data?.kind ?? '');
-  const text = String(req.data?.text ?? '').trim().slice(0, 1000);
-  if (!/^[A-Za-z0-9]{10,40}$/.test(id) || !PROBLEMS[kind]) throw new HttpsError('invalid-argument', 'Elige qué pasó.');
-  if (text.length < 15) throw new HttpsError('invalid-argument', 'Cuéntanos qué pasó (al menos 15 caracteres).');
+  if (!BOOKING_ID.test(id)) throw new HttpsError('invalid-argument', 'Reserva no válida.');
+  const { text, original } = claimText(req.data?.text);
+  const photos = cleanClaimPhotos(req.data?.photos, uid, id);
   const ref = db().doc(`bookings/${id}`);
+  const cref = db().doc(`reclamos/${id}`);
+  const kinds = side === 'cliente' ? CLIENT_KINDS : PRO_KINDS;
+  const openedAt = Date.now();
+  const due = deadlines(openedAt);
   const b = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'No encontramos esa reserva.');
     const bk = snap.data();
-    if (bk.clientId !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
-    const finished = bk.finishedAt?.toMillis?.() ?? 0;
-    const absent = bk.status === 'cancelada' && bk.cancelledBy === 'cliente_ausente' && Date.now() - (bk.cancelledAt?.toMillis?.() ?? 0) < 48 * 3_600_000;
-    if (kind === 'si_estaba' && !absent) throw new HttpsError('failed-precondition', 'Esta opción es para cuando el profesional marcó que no te encontró (hasta 48 horas después).');
-    const inWindow = absent || bk.status === 'por_aprobar' || (bk.status === 'completada' && Date.now() - finished < 48 * 3_600_000);
-    if (!inWindow) throw new HttpsError('failed-precondition', 'Los problemas se reportan hasta 48 horas después de terminada la visita.');
-    if (bk.dispute) throw new HttpsError('already-exists', 'Ya reportaste un problema en esta reserva. Lo estamos revisando.');
-    tx.update(ref, { status: 'en_disputa', previousStatus: bk.status, dispute: { kind, text, at: FieldValue.serverTimestamp(), status: 'abierta' } });
+    if ((side === 'cliente' ? bk.clientId : bk.professionalId) !== uid) throw new HttpsError('permission-denied', 'Esta reserva no es tuya.');
+    if ((await tx.get(cref)).exists) throw new HttpsError('already-exists', 'Ya hay un reclamo en esta reserva. Lo estamos revisando.');
+    const blocked = claimBlocked(bk, side, kind, openedAt);
+    if (blocked) throw new HttpsError('failed-precondition', blocked);
+    tx.set(cref, {
+      code: code(id), bookingId: id, openedBy: side, openerId: uid,
+      clientId: bk.clientId, proId: bk.professionalId,
+      clientName: String(bk.contactName ?? ''), proName: String(bk.professionalName ?? ''),
+      category: bk.category ?? '', date: bk.date ?? '', slot: bk.slot ?? '',
+      kind, kindLabel: kinds[kind], text, photos,
+      status: 'esperando_respuesta', openedAt, ...due,
+      response: null, decision: null, alerts: {},
+      moneyHeld: side === 'cliente',
+    });
+    tx.set(db().doc(`reclamos/${id}/privado/textos`), { apertura: original }, { merge: true });
+    const dispute = { kind, text, by: side, at: FieldValue.serverTimestamp(), status: 'abierta' };
+    // Si reclama el cliente, el pago queda retenido hasta la decisión.
+    tx.update(ref, side === 'cliente' ? { status: 'en_disputa', previousStatus: bk.status, dispute, claimId: id } : { dispute, claimId: id });
     return bk;
   });
-  try {
-    const { from, notifyTo } = senders();
-    await transport().sendMail({ from, to: notifyTo, replyTo: b.contactEmail || undefined, subject: `RECLAMO ${code(id)} · ${PROBLEMS[kind]}`,
-      html: layout('Reclamo por revisar', rows([
-        ['Código', code(id)], ['Motivo', esc(PROBLEMS[kind])], ['Detalle', esc(text)],
-        ['Cliente', `${esc(b.contactName)} · ${esc(b.contactPhone)}`], ['Profesional', esc(b.professionalName)],
-        ['Resultado marcado', esc(outcomeText(b.outcome, b.category))], [reportName(b.category), esc(b.diagnosis ?? '—')],
-        ['Empezó con código', b.startedAt ? 'Sí' : 'No'],
-        ...(b.cancelledBy === 'cliente_ausente' ? [['Cliente ausente', `Cobro retenido: ${usd(b.cancelFee)}. Llegada marcada a ${b.arrivedPos?.distance ?? '¿?'} m de la dirección.`]] : []),
-      ]) + `<p style="font-size:13px;color:#6B6560">Revisa en Firestore la reserva, sus fotos y el chat (bookings/${esc(id)}/messages). Para cerrar: cambia <b>status</b> a <b>completada</b> (procede el pago) o <b>cancelada</b> con <b>cancelFee</b> 0 (se devuelve al cliente). Si era "cliente ausente" y el cliente tiene razón: <b>cancelada</b>, <b>cancelFee</b> 0 y resta el monto de <b>balance</b> en clients/${esc(b.clientId)}.</p>` +
-        button(`https://console.firebase.google.com/project/${PROJECT}/firestore/databases/-default-/data/~2Fbookings~2F${id}`, 'Revisar en Firebase')) });
-    await pushTo(b.professionalId, 'El cliente pidió ayuda con el servicio', `${PROBLEMS[kind]}. HULUL lo revisa; el pago queda retenido mientras tanto. Puedes responder por el chat.`, { url: AGENDA, bookingId: id, to: 'pro' });
-  } catch (e) {
-    logger.warn('No se pudo avisar el reclamo', { id, e: String(e) });
-  }
+  const other = side === 'cliente' ? b.professionalId : b.clientId;
+  const who = side === 'cliente' ? String(b.contactName ?? 'El cliente').split(' ')[0] : String(b.professionalName ?? 'El profesional').split(' ')[0];
+  await pushTo(other, `${who} abrió un reclamo`, `${kinds[kind]}. Tienes ${RESPONSE_HOURS} horas para dar tu versión (con fotos si las tienes). HULUL decide en máximo ${RESOLVE_HOURS} horas.`,
+    side === 'cliente' ? { url: AGENDA, bookingId: id, to: 'pro', claim: true } : { bookingId: id, to: 'cliente', claim: true });
+  await notifyAdmin(`RECLAMO ${code(id)} · ${kinds[kind]}`, 'Nuevo reclamo', [
+    ['Código', code(id)], ['Abrió', side === 'cliente' ? 'Cliente' : 'Profesional'], ['Motivo', esc(kinds[kind])], ['Detalle', esc(text)],
+    ['Cliente', esc(b.contactName)], ['Profesional', esc(b.professionalName)], ['Servicio', `${esc(CATEGORIES[b.category] ?? b.category)} · ${esc(longDate(b.date))} ${esc(b.slot)}`],
+    ['Plazos', `Respuesta de la otra parte: ${RESPONSE_HOURS} h · Decisión: ${RESOLVE_HOURS} h`],
+  ], id);
+  logger.info('Reclamo abierto', { id, side, kind });
   return { ok: true };
+}
+
+/** El cliente reporta un problema (antes "reportarProblema"; mismo nombre para las apps ya instaladas). */
+export const reportarProblema = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, (req) => openClaim(req, 'cliente'));
+
+/** El profesional reporta un problema con el cliente. */
+export const reportarProblemaPro = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, async (req) => {
+  const pro = (await db().doc(`providers/${req.auth?.uid ?? '_'}`).get()).data();
+  if (!pro) throw new HttpsError('permission-denied', 'Solo para profesionales.');
+  return openClaim(req, 'profesional');
+});
+
+/** La otra parte da su versión (una vez, dentro de 24 h; después, hasta que HULUL decida). */
+export const responderReclamo = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const id = String(req.data?.id ?? '');
+  if (!BOOKING_ID.test(id)) throw new HttpsError('invalid-argument', 'Reserva no válida.');
+  const { text, original } = claimText(req.data?.text);
+  const photos = cleanClaimPhotos(req.data?.photos, uid, id);
+  const cref = db().doc(`reclamos/${id}`);
+  const c = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(cref);
+    if (!snap.exists) throw new HttpsError('not-found', 'No encontramos ese reclamo.');
+    const cur = snap.data();
+    const responder = cur.openedBy === 'cliente' ? cur.proId : cur.clientId;
+    if (responder !== uid) throw new HttpsError('permission-denied', 'Solo la otra parte puede responder este reclamo.');
+    if (cur.response) throw new HttpsError('already-exists', 'Ya diste tu versión.');
+    if (cur.status === 'resuelto') throw new HttpsError('failed-precondition', 'Este reclamo ya fue resuelto.');
+    const late = Date.now() > Number(cur.responseDueAt);
+    tx.update(cref, { response: { text, photos, at: Date.now(), late }, status: 'en_revision' });
+    tx.set(db().doc(`reclamos/${id}/privado/textos`), { respuesta: original }, { merge: true });
+    return cur;
+  });
+  await pushTo(c.openerId, 'Hay una respuesta a tu reclamo', 'La otra parte dio su versión. HULUL revisa todo y te avisa la decisión.', c.openedBy === 'cliente' ? { bookingId: id, to: 'cliente', claim: true } : { url: AGENDA, bookingId: id, to: 'pro', claim: true });
+  await notifyAdmin(`Respuesta en reclamo ${c.code}`, 'La otra parte respondió', [['Código', c.code], ['Respondió', c.openedBy === 'cliente' ? 'Profesional' : 'Cliente'], ['Versión', esc(text)]], id);
+  return { ok: true };
+});
+
+/** Panel: lista de reclamos (sin datos de contacto). */
+export const adminReclamos = onCall({ region: REGION }, async (req) => {
+  requireAdmin(req);
+  const snap = await db().collection('reclamos').orderBy('openedAt', 'desc').limit(200).get();
+  return {
+    items: snap.docs.map((d) => {
+      const c = d.data();
+      return {
+        id: d.id, code: c.code, openedBy: c.openedBy, kindLabel: c.kindLabel, status: c.status, openedAt: c.openedAt,
+        responseDueAt: c.responseDueAt, resolveDueAt: c.resolveDueAt, hasResponse: !!c.response, decision: c.decision?.outcome ?? null,
+        clientName: c.clientName, proName: c.proName, category: c.category, date: c.date, slot: c.slot, moneyHeld: !!c.moneyHeld,
+      };
+    }),
+  };
+});
+
+/** Panel: expediente completo. Cada apertura (y cada vez que se muestra el contacto) queda registrada. */
+export const adminReclamo = onCall({ region: REGION }, async (req) => {
+  const admin = requireAdmin(req);
+  const id = String(req.data?.id ?? '');
+  const reveal = req.data?.reveal === true;
+  if (!BOOKING_ID.test(id)) throw new HttpsError('invalid-argument', 'Reclamo no válido.');
+  const [cs, bs, ms_, mod, priv, acc] = await Promise.all([
+    db().doc(`reclamos/${id}`).get(), db().doc(`bookings/${id}`).get(),
+    db().collection(`bookings/${id}/messages`).orderBy('at').limit(500).get(),
+    db().collection(`bookings/${id}/moderacion`).get(),
+    db().doc(`reclamos/${id}/privado/textos`).get(),
+    db().collection(`reclamos/${id}/accesos`).orderBy('at', 'desc').limit(50).get(),
+  ]);
+  if (!cs.exists || !bs.exists) throw new HttpsError('not-found', 'No encontramos ese reclamo.');
+  await logAccess(id, admin, reveal ? 'ver_contacto' : 'abrir');
+  const c = cs.data(); const b = bs.data();
+  const originals = Object.fromEntries(mod.docs.map((d) => [d.id, d.data().original]));
+  const messages = ms_.docs.map((d) => {
+    const m = d.data();
+    return { id: d.id, from: m.from, kind: m.kind, text: m.text ?? '', photo: m.photo ?? '', at: m.at?.toMillis?.() ?? 0, original: originals[d.id] ?? null };
+  });
+  const tsKeys = ['createdAt', 'acceptedAt', 'enRouteAt', 'arrivedAt', 'startedAt', 'finishedAt', 'cancelledAt', 'completedAt'];
+  const times = Object.fromEntries(tsKeys.map((k) => [k, b[k]?.toMillis?.() ?? null]));
+  const contact = (v) => (reveal ? String(v ?? '') : maskContact(v));
+  const [cl, pr] = await Promise.all([db().doc(`clients/${c.clientId}`).get(), db().doc(`providers/${c.proId}`).get()]);
+  const others = await db().collection('reclamos').where('clientId', '==', c.clientId).get();
+  const proOthers = await db().collection('reclamos').where('proId', '==', c.proId).get();
+  return {
+    claim: { id, ...c, privado: priv.exists ? priv.data() : {} },
+    booking: {
+      status: b.status, previousStatus: b.previousStatus ?? null, category: b.category, date: b.date, slot: b.slot, hours: b.hours ?? null,
+      address: b.address ?? '', notes: b.notes ?? '', paymentMethod: b.paymentMethod ?? '', subtotal: b.subtotal ?? null, visit: b.visit ?? null,
+      cancelFee: b.cancelFee ?? null, cancelledBy: b.cancelledBy ?? null, cancelReason: b.cancelReason ?? '', outcome: b.outcome ?? null,
+      diagnosis: b.diagnosis ?? '', diagnosisPhotos: b.diagnosisPhotos ?? [], photos: b.photos ?? [], extra: b.extra ?? null, delay: b.delay ?? null,
+      arrivedPos: b.arrivedPos ?? null, rings: b.rings ?? [], startedWithCode: !!b.startedAt, clientRating: b.clientRating ?? null, rating: b.rating ?? null, ...times,
+      contactName: b.contactName ?? '', contactPhone: contact(b.contactPhone), contactEmail: contact(b.contactEmail), professionalName: b.professionalName ?? '',
+    },
+    parties: {
+      client: { reclamos: others.size, strikes: Number(cl.data()?.strikes ?? 0) },
+      pro: { reclamos: proOthers.size, strikes: Number(pr.data()?.strikes ?? 0), rating: pr.data()?.rating ?? null, phone: contact(pr.data()?.phone) },
+    },
+    messages,
+    stats: responseStats(messages),
+    timeline: timeline({ ...b, ...Object.fromEntries(tsKeys.map((k) => [k, times[k]])) }, c, messages),
+    accesses: acc.docs.map((d) => ({ email: d.data().email, action: d.data().action, at: d.data().at?.toMillis?.() ?? 0 })),
+    revealed: reveal,
+  };
+});
+
+/**
+ * Panel: decisión. outcome 'cliente' | 'profesional', motivo (lo ven las dos
+ * partes), y opcionalmente multa y falta al profesional, crédito y falta al cliente.
+ */
+export const resolverReclamo = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, async (req) => {
+  const admin = requireAdmin(req);
+  const id = String(req.data?.id ?? '');
+  const outcome = String(req.data?.outcome ?? '');
+  const note = String(req.data?.note ?? '').trim().slice(0, 1500);
+  if (!BOOKING_ID.test(id) || !['cliente', 'profesional'].includes(outcome)) throw new HttpsError('invalid-argument', 'Elige a favor de quién se resuelve.');
+  if (note.length < 20) throw new HttpsError('invalid-argument', 'Escribe el motivo de la decisión (al menos 20 caracteres). Lo verán las dos partes.');
+  const d = {
+    outcome, note,
+    multaPro: Math.max(0, Math.min(200, Number(req.data?.multaPro || 0))),
+    creditoCliente: Math.max(0, Math.min(500, Number(req.data?.creditoCliente || 0))),
+    faltaPro: req.data?.faltaPro === true, faltaCliente: req.data?.faltaCliente === true,
+  };
+  const cref = db().doc(`reclamos/${id}`);
+  const bref = db().doc(`bookings/${id}`);
+  const { c, b } = await db().runTransaction(async (tx) => {
+    const [cs, bs] = await Promise.all([tx.get(cref), tx.get(bref)]);
+    if (!cs.exists || !bs.exists) throw new HttpsError('not-found', 'No encontramos ese reclamo.');
+    const cur = cs.data(); const bk = bs.data();
+    if (cur.status === 'resuelto') throw new HttpsError('failed-precondition', 'Este reclamo ya fue resuelto.');
+    const pref = db().doc(`providers/${cur.proId}`);
+    const ps = d.faltaPro ? await tx.get(pref) : null;
+    const patch = decisionPatch(bk, cur, d);
+    if (patch.status === 'completada') patch.completedAt = FieldValue.serverTimestamp();
+    if (patch.cancelledBy === 'reclamo') patch.cancelledAt = FieldValue.serverTimestamp();
+    tx.update(bref, patch);
+    tx.update(cref, { status: 'resuelto', decision: { ...d, by: admin.email, at: Date.now() } });
+    if (d.faltaPro && ps) {
+      const p = ps.data() ?? {};
+      const log = [...(p.strikeLog ?? []), Date.now()];
+      tx.set(pref, { ...strikeData({ lastStrikeReason: 'reclamo' }), ...(strikeSuspension({ ...p, strikeLog: log }) ?? {}) }, { merge: true });
+    }
+    if (d.faltaCliente) tx.set(db().doc(`clients/${cur.clientId}`), { strikes: FieldValue.increment(1), strikeLog: FieldValue.arrayUnion(Date.now()) }, { merge: true });
+    return { c: cur, b: bk };
+  });
+  await logAccess(id, admin, `resolver_${outcome}`);
+  const favor = outcome === 'cliente' ? 'a favor del cliente' : 'a favor del profesional';
+  const money = c.openedBy === 'cliente'
+    ? (outcome === 'cliente' ? 'No se cobra la visita.' : 'Se mantiene el cobro y se libera el pago al profesional.')
+    : '';
+  const extraPro = [d.multaPro ? `Multa de ${usd(d.multaPro)}.` : '', d.faltaPro ? 'Se registra una falta.' : ''].filter(Boolean).join(' ');
+  const extraCli = [d.creditoCliente ? `Crédito de ${usd(d.creditoCliente)} para tu próximo servicio.` : '', d.faltaCliente ? 'Se registra una falta en tu cuenta.' : ''].filter(Boolean).join(' ');
+  const bodyFor = (extra) => `Reclamo ${c.code} resuelto ${favor}. ${money} ${extra} Motivo: ${note}`.replace(/\s+/g, ' ').trim();
+  await pushTo(c.clientId, 'Decisión sobre el reclamo', bodyFor(extraCli).slice(0, 220), { bookingId: id, to: 'cliente', claim: true });
+  await pushTo(c.proId, 'Decisión sobre el reclamo', bodyFor(extraPro).slice(0, 220), { url: AGENDA, bookingId: id, to: 'pro', claim: true });
+  try {
+    if (b.contactEmail) {
+      const { from, notifyTo } = senders();
+      await transport().sendMail({ from, to: b.contactEmail, replyTo: notifyTo, subject: `Decisión sobre tu reclamo ${c.code}`,
+        html: layout('Decisión sobre el reclamo', `<p style="font-size:15px">${esc(bodyFor(extraCli))}</p>`) });
+    }
+  } catch (e) {
+    logger.warn('No se pudo enviar la decisión por correo', { id, e: String(e) });
+  }
+  logger.info('Reclamo resuelto', { id, outcome, by: admin.email });
+  return { ok: true };
+});
+
+/** Plazos: sin respuesta en 24 h pasa a revisión; aviso a HULUL 12 h antes de vencer y al vencer. */
+export const plazosReclamos = onSchedule({ schedule: 'every 30 minutes', region: REGION, timeZone: 'America/Guayaquil', secrets: [MAIL_PASSWORD] }, async () => {
+  const snap = await db().collection('reclamos').where('status', 'in', ['esperando_respuesta', 'en_revision']).get();
+  for (const d of snap.docs) {
+    const c = d.data();
+    for (const a of dueActions(c)) {
+      if (a === 'sin_respuesta') {
+        await d.ref.update({ status: 'en_revision', responseMissed: true });
+        await pushTo(c.openerId, 'Tu reclamo pasó a revisión', `La otra parte no respondió en ${RESPONSE_HOURS} horas. HULUL decide con la información que hay.`, c.openedBy === 'cliente' ? { bookingId: d.id, to: 'cliente', claim: true } : { url: AGENDA, bookingId: d.id, to: 'pro', claim: true });
+        await notifyAdmin(`Reclamo ${c.code}: sin respuesta en ${RESPONSE_HOURS} h`, 'Sin respuesta de la otra parte', [['Código', c.code], ['Motivo', esc(c.kindLabel)]], d.id);
+      } else if (a === 'por_vencer') {
+        await d.ref.update({ 'alerts.porVencer': true });
+        await notifyAdmin(`⏰ Reclamo ${c.code} vence en ${REMIND_BEFORE_HOURS} h`, 'Reclamo por vencer', [['Código', c.code], ['Motivo', esc(c.kindLabel)], ['Estado', esc(CLAIM_STATUS[c.status])]], d.id);
+      } else if (a === 'vencido') {
+        await d.ref.update({ 'alerts.vencido': true });
+        await notifyAdmin(`⚠️ Reclamo ${c.code} VENCIDO`, 'Reclamo vencido sin decisión', [['Código', c.code], ['Motivo', esc(c.kindLabel)], ['Plazo', `${RESOLVE_HOURS} h desde la apertura`]], d.id);
+      }
+    }
+  }
 });
 
 /* ------------------------ Libro de movimientos ------------------------ */

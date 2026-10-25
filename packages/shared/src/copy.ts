@@ -75,7 +75,7 @@ export interface ServiceCopy {
   /** Botón y título para pedir ayuda con el servicio. */
   helpButton: string;
   helpTitle: string;
-  helpOptions: { value: 'no_vino' | 'incompleto' | 'cobro' | 'otro'; label: string }[];
+  helpOptions: { value: 'no_vino' | 'incompleto' | 'cobro' | 'trato' | 'dano' | 'otro'; label: string }[];
   /** Pasos del seguimiento. */
   inProgress: string;
   finished: string;
@@ -111,6 +111,8 @@ export function serviceCopy(slug?: string): ServiceCopy {
         { value: 'no_vino', label: 'No se realizó el trabajo' },
         { value: 'incompleto', label: 'Se marcó como listo, pero no quedó funcionando' },
         { value: 'cobro', label: 'El cobro no fue el acordado' },
+        { value: 'trato', label: 'Me trató mal o fue irrespetuoso' },
+        { value: 'dano', label: 'Dañó algo de mi casa' },
         { value: 'otro', label: 'Otra cosa' },
       ],
       inProgress: 'Revisa y resuelve lo que se pueda en la visita.',
@@ -141,6 +143,8 @@ export function serviceCopy(slug?: string): ServiceCopy {
       { value: 'no_vino', label: 'No se realizó el servicio' },
       { value: 'incompleto', label: 'Se marcó como completo, pero no lo fue' },
       { value: 'cobro', label: 'El cobro no fue el acordado' },
+      { value: 'trato', label: 'Me trató mal o fue irrespetuoso' },
+      { value: 'dano', label: 'Dañó algo de mi casa' },
       { value: 'otro', label: 'Otra cosa' },
     ],
     inProgress: 'Disfruta tu servicio.',

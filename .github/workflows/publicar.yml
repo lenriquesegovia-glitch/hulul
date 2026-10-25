@@ -8,6 +8,7 @@
 #   Secrets:   FIREBASE_SERVICE_ACCOUNT (JSON de una cuenta de servicio con permisos de despliegue en hulul-59081)
 #              EXPO_TOKEN (token de acceso de Expo, cuenta dueña del proyecto)
 #   Variables: MAIL_PROVIDER, FROM_EMAIL, NOTIFY_TO (los mismos valores que pidió firebase deploy la primera vez)
+#              ADMIN_EMAILS (opcional): correos con acceso al panel de reclamos, separados por coma
 name: Publicar HULUL
 
 on:
@@ -79,7 +80,7 @@ jobs:
           node-version: 22
       - name: Parámetros de las funciones
         run: |
-          printf 'MAIL_PROVIDER=%s\nFROM_EMAIL=%s\nNOTIFY_TO=%s\n' "${{ vars.MAIL_PROVIDER }}" "${{ vars.FROM_EMAIL }}" "${{ vars.NOTIFY_TO }}" > functions/.env.hulul-59081
+          printf 'MAIL_PROVIDER=%s\nFROM_EMAIL=%s\nNOTIFY_TO=%s\nADMIN_EMAILS=%s\n' "${{ vars.MAIL_PROVIDER }}" "${{ vars.FROM_EMAIL }}" "${{ vars.NOTIFY_TO }}" "${{ vars.ADMIN_EMAILS || 'lenriquesegovia@gmail.com' }}" > functions/.env.hulul-59081
       - run: npm ci --no-audit --no-fund
         working-directory: functions
       - uses: google-github-actions/auth@v2

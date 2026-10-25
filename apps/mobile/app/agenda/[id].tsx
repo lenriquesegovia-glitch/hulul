@@ -8,9 +8,10 @@ import {
   acceptedDelay, appointmentTime, departPlan, travelEstimate, extraQuote, formatUSD, getCategory, hhmmEcuador, serviceCopy, outcomeLabel, hasProfanity, PROFANITY_MESSAGE, MAX_DIAGNOSIS_CHARS, MAX_DIAGNOSIS_PHOTOS,
   MAX_EXTRA, MIN_DIAGNOSIS_CHARS, MIN_EXTRA, POLICY, type JobOutcome,
 } from '@hulul/shared';
-import { EXTRA_STATUS_LABEL, extraCharge, proAction, rateClient, ringClient, shareLivePosition, type ExtraAction, type ProAction, type ProBooking } from '@hulul/shared/firebase';
+import { EXTRA_STATUS_LABEL, extraCharge, proAction, proCanReport, rateClient, ringClient, shareLivePosition, type ExtraAction, type ProAction, type ProBooking } from '@hulul/shared/firebase';
 import { BackButton, Body, Card, H1, Button, PrimaryButton } from '@/components/ui';
 import { Chat } from '@/components/Chat';
+import { ClaimCard, ProReportBox } from '@/components/Claim';
 import { DelayPro } from '@/components/Delay';
 import { Reschedule, shortDay } from '@/components/Reschedule';
 import { StarInput } from '@/components/Rating';
@@ -172,6 +173,8 @@ function Job({ b, uid }: { b: ProBooking; uid: string }) {
       <ExtraPro b={b} />
 
       {(['por_aprobar', 'completada'].includes(b.status) || b.cancelledBy === 'cliente_ausente') && !b.clientRating && <RateClient id={b.id} name={first} />}
+      {(b.claimId || b.dispute) && <ClaimCard id={b.id} side="profesional" />}
+      {proCanReport(b) && <ProReportBox id={b.id} />}
       {b.rating ? <Body muted>El cliente te calificó {'★'.repeat(b.rating)}</Body> : null}
 
       {['pendiente', 'confirmada'].includes(b.status) && <Reschedule id={b.id} date={b.date} slot={b.slot} proposal={b.proposal} me="profesional" other={first} />}
