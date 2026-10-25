@@ -1,5 +1,14 @@
 # HULUL — Estado y registro de entregas
 
+## Estado vigente — V5.2 + V5.3 publicadas el 25 de octubre de 2026 (Claude)
+- Integrado: PR #6 (V5.2 seguridad + publicador) → main ef81c38; PR #7 (V5.3 estado de cuenta y cabecera) → main **d87f931**.
+- Publicado con GitHub Actions "Publicar HULUL", run 40230652530 sobre d87f931: verificar ✅ → backend ✅ (reglas Firestore/Storage y funciones en hulul-59081) → web ✅ (Vercel Production 7318680133, https://hulul-lzfwwc5nn-hulul.vercel.app) → android ✅ (OTA canal production, runtime 0.1.0).
+- Grupo OTA: ver la salida del paso "eas update" del job android en ese run o el panel de Expo (la sesión de Claude no puede leer los logs).
+- Credenciales de Actions: secret EXPO_TOKEN y FIREBASE_SERVICE_ACCOUNT (cuenta github-publicador-262@hulul-59081); variables MAIL_PROVIDER=resend, FROM_EMAIL=reservas@hululec.com, NOTIFY_TO=servicioalcliente@hululec.com.
+- Correo entrante del dominio: ImprovMX (MX mx1/mx2.improvmx.com + SPF en DNS de Vercel); *@hululec.com reenvía al Gmail del dueño.
+- Respaldo: web anterior acb1123 / Android anterior grupo a070ca0c-8003-4845-bf54-e2ff154bf08c; backend anterior = reglas y funciones de V5 (main acb1123).
+- Pendiente: comprobar en teléfono físico (cabecera, estado de cuenta, Stepper); restringir clave de Google Maps; App Check; módulo de reclamos; identidad visual de correos.
+
 ## Integrada — V5.2 seguridad (main ef81c38, backend aún NO desplegado) · 24 oct 2026, Claude
 - PR #6, rama `claude/seguridad-v5-2`, commit 19a792c. Basada en main acb1123. Cambia **backend** (reglas y funciones); web y app sin cambios de código.
 - Corrige: reservas sin cuenta o a nombre de otro (regla de bookings), correos con lista de destinatarios (reglas + `functions/mail-safety.js`), cruces al aceptar un cambio de hora, reservas en horas pasadas, nodemailer/body-parser vulnerables.
