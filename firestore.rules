@@ -33,6 +33,12 @@ service cloud.firestore {
         && num(d.location.lng, -92.1, -75.1));
     }
 
+    // Un solo correo (sin listas ni comentarios): evita usar los avisos de HULUL para escribir a terceros.
+    function email(v) {
+      return v is string && v.size() <= 160
+        && v.matches('^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}$');
+    }
+
     function consent(d) {
       return d.consentPrivacy == true
         && d.consentMarketing is bool
@@ -58,12 +64,12 @@ service cloud.firestore {
             'status', 'consentPrivacy', 'privacyVersion', 'createdAt'])
         && (!('pricingVersion' in request.resource.data) || request.resource.data.pricingVersion == 2)
         && request.resource.data.source in ['web', 'app']
-        // Desde la web solo se reserva con cuenta, y a nombre propio.
-        // (La app se suma cuando tenga inicio de sesión.)
-        && (request.resource.data.source == 'app'
-            || (request.auth != null && request.resource.data.clientId == request.auth.uid))
+        // Web y app reservan solo con cuenta, y a nombre propio (desde V5.2: la app
+        // ya exige iniciar sesión; antes se aceptaban reservas de la app sin cuenta).
+        && request.auth != null
+        && request.resource.data.clientId == request.auth.uid
         // Un profesional puede reservar otros servicios, pero no a sí mismo.
-        && (request.auth == null || request.resource.data.professionalId != request.auth.uid)
+        && request.resource.data.professionalId != request.auth.uid
         && str(request.resource.data.professionalId, 1, 80)
         && str(request.resource.data.professionalName, 1, 120)
         && str(request.resource.data.category, 1, 40)
@@ -89,7 +95,7 @@ service cloud.firestore {
         && str(request.resource.data.notes, 0, 1000)
         && str(request.resource.data.contactName, 2, 120)
         && str(request.resource.data.contactPhone, 7, 20)
-        && str(request.resource.data.contactEmail, 0, 160)
+        && (request.resource.data.contactEmail == '' || email(request.resource.data.contactEmail))
         && request.resource.data.paymentMethod in ['tarjeta', 'transferencia', 'deuna']
         && num(request.resource.data.subtotal, 0, 10000)
         && num(request.resource.data.fee, 0, 100)
@@ -117,7 +123,7 @@ service cloud.firestore {
         && request.resource.data.uid == uid
         && str(request.resource.data.name, 2, 120)
         && str(request.resource.data.phone, 9, 15)
-        && str(request.resource.data.email, 3, 160)
+        && email(request.resource.data.email)
         && request.resource.data.consentMarketing is bool
         && request.resource.data.consentPrivacy == true
         && request.resource.data.createdAt == request.time;
@@ -131,6 +137,7 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt
         && str(request.resource.data.name, 2, 120)
         && str(request.resource.data.phone, 9, 15)
+        && email(request.resource.data.email)
         && request.resource.data.updatedAt == request.time;
       allow delete: if false;
     }
@@ -173,6 +180,7 @@ service cloud.firestore {
         && (!('catEvidence' in d) || d.catEvidence is map)
         && (!('bio' in d) || str(d.bio, 0, 500))
         && (!('cedula' in d) || str(d.cedula, 0, 10))
+        && (!('email' in d) || d.email == '' || email(d.email))
         && (!('docs' in d) || d.docs is map)
         // Fuera de horario y feriados: horas que activa y recargos en monto fijo.
         && (!('offHours' in d) || (d.offHours is list && d.offHours.size() <= 14))

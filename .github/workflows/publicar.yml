@@ -1,0 +1,136 @@
+# Publicador oficial de HULUL.
+# - En cada PR: solo verifica (TypeScript, pruebas de horarios/tarifas, funciones, reglas en emulador y build web).
+# - Manual (Actions → "Publicar HULUL" → Run workflow, rama main): verifica y publica en orden
+#   backend (Firebase) → web (espera el despliegue de Vercel de ese commit) → Android (OTA, canal production).
+# Bloqueo: solo publica si el commit es exactamente el último de main. Nunca desde copias locales antiguas.
+#
+# Configuración (Settings → Secrets and variables → Actions):
+#   Secrets:   FIREBASE_SERVICE_ACCOUNT (JSON de una cuenta de servicio con permisos de despliegue en hulul-59081)
+#              EXPO_TOKEN (token de acceso de Expo, cuenta dueña del proyecto)
+#   Variables: MAIL_PROVIDER, FROM_EMAIL, NOTIFY_TO (los mismos valores que pidió firebase deploy la primera vez)
+name: Publicar HULUL
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      backend:
+        description: 'Publicar reglas y funciones de Firebase (solo si cambió el backend)'
+        type: boolean
+        default: false
+      android:
+        description: 'Publicar actualización OTA de Android (canal production)'
+        type: boolean
+        default: true
+
+concurrency:
+  group: publicar-hulul-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  deployments: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Bloqueo contra código antiguo
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then echo "::error::Solo se publica desde main."; exit 1; fi
+          git fetch --quiet origin main
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ]; then echo "::error::Hay un commit más nuevo en main. Vuelve a lanzar el publicador."; exit 1; fi
+          echo "Publicando $(git rev-parse --short HEAD) (último de main)." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci --no-audit --no-fund
+      - name: TypeScript (shared y Android)
+        run: npm run typecheck
+      - name: Pruebas de horarios y tarifas
+        run: node scripts/check-booking-window.cjs && node scripts/check-user-feedback.cjs
+      - name: Pruebas de funciones (dinero y correos)
+        working-directory: functions
+        run: npm ci --no-audit --no-fund && npm test
+      - name: Pruebas de reglas de Firestore (emulador)
+        working-directory: tests/reglas
+        run: npm ci --no-audit --no-fund && npm test
+      - name: Build web
+        run: npm run web:build
+
+  backend:
+    needs: verificar
+    if: github.event_name == 'workflow_dispatch' && inputs.backend
+    runs-on: ubuntu-latest
+    environment: produccion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Parámetros de las funciones
+        run: |
+          printf 'MAIL_PROVIDER=%s\nFROM_EMAIL=%s\nNOTIFY_TO=%s\n' "${{ vars.MAIL_PROVIDER }}" "${{ vars.FROM_EMAIL }}" "${{ vars.NOTIFY_TO }}" > functions/.env.hulul-59081
+      - run: npm ci --no-audit --no-fund
+        working-directory: functions
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - name: Publicar reglas y funciones
+        run: npx -y firebase-tools@15 deploy --only firestore:rules,storage,functions --project hulul-59081 --non-interactive --force
+      - run: echo "Backend publicado desde $(git rev-parse --short HEAD)." >> "$GITHUB_STEP_SUMMARY"
+
+  web:
+    needs: [verificar, backend]
+    if: always() && github.event_name == 'workflow_dispatch' && needs.verificar.result == 'success' && (needs.backend.result == 'success' || needs.backend.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Esperar el despliegue de Vercel de este commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 60); do
+            id=$(gh api "repos/${GITHUB_REPOSITORY}/deployments?sha=${GITHUB_SHA}&environment=Production" --jq '.[0].id // empty')
+            if [ -n "$id" ]; then
+              state=$(gh api "repos/${GITHUB_REPOSITORY}/deployments/$id/statuses" --jq '.[0].state // empty')
+              url=$(gh api "repos/${GITHUB_REPOSITORY}/deployments/$id/statuses" --jq '.[0].environment_url // empty')
+              echo "Intento $i: $state"
+              if [ "$state" = "success" ]; then echo "Web: Vercel success, despliegue $id, $url" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+              if [ "$state" = "failure" ] || [ "$state" = "error" ]; then echo "::error::Vercel falló ($state)."; exit 1; fi
+            fi
+            sleep 20
+          done
+          echo "::error::Vercel no confirmó el despliegue en 20 minutos."; exit 1
+
+  android:
+    needs: web
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.android && needs.web.result == 'success'
+    runs-on: ubuntu-latest
+    environment: produccion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Publicar OTA Android (production)
+        working-directory: apps/mobile
+        run: |
+          out=$(eas update --channel production --platform android --environment production --non-interactive --json --message "main ${GITHUB_SHA::7}")
+          echo "$out"
+          group=$(echo "$out" | jq -r '.[0].group // empty')
+          echo "Android: canal production, grupo ${group:-desconocido}, commit ${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
