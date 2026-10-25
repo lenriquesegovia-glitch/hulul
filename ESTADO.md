@@ -1,5 +1,12 @@
 # HULUL — Estado y registro de entregas
 
+## En revisión — V5.3 app (NO publicada) · 24 oct 2026, Claude
+- Rama `claude/cuenta-profesional-v5-3`, basada en main acb1123. Solo app Android (y módulo compartido); sin cambios de backend ni de web visibles.
+- Corrige: cabecera de la app (la campana y "Mi cuenta" tapaban el logo HULUL en teléfonos de ~360 dp; ahora el logo se ajusta y "Mi cuenta" queda solo como ícono en pantallas angostas) y montos partidos en el panel del profesional ("$337.4 / 5").
+- Nuevo: **Estado de cuenta del profesional** (`apps/mobile/app/estado-cuenta.tsx`, cálculo en `packages/shared/src/statement.ts`): ganado, comisión, multas, retenciones, neto por periodo; saldo a favor / disponible / en espera; faltas (x de 3 en 30 días) y suspensión; pagos semanales; movimientos. Lee `ledger`, `payouts` y `providers/{uid}`, ya permitidos por las reglas. Acceso desde la tarjeta "Ganado en 7 días" y el botón "Estado de cuenta".
+- Verificado: TypeScript, `scripts/check-statement.mjs` (con movimientos reales de functions/money.js), horarios/tarifas, build web, export Android y revisión visual (exportación web temporal) a 360 y 412 px.
+- Publicar: solo OTA Android (canal production) después de integrar; no requiere backend. Independiente de V5.2 (PR #6).
+
 ## Estado vigente — V5.1 publicada el 24 de octubre de 2026
 - Web: PR #5 integrado, commit e392844b0d12aaaf17dbefeb56122d12ea595549, Vercel SUCCESS. Dominio hululec.com verificado (HTTP 200, cabecera y estilos nuevos).
 - Android: canal production, runtime 0.1.0, grupo a070ca0c-8003-4845-bf54-e2ff154bf08c; update 01a17108-329d-7e3c-b576-49c4c1bdd30f. EAS confirmó Published después de web SUCCESS.
