@@ -9,7 +9,7 @@ import { SignIn } from '@/components/SignIn';
 
 /**
  * Cuenta de cliente obligatoria para reservar (como Uber).
- * 1) Inicia sesión con Google o celular. 2) La primera vez completa nombre,
+ * 1) Inicia sesión con Google, Outlook o correo. 2) La primera vez completa nombre,
  * celular y correo (se guardan en `clients/{uid}`). 3) Muestra el contenido.
  */
 

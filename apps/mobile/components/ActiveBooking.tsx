@@ -1,11 +1,19 @@
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { getCategory } from '@hulul/shared';
+import { friendlyDate, getCategory } from '@hulul/shared';
 import { activeBooking, clientBookings, TRACK_STEPS, type ClientBooking } from '@hulul/shared/firebase';
 import { Body } from '@/components/ui';
 import { useUser } from '@/lib/auth';
 import { c, font, radius } from '@/theme';
+
+/** Frase del paso actual, más clara que la etiqueta corta de la barra. */
+const NOW_TEXT: Record<string, string> = {
+  pendiente: 'Recibida · esperando que el profesional confirme',
+  confirmada: 'Confirmada · el profesional te visitará a la hora',
+  en_camino: 'El profesional va en camino',
+  en_curso: 'Trabajo en curso',
+};
 
 /** Arriba del inicio: la reserva activa y en qué paso va. Se actualiza al volver a la pantalla. */
 export function ActiveBooking() {
@@ -24,13 +32,14 @@ export function ActiveBooking() {
     <Pressable accessibilityRole="button" accessibilityLabel="Ver mi reserva" onPress={() => router.push({ pathname: '/reserva/[id]', params: { id: b.id } })} style={s.card}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
         <Text style={s.title}>Tu reserva · {getCategory(b.category)?.name}</Text>
-        <Body muted style={{ fontSize: 12.5 }}>{b.date} · {b.slot}</Body>
+        <Body muted style={{ fontSize: 12.5 }}>{friendlyDate(b.date)} · {b.slot}</Body>
       </View>
-      <Body style={{fontFamily:font.bodyBold}}>AHORA · {b.status === 'por_aprobar' ? 'Terminado · pendiente de tu revisión' : TRACK_STEPS.find(s=>s.status===b.status)?.label || 'En revisión'}</Body><View style={s.steps}>
+      <Body style={{ fontFamily: font.bodyBold }}>{b.status === 'por_aprobar' ? 'Terminado · pendiente de tu revisión' : NOW_TEXT[b.status] ?? 'En revisión'}</Body>
+      <View style={s.steps}>
         {TRACK_STEPS.map((st, i) => (
           <View key={st.status} style={{ flex: 1, gap: 5 }}>
             <View style={[s.bar, i < idx && { backgroundColor: c.success }, i === idx && { backgroundColor: c.copper }]} />
-            <Text style={[s.label, i === idx && { color: c.copper }]} numberOfLines={1}>{st.label}</Text>
+            <Text style={[s.label, i === idx && { color: c.copper }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>{st.label}</Text>
           </View>
         ))}
       </View>

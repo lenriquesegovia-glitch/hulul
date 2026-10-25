@@ -501,6 +501,7 @@ function evidenceText(e) {
 export function providerEmails(p, uid, { from, notifyTo }) {
   const name = p.kind === 'empresa' ? `${p.businessName} (${p.firstName} ${p.lastName})` : `${p.firstName} ${p.lastName}`;
   const cats = (p.categories ?? []).map((c) => `${CATEGORIES[c] ?? c} · ${usd(visitRateOf(p, c))} por visita<br><span style="color:#6B6560;font-size:13px">${evidenceText(p.catEvidence?.[c])}</span>`).join('<br>');
+  const proposals = (Array.isArray(p.proposals) ? p.proposals : []).map((a) => `<b>${esc(a.name)}</b> · ${usd(Number(a.rate) || 0)} por visita<br><span style="color:#6B6560;font-size:13px">${esc((a.services ?? []).join(', '))}<br>${esc(a.note)}</span>`).join('<br>');
   const firstName = String(p.firstName ?? '').split(' ')[0];
   const waText = `Hola ${firstName}, te escribimos de HULUL por tu registro como profesional.`;
   const admin = rows([
@@ -509,7 +510,8 @@ export function providerEmails(p, uid, { from, notifyTo }) {
     ['RUC', esc(p.ruc)],
     ['Celular', esc(p.phone)],
     ['Correo', esc(p.email)],
-    ['Servicios', cats],
+    ['Servicios', cats || '—'],
+    ...(proposals ? [['Actividades nuevas (por aprobar)', proposals]] : []),
     ['Ciudades', esc((p.cities ?? []).join(', '))],
     ['Horario', esc(`${(p.days ?? []).length} días · ${p.from} a ${p.to}`)],
     ['Efectivo', p.acceptsCash ? 'Acepta' : 'No'],

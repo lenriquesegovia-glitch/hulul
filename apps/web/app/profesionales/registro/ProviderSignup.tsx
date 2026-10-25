@@ -22,6 +22,8 @@ import {
   maxEndHour,
   isNoisy,
   offHoursProblem,
+  proposalProblem,
+  type ActivityProposal,
   type Surcharges,
   WEEKDAY_NAMES,
   type CategoryEvidence,
@@ -38,6 +40,7 @@ import { Icon } from '@/components/Icon';
 import { logout, useUser } from '@/lib/auth';
 import { SignIn } from '@/components/SignIn';
 import { EvidenceEditor, Field, RateField, rateProblem, ServicesPicker } from './ServiceBits';
+import { ProposalsEditor } from './Proposals';
 import { ServiceManager } from './ServiceManager';
 import { OffHoursEditor } from './OffHoursEditor';
 
@@ -62,6 +65,8 @@ interface Draft {
   visitRates: Partial<Record<CategorySlug, number | undefined>>;
   /** Cómo demuestra que sabe hacer cada categoría. */
   catEvidence: Partial<Record<CategorySlug, CategoryEvidence>>;
+  /** Actividades que no están entre las categorías (quedan en revisión). */
+  proposals: ActivityProposal[];
   years: number;
   bio: string;
   cities: string[];
@@ -90,7 +95,7 @@ interface Bank {
 
 const EMPTY: Draft = {
   kind: 'persona', firstName: '', lastName: '', businessName: '', cedula: '', ruc: '', phone: '', email: '',
-  categories: [], services: {}, visitRates: {}, catEvidence: {}, years: 0, bio: '',
+  categories: [], services: {}, visitRates: {}, catEvidence: {}, proposals: [], years: 0, bio: '',
   cities: [], days: [1, 2, 3, 4, 5, 6], from: '08:00', to: '17:00', acceptsCash: true, offHours: [], holidays: false, surcharges: {}, docs: {},
   taxRegime: '', eSignature: false,
 };
@@ -178,6 +183,8 @@ function Wizard({ user }: { user: User }) {
       // Sin guardar categorías que ya no eligió.
       visitRates: Object.fromEntries(d.categories.filter((c) => d.visitRates[c]).map((c) => [c, d.visitRates[c]])),
       catEvidence: Object.fromEntries(d.categories.filter((c) => d.catEvidence[c]).map((c) => [c, d.catEvidence[c]])),
+      // Firestore no acepta campos vacíos dentro de las actividades nuevas.
+      proposals: d.proposals.map(({ rate, ...p }) => (rate ? { ...p, rate } : p)),
       // Firestore no acepta campos vacíos: solo los tarifas especiales que puso.
       surcharges: Object.fromEntries(Object.entries(d.surcharges).filter(([, v]) => typeof v === 'number')),
       // Firestore no acepta el régimen vacío: se omite hasta que lo elija.
@@ -314,7 +321,7 @@ function validate(step: number, d: Draft, bank: Bank): string {
     if (!d.taxRegime) return 'Elige tu régimen en el SRI (lo ves en tu RUC). Si no lo sabes, revisa tu RUC en SRI en línea.';
   }
   if (step === 1) {
-    if (!d.categories.length) return 'Elige al menos una categoría.';
+    if (!d.categories.length && !d.proposals.length) return 'Elige al menos una categoría o agrega tu actividad.';
     for (const c of d.categories) {
       const name = getCategory(c)?.name ?? c;
       if (!(d.services[c]?.length)) return `Marca qué trabajos haces en ${name}.`;
@@ -322,6 +329,10 @@ function validate(step: number, d: Draft, bank: Bank): string {
       if (r) return r;
       const ev = evidenceProblem(c, d.catEvidence[c]);
       if (ev) return `${name}: ${ev}`;
+    }
+    for (const p of d.proposals) {
+      const pr = proposalProblem(p);
+      if (pr) return pr;
     }
     if (d.bio.trim().length < 30) return 'Cuéntales a los clientes tu experiencia (al menos 30 caracteres).';
   }
@@ -423,7 +434,11 @@ function StepServices({ d, setD, uid }: { d: Draft; setD: (fn: (x: Draft) => Dra
         })}
       </div>
 
-      {d.categories.length > 0 && (
+      <ProposalsEditor value={d.proposals} chosen={d.categories}
+        onChange={(v) => setD((x) => ({ ...x, proposals: v }))}
+        onPickCategory={(c) => setD((x) => (x.categories.includes(c) ? x : { ...x, categories: [...x.categories, c] }))} />
+
+      {(d.categories.length > 0 || d.proposals.length > 0) && (
         <div className="notice" style={{ fontSize: 13.5 }}>
           <strong>Cobras por visita, como un taxi.</strong> Tu tarifa cubre el traslado y el servicio (en arreglos, la revisión y lo que se resuelva en esa visita). Si hace falta más (materiales, más tiempo u otra visita), se lo propones al cliente en la app. HULUL retiene el {Math.round(POLICY.commission * 100)} % de la tarifa.
         </div>
@@ -604,7 +619,8 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
         <Row k="Nombre" v={name} />
         <Row k="Cédula" v={d.cedula} />
         <Row k="Celular" v={d.phone} />
-        <Row k="Servicios" v={d.categories.map((x) => `${getCategory(x)?.name} ($${d.visitRates[x]} por visita)`).join(' · ')} />
+        <Row k="Servicios" v={d.categories.map((x) => `${getCategory(x)?.name} ($${d.visitRates[x]} por visita)`).join(' · ') || '—'} />
+        {d.proposals.length > 0 && <Row k="Actividades nuevas (en revisión)" v={d.proposals.map((p) => `${p.name} ($${p.rate} por visita)`).join(' · ')} />}
         <Row k="Ciudades" v={d.cities.map((x) => cities.find((y) => y.slug === x)?.name).join(', ')} />
         <Row k="Horario" v={`${d.days.map((i) => WEEKDAY_NAMES[i].slice(0, 3)).join(' ')} · ${d.from} a ${d.to}`} />
         <Row k="Fuera de horario" v={d.offHours.length ? `${[...d.offHours].sort((a, b) => ((a + 6) % 24) - ((b + 6) % 24)).map((h) => `${String(h).padStart(2, '0')}:00`).join(' ')} · tarifa completa $${d.surcharges.nocturno ?? 0}` : 'No'} />

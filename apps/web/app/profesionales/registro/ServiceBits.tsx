@@ -184,7 +184,7 @@ export function AddOwnJob({ onAdd }: { onAdd: (job: string) => void }) {
   };
   return (
     <div className="row gap-8">
-      <input className="own-job" value={v} maxLength={60} placeholder="¿Haces otro trabajo? Escríbelo"
+      <input className="own-job" value={v} maxLength={60} placeholder="Otro trabajo que haces"
         onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
       <button type="button" className="btn btn-ghost" style={{ minHeight: 44, padding: '0 14px' }} onClick={add}>Agregar</button>
     </div>

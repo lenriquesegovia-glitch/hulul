@@ -96,3 +96,18 @@ export function firstAvailable(now: Date = new Date(), leadMin = LEAD_TIME_HOURS
   }
   return { day: 1, slot: 0 };
 }
+
+const SHORT_DAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const SHORT_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+/** "2026-10-25" → "Hoy", "Mañana" o "dom 25 oct" (para tarjetas y seguimiento). */
+export function friendlyDate(date: string, now: Date = new Date()): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) return date;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+  if (diff === 0) return 'Hoy';
+  if (diff === 1) return 'Mañana';
+  return `${SHORT_DAYS[d.getDay()]} ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`;
+}

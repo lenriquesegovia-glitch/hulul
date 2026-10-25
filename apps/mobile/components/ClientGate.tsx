@@ -109,7 +109,7 @@ function SignIn({ title, lead }: { title: string; lead: string }) {
         </Pressable>
       )}
       <Card style={{ backgroundColor: c.surfaceWarm }}>
-        <Body muted style={{ fontSize: 13 }}>{withGoogle ? 'Es la misma cuenta que usas en hululec.com. Si te registraste allí con Facebook, toca "Ya tengo cuenta" y luego "Olvidé mi contraseña" para crearle una contraseña.' : 'Por ahora en la app se entra con correo y contraseña. Si te registraste con Google o Facebook en hululec.com, toca "Ya tengo cuenta", escribe ese correo y luego "Olvidé mi contraseña" para crearle una. Es la misma cuenta.'}</Body>
+        <Body muted style={{ fontSize: 13 }}>{withGoogle ? 'Es la misma cuenta que usas en hululec.com. Si te registraste allí con Outlook, toca "Ya tengo cuenta" y luego "Olvidé mi contraseña" para crearle una contraseña.' : 'Por ahora en la app se entra con correo y contraseña. Si te registraste con Google u Outlook en hululec.com, toca "Ya tengo cuenta", escribe ese correo y luego "Olvidé mi contraseña" para crearle una. Es la misma cuenta.'}</Body>
       </Card>
     </View>
   );

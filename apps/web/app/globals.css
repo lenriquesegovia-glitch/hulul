@@ -305,6 +305,8 @@ details p { margin-top: 10px; color: var(--text-2); }
 .progress button.on { background: var(--primary); cursor: pointer; }
 .seg { display: inline-flex; background: var(--surface-warm); border-radius: 12px; padding: 4px; gap: 4px; align-self: flex-start; }
 .seg button { font: inherit; font-weight: 700; font-size: 14.5px; border: none; background: none; color: var(--text-2); padding: 10px 18px; border-radius: 9px; cursor: pointer; }
+.seg-full { display: flex; align-self: stretch; }
+.seg-full button { flex: 1; white-space: nowrap; padding: 10px 8px; }
 .seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(28,26,26,.12); }
 .cat-tile.pick { font: inherit; cursor: pointer; background: var(--surface); }
 .cat-tile.pick.on { background: var(--text); border-color: var(--text); color: #fff; }
@@ -344,7 +346,9 @@ details p { margin-top: 10px; color: var(--text-2); }
 .nav-account { display: inline-flex; align-items: center; gap: 6px; color: var(--text); text-decoration: none; font-weight: 700; font-size: 15px; min-height: 44px; padding: 0 4px; }
 .nav-account:hover { color: var(--primary); }
 @media (max-width: 640px) { .nav-account-label { display: none; } }
-.social-btn { min-height: 50px; justify-content: flex-start; padding: 0 18px; gap: 12px; }
+.social-btn { min-height: 50px; justify-content: flex-start; padding: 0 18px; gap: 12px; text-align: left; }
+.social-btn > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.social-btn > svg { flex: none; }
 @media (max-width: 440px) {
   .social-btn { font-size: 14.5px; }
   .nav { gap: 10px; }
@@ -384,12 +388,14 @@ details p { margin-top: 10px; color: var(--text-2); }
 /* Reserva activa arriba del inicio */
 .active-booking { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; padding: 16px; background: var(--surface); border: 1px solid var(--copper); border-radius: var(--radius); text-decoration: none; color: var(--text); max-width: calc(var(--max) - 40px); }
 .active-booking:hover { color: var(--text); box-shadow: 0 4px 16px rgba(28,26,26,.08); }
-.ab-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.ab-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .ab-step { display: flex; flex-direction: column; gap: 6px; }
 .ab-bar { height: 6px; border-radius: 3px; background: var(--border); }
 .ab-step.done .ab-bar { background: var(--success); }
 .ab-step.now .ab-bar { background: var(--copper); }
-.ab-label { font-size: 11.5px; font-weight: 700; color: var(--muted); }
+.ab-label { font-size: 11.5px; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -.01em; }
+.ab-now { font-size: 16px; line-height: 1.35; }
+@media (max-width: 400px) { .ab-label { font-size: 10.5px; } .ab-steps { gap: 4px; } }
 .ab-step.now .ab-label { color: var(--copper); }
 
 /* "Soy profesional" siempre visible: versión corta en celulares */
@@ -473,3 +479,13 @@ details p { margin-top: 10px; color: var(--text-2); }
  .city-dialog { padding:18px; max-height:calc(100dvh - 24px); }
 }
 @media(max-width:360px) { .logo .brand-lockup { width:112px; } .header .nav { column-gap:4px; } }
+
+/* Registro: actividades que no están entre las categorías */
+.add-activity { border-style: dashed; justify-content: center; text-align: center; white-space: normal; }
+.pill-review { align-self: flex-start; font-size: 12.5px; font-weight: 700; color: var(--copper); background: var(--copper-soft); border-radius: 999px; padding: 3px 10px; }
+.activity-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; max-height: 360px; overflow-y: auto; padding-right: 2px; }
+.activity-item { font: inherit; text-align: left; display: flex; flex-direction: column; gap: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; cursor: pointer; color: var(--text); }
+.activity-item strong { font-size: 14.5px; }
+.activity-item span { font-size: 12.5px; color: var(--muted); }
+.activity-item:hover:not(:disabled) { border-color: var(--primary); background: var(--surface-warm); }
+.activity-item:disabled { opacity: .55; cursor: default; }

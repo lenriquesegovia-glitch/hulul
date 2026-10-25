@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Cuentas en la web (Firebase Authentication): Google, Outlook, Facebook,
- * correo y contraseña o celular con código SMS. Una sola cuenta por correo.
+ * Cuentas en la web (Firebase Authentication): Google, Outlook (Facebook
+ * listo pero oculto) o correo y contraseña. Sin SMS. Una sola cuenta por correo.
  * Se carga solo en las páginas que lo usan.
  */
 import { useEffect, useState } from 'react';
@@ -20,13 +20,10 @@ import {
   signInWithEmailAndPassword,
   type AuthProvider,
   onAuthStateChanged,
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
   signInWithPopup,
   signInWithRedirect,
   signOut,
   type Auth,
-  type ConfirmationResult,
   type User,
 } from 'firebase/auth';
 import { firebaseApp } from '@hulul/shared/firebase';
@@ -203,20 +200,6 @@ export async function signInSocial(name: SocialProvider): Promise<void> {
   }
 }
 
-let verifier: RecaptchaVerifier | null = null;
-
-/** Envía el código SMS. `containerId` es un div vacío para la verificación anti-robots. */
-export async function sendSmsCode(phoneE164: string, containerId: string): Promise<ConfirmationResult> {
-  if (!verifier) verifier = new RecaptchaVerifier(webAuth(), containerId, { size: 'invisible' });
-  try {
-    return await signInWithPhoneNumber(webAuth(), phoneE164, verifier);
-  } catch (e) {
-    verifier.clear();
-    verifier = null;
-    throw e;
-  }
-}
-
 export const signInGoogle = () => signInSocial('google');
 
 /** Correo y contraseña: entra si existe, o crea la cuenta. */
@@ -238,27 +221,20 @@ export function authErrorMessage(e: unknown): string {
   const name = prov ? PROVIDER_LABEL[prov] : 'la cuenta';
   if (code === 'auth/in-app-browser') {
     const app = (e as { app?: string }).app ?? 'esta app';
-    return `Estás dentro de ${app} y desde ahí no se puede entrar con ${name}. Toca ⋮ o ··· arriba y elige "Abrir en el navegador" (Chrome o Safari), o entra con tu correo o celular.`;
+    return `Estás dentro de ${app} y desde ahí no se puede entrar con ${name}. Toca ⋮ o ··· arriba y elige "Abrir en el navegador" (Chrome o Safari), o entra con tu correo y contraseña.`;
   }
   if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return `Cerraste la ventana de ${name} antes de terminar.`;
   if (code === 'auth/account-exists-with-different-credential') {
     const email = (e as { customData?: { email?: string } }).customData?.email;
     return `${email ? `El correo ${email}` : 'Ese correo'} ya tiene cuenta en HULUL con otro método. Entra con el que usaste la primera vez (Google, Outlook o correo y contraseña) y ${name} quedará unido a tu cuenta para la próxima.`;
   }
-  if (code === 'auth/operation-not-allowed') return `Entrar con ${name} aún no está activado en HULUL. Usa otra opción.`;
+  if (code === 'auth/operation-not-allowed') return prov ? `Entrar con ${name} aún no está activado en HULUL. Usa otra opción.` : 'Esta forma de entrar aún no está activada en HULUL. Usa otra opción.';
   if (code === 'auth/user-disabled') return 'Esta cuenta está desactivada. Escríbenos a reservas@hululec.com.';
   if (code === 'auth/web-storage-unsupported') return 'Tu navegador bloquea el inicio de sesión (modo privado o cookies desactivadas). Prueba en una ventana normal.';
   const map: Record<string, string> = {
-    'auth/invalid-phone-number': 'Ese número de celular no es válido.',
     'auth/too-many-requests': 'Demasiados intentos. Espera unos minutos y vuelve a intentar.',
-    'auth/invalid-verification-code': 'El código no es correcto. Revísalo e inténtalo de nuevo.',
-    'auth/code-expired': 'El código venció. Pide uno nuevo.',
-    'auth/popup-closed-by-user': 'Cerraste la ventana de Google antes de terminar.',
-    'auth/cancelled-popup-request': 'Cerraste la ventana de Google antes de terminar.',
-    'auth/operation-not-allowed': 'Este método de acceso aún no está activado en HULUL.',
     'auth/unauthorized-domain': 'Este sitio aún no está autorizado para iniciar sesión.',
     'auth/network-request-failed': 'Sin conexión. Revisa tu internet.',
-    'auth/quota-exceeded': 'No pudimos enviar el SMS en este momento. Prueba con otra opción.',
     'auth/account-exists-with-different-credential': 'Ya tienes una cuenta con ese correo usando otro método. Entra con el método que usaste la primera vez.',
     'auth/email-already-in-use': 'Ya existe una cuenta con ese correo. Elige "Ya tengo cuenta".',
     'auth/invalid-credential': 'Correo o contraseña incorrectos.',

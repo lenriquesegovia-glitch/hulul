@@ -2,10 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getCategory } from '@hulul/shared';
+import { friendlyDate, getCategory } from '@hulul/shared';
 import { useUser } from '@/lib/auth';
 
 type Row = { id: string; category: string; professionalName: string; date: string; slot: string; status: string };
+
+/** Frase del paso actual, más clara que la etiqueta corta de la barra. */
+const NOW_TEXT: Record<string, string> = {
+  pendiente: 'Recibida · esperando que el profesional confirme',
+  confirmada: 'Confirmada · el profesional te visitará a la hora',
+  en_camino: 'El profesional va en camino',
+  en_curso: 'Trabajo en curso',
+};
 
 /** Arriba del inicio: la reserva activa del cliente y en qué paso va. */
 export function ActiveBooking() {
@@ -28,9 +36,10 @@ export function ActiveBooking() {
     <Link href={`/cuenta/reserva/${b.id}`} className="active-booking container" aria-label="Ver mi reserva">
       <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
         <strong>Tu reserva · {getCategory(b.category)?.name}</strong>
-        <span className="muted" style={{ fontSize: 13 }}>{b.date} · {b.slot}</span>
+        <span className="muted" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{friendlyDate(b.date)} · {b.slot}</span>
       </div>
-      <strong>AHORA · {b.status === 'por_aprobar' ? 'Terminado · pendiente de tu revisión' : steps.find(s=>s.status===b.status)?.label || 'En revisión'}</strong><div className="ab-steps">
+      <strong className="ab-now">{b.status === 'por_aprobar' ? 'Terminado · pendiente de tu revisión' : NOW_TEXT[b.status] ?? 'En revisión'}</strong>
+      <div className="ab-steps">
         {steps.map((s, i) => (
           <div key={s.status} className={`ab-step ${i < idx ? 'done' : i === idx ? 'now' : ''}`}>
             <span className="ab-bar" />

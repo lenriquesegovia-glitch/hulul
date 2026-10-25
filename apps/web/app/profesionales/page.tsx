@@ -71,7 +71,7 @@ export default function ProfessionalsPage() {
           <div className="card stack gap-24">
             <h2 style={{ fontSize: 26 }}>Regístrate en 10 minutos</h2>
             <ol className="stack gap-8" style={{ margin: 0, paddingLeft: 20, color: 'var(--text-2)' }}>
-              <li>Crea tu cuenta con Google o tu celular.</li>
+              <li>Crea tu cuenta con Google, Outlook o tu correo.</li>
               <li>Elige tus servicios y tu tarifa por visita, y demuestra que sabes hacerlos (certificado o fotos de tus trabajos).</li>
               <li>Sube tu cédula, una foto de tu rostro y tu certificado de antecedentes penales.</li>
               <li>Te revisamos en 1 a 3 días hábiles y empiezas a recibir trabajos.</li>

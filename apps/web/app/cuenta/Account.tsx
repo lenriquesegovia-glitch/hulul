@@ -15,7 +15,7 @@ const STATUS: Record<string, string> = {
 
 export function Account() {
   return (
-    <ClientGate title="Entra a tu cuenta" lead="Con Google, Outlook, tu correo o tu celular. Si es tu primera vez, se crea tu cuenta.">
+    <ClientGate title="Entra a tu cuenta" lead="Con Google, Outlook o tu correo. Si es tu primera vez, se crea tu cuenta.">
       {({ user, profile }) => (
         <div className="stack gap-24">
           <div className="card stack gap-8">

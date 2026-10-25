@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { ConfirmationResult } from 'firebase/auth';
-import { e164Ecuador } from '@hulul/shared';
-import { authErrorMessage, completeRedirectSignIn, inAppBrowser, pendingLink, PROVIDER_LABEL, resetPassword, sendSmsCode, signInEmail, signInSocial, type SocialProvider } from '@/lib/auth';
+import { authErrorMessage, completeRedirectSignIn, inAppBrowser, pendingLink, PROVIDER_LABEL, resetPassword, signInEmail, signInSocial, type SocialProvider } from '@/lib/auth';
 
-/** Inicio de sesión o registro con Google, Outlook, Facebook, correo o celular (SMS). Sirve para clientes y profesionales. */
+/**
+ * Inicio de sesión o registro con Google, Outlook o correo y contraseña.
+ * Sirve para clientes y profesionales. Sin SMS (decidido por Luis el 25-oct-2026).
+ */
 
 /**
  * Botones que solo se muestran si el proveedor está activado en Firebase
@@ -17,12 +18,9 @@ const SHOW_MICROSOFT = true;
 const SHOW_FACEBOOK = false;
 
 export function SignIn({ title, lead }: { title: string; lead: string }) {
-  const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
-  const [confirm, setConfirm] = useState<ConfirmationResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [mode, setMode] = useState<'phone' | 'email'>('phone');
+  const [notice, setNotice] = useState('');
   const [create, setCreate] = useState(true);
   const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
@@ -30,7 +28,7 @@ export function SignIn({ title, lead }: { title: string; lead: string }) {
   const [inApp, setInApp] = useState<string | null>(null);
   const [linkWait, setLinkWait] = useState<ReturnType<typeof pendingLink>>(null);
 
-  // Al volver de Google, Outlook o Facebook (celular), muestra el error si lo hubo.
+  // Al volver de Google u Outlook (celular), muestra el error si lo hubo.
   useEffect(() => {
     setInApp(inAppBrowser());
     setLinkWait(pendingLink());
@@ -39,15 +37,16 @@ export function SignIn({ title, lead }: { title: string; lead: string }) {
       .finally(() => setLinkWait(pendingLink()));
   }, []);
 
-  const social = (name: SocialProvider) => {
-    setGoing(name);
-    run(() => signInSocial(name)).finally(() => { setGoing(null); setLinkWait(pendingLink()); });
-  };
-
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError('');
+    setNotice('');
     try { await fn(); } catch (e) { setError(authErrorMessage(e)); } finally { setBusy(false); }
+  };
+
+  const social = (name: SocialProvider) => {
+    setGoing(name);
+    run(() => signInSocial(name)).finally(() => { setGoing(null); setLinkWait(pendingLink()); });
   };
 
   return (
@@ -59,7 +58,7 @@ export function SignIn({ title, lead }: { title: string; lead: string }) {
 
       {inApp && (
         <p role="note" className="muted" style={{ fontSize: 14 }}>
-          Estás dentro de {inApp}. Para entrar con Google u Outlook, toca ⋮ o ··· arriba y elige «Abrir en el navegador». Aquí mismo puedes entrar con tu correo o celular.
+          Estás dentro de {inApp}. Para entrar con Google u Outlook, toca ⋮ o ··· arriba y elige «Abrir en el navegador». Aquí mismo puedes entrar con tu correo.
         </p>
       )}
 
@@ -71,76 +70,45 @@ export function SignIn({ title, lead }: { title: string; lead: string }) {
 
       <div className="stack gap-8">
         <button type="button" className="btn btn-ghost social-btn" disabled={busy} aria-busy={going === 'google'} onClick={() => social('google')}>
-          <GoogleMark /> {going === 'google' ? 'Abriendo Google…' : 'Continuar con Google'}
+          <GoogleMark /> <span>{going === 'google' ? 'Abriendo Google…' : 'Continuar con Google'}</span>
         </button>
         {SHOW_MICROSOFT && (
           <button type="button" className="btn btn-ghost social-btn" disabled={busy} aria-busy={going === 'microsoft'} onClick={() => social('microsoft')}>
-            <MicrosoftMark /> {going === 'microsoft' ? 'Abriendo Outlook…' : 'Continuar con Outlook / Hotmail'}
+            <MicrosoftMark /> <span>{going === 'microsoft' ? 'Abriendo Outlook…' : 'Continuar con Outlook'}</span>
           </button>
         )}
         {SHOW_FACEBOOK && (
           <button type="button" className="btn btn-ghost social-btn" disabled={busy} aria-busy={going === 'facebook'} onClick={() => social('facebook')}>
-            <FacebookMark /> {going === 'facebook' ? 'Abriendo Facebook…' : 'Continuar con Facebook'}
+            <FacebookMark /> <span>{going === 'facebook' ? 'Abriendo Facebook…' : 'Continuar con Facebook'}</span>
           </button>
         )}
-        <button type="button" className="btn btn-ghost social-btn" disabled={busy} onClick={() => { setError(''); setMode(mode === 'email' ? 'phone' : 'email'); }}>
-          {mode === 'email' ? <><PhoneMark /> Mejor con mi celular</> : <><MailMark /> Con correo y contraseña</>}
-        </button>
       </div>
 
-      {mode === 'email' && (
-        <form className="stack gap-12" onSubmit={(e) => {
-          e.preventDefault();
-          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setError('Escribe un correo válido.'); return; }
-          if (pass.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
-          run(() => signInEmail(email.trim(), pass, create));
-        }}>
-          <div className="seg" role="radiogroup" aria-label="Tipo de acceso">
-            <button type="button" role="radio" aria-checked={create} className={create ? 'on' : ''} onClick={() => setCreate(true)}>Crear cuenta</button>
-            <button type="button" role="radio" aria-checked={!create} className={!create ? 'on' : ''} onClick={() => setCreate(false)}>Ya tengo cuenta</button>
-          </div>
-          <div className="field"><label htmlFor="em-in">Correo</label><input id="em-in" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-          <div className="field"><label htmlFor="pw-in">Contraseña</label><input id="pw-in" type="password" autoComplete={create ? 'new-password' : 'current-password'} minLength={6} value={pass} onChange={(e) => setPass(e.target.value)} /></div>
-          <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Un momento…' : create ? 'Crear mi cuenta' : 'Entrar'}</button>
-          {!create && (
-            <button type="button" className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={() => {
-              if (!email) { setError('Escribe tu correo y vuelve a tocar "Olvidé mi contraseña".'); return; }
-              run(async () => { await resetPassword(email.trim()); setError('Te enviamos un correo para crear una nueva contraseña.'); });
-            }}>Olvidé mi contraseña</button>
-          )}
-        </form>
-      )}
+      <div className="or-line"><span>o con tu correo</span></div>
 
-      {mode === 'phone' && <div className="or-line"><span>o con tu celular</span></div>}
+      <form className="stack gap-12" noValidate onSubmit={(e) => {
+        e.preventDefault();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) { setError('Escribe un correo válido.'); return; }
+        if (pass.length < 6) { setError('La contraseña debe tener al menos 6 caracteres.'); return; }
+        run(() => signInEmail(email.trim(), pass, create));
+      }}>
+        <div className="seg seg-full" role="radiogroup" aria-label="Tipo de acceso">
+          <button type="button" role="radio" aria-checked={create} className={create ? 'on' : ''} onClick={() => { setCreate(true); setError(''); }}>Crear cuenta</button>
+          <button type="button" role="radio" aria-checked={!create} className={!create ? 'on' : ''} onClick={() => { setCreate(false); setError(''); }}>Ya tengo cuenta</button>
+        </div>
+        <div className="field"><label htmlFor="em-in">Correo</label><input id="em-in" type="email" inputMode="email" autoComplete="email" placeholder="tucorreo@ejemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+        <div className="field"><label htmlFor="pw-in">Contraseña</label><input id="pw-in" type="password" autoComplete={create ? 'new-password' : 'current-password'} placeholder={create ? 'Mínimo 6 caracteres' : ''} minLength={6} value={pass} onChange={(e) => setPass(e.target.value)} /></div>
+        <button type="submit" className="btn btn-primary" disabled={busy}>{busy && !going ? 'Un momento…' : create ? 'Crear mi cuenta' : 'Entrar'}</button>
+        {!create && (
+          <button type="button" className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={() => {
+            if (!email.trim()) { setError('Escribe tu correo y vuelve a tocar «Olvidé mi contraseña».'); return; }
+            run(async () => { await resetPassword(email.trim()); setNotice('Te enviamos un correo para crear una nueva contraseña. Revisa también la carpeta de spam.'); });
+          }}>Olvidé mi contraseña</button>
+        )}
+      </form>
 
-      {mode !== 'phone' ? null : !confirm ? (
-        <form className="stack gap-12" onSubmit={(e) => {
-          e.preventDefault();
-          const n = e164Ecuador(phone);
-          if (!n) { setError('Escribe tu celular de 10 dígitos, por ejemplo 0991234567.'); return; }
-          run(async () => setConfirm(await sendSmsCode(n, 'recaptcha-box')));
-        }}>
-          <div className="field">
-            <label htmlFor="cel">Celular</label>
-            <input id="cel" type="tel" inputMode="tel" autoComplete="tel" placeholder="09XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </div>
-          <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Enviando…' : 'Enviarme un código por SMS'}</button>
-        </form>
-      ) : (
-        <form className="stack gap-12" onSubmit={(e) => {
-          e.preventDefault();
-          run(() => confirm.confirm(code.trim()));
-        }}>
-          <div className="field">
-            <label htmlFor="code">Código de 6 dígitos que llegó a {phone}</label>
-            <input id="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} />
-          </div>
-          <button type="submit" className="btn btn-primary" disabled={busy || code.trim().length < 6}>{busy ? 'Verificando…' : 'Entrar'}</button>
-          <button type="button" className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={() => { setConfirm(null); setCode(''); }}>Cambiar número</button>
-        </form>
-      )}
-      <div id="recaptcha-box" />
       {error && <p role="alert" className="form-error">{error}</p>}
+      {notice && <p role="status" className="muted" style={{ fontSize: 14 }}>{notice}</p>}
     </div>
   );
 }
@@ -171,22 +139,6 @@ function FacebookMark() {
     <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden>
       <circle cx="12" cy="12" r="12" fill="#1877F2" />
       <path fill="#fff" d="M13.4 19.5v-6.1h2.1l.3-2.4h-2.4V9.5c0-.7.2-1.2 1.2-1.2h1.3V6.2c-.2 0-1-.1-1.9-.1-1.9 0-3.1 1.1-3.1 3.2v1.8H8.8v2.4h2.1v6.1h2.5z" />
-    </svg>
-  );
-}
-
-function PhoneMark() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="6" y="2.5" width="12" height="19" rx="2.5" /><path d="M10.5 18.5h3" />
-    </svg>
-  );
-}
-
-function MailMark() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" />
     </svg>
   );
 }

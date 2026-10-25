@@ -27,3 +27,4 @@ export * from './service-icons';
 
 export * from './locations';
 export * from './statement';
+export * from './activities';

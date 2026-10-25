@@ -103,8 +103,8 @@ export function authErrorMessage(e: unknown): string {
   const code = (e as { code?: string }).code ?? '';
   const map: Record<string, string> = {
     'auth/email-already-in-use': 'Ya existe una cuenta con ese correo. Elige "Ya tengo cuenta".',
-    'auth/invalid-credential': 'Correo o contraseña incorrectos. Si creaste tu cuenta con Google o Facebook en hululec.com, aún no tiene contraseña: toca "Olvidé mi contraseña" para crearle una y entra con ella.',
-    'auth/wrong-password': 'Correo o contraseña incorrectos. Si creaste tu cuenta con Google o Facebook en hululec.com, toca "Olvidé mi contraseña" para crearle una.',
+    'auth/invalid-credential': 'Correo o contraseña incorrectos. Si creaste tu cuenta con Google u Outlook en hululec.com, aún no tiene contraseña: toca "Olvidé mi contraseña" para crearle una y entra con ella.',
+    'auth/wrong-password': 'Correo o contraseña incorrectos. Si creaste tu cuenta con Google u Outlook en hululec.com, toca "Olvidé mi contraseña" para crearle una.',
     'auth/user-not-found': 'No hay una cuenta con ese correo. Elige "Crear cuenta".',
     'auth/weak-password': 'La contraseña debe tener al menos 6 caracteres.',
     'auth/invalid-email': 'Ese correo no es válido.',
