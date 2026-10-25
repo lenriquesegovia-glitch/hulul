@@ -9,7 +9,7 @@
 - Incluye tarifas especiales completas (no sumadas), selector nacional, resumen restringido de calificaciones del cliente, buzón persistente y tracker AHORA.
 - Consultar despliegues actuales antes de asumir que siguen activos: otra herramienta puede publicar después.
 
-## Trabajo más reciente: V5.1 EN REVISIÓN, NO PUBLICADO
+## Trabajo más reciente: V5.1 VERIFICADA, PUBLICACIÓN EN CURSO
 Rama: codex/ajustes-capturas-v5, basada en origin/main vigente al iniciar.
 - Selector de ciudad: fondo opaco correcto, input y cierre contenidos, nombre accesible.
 - Cabecera compacta para móvil/tablet; en esos tamaños deja de ser sticky para no tapar reservas. Campana con contador y cuenta arriba; Soy pro y Reservar abajo en teléfonos.
@@ -20,17 +20,15 @@ Rama: codex/ajustes-capturas-v5, basada en origin/main vigente al iniciar.
 - Estas decisiones reemplazan las notas previas que exigían terminar dentro de jornada.
 
 ## Revisión de Claude sobre V5.1 — 24 oct 2026, 22:10 (Guayaquil)
-Rama local actualizada con `git fetch`; se integró `origin/main` (c3dc7af, solo documentación) en la rama sin reset ni clean.
-- Typecheck shared/mobile: correcto. check-booking-window y check-user-feedback: correctos.
-- check-home-preservation.cjs FALLA también en main: compara contra la V2 (7f02a20) y la V5 publicada cambió `pushTo` a propósito (buzón). No es regresión de V5.1 (functions/index.js igual a main). Hay que actualizar su línea base, no el código.
-- Build web final (Next 16): correcto. Export Android (expo export): correcto, bundle 5.4 MB.
-- **Error encontrado y corregido:** en web, una regla antigua de globals.css (`.stepper { width:44px; height:44px; … }`, más `.stepper` en el grupo de chips y `.stepper:disabled`) anulaba el contenedor del selector − valor +. Medía 44×44 px: "Mañana" se cortaba y los números se salían. Se quitaron esas reglas (solo Stepper.tsx usa la clase) y el contenedor ocupa el ancho. Comprobado con el CSS compilado a 320, 390 y 768 px: 260/330/348 px de ancho, sin desborde horizontal.
-- Pendiente: Stepper de Android revisado solo por código y export; falta verlo en un teléfono físico.
+- Typecheck shared/mobile, check-booking-window y check-user-feedback: correctos. Build web (Next 16) y export Android (expo export, 5.4 MB): correctos.
+- check-home-preservation.cjs falla también en main: compara contra V2 (7f02a20) y la V5 cambió `pushTo` a propósito (buzón). Actualizar su línea base; no es regresión.
+- **Error corregido en web:** reglas antiguas de globals.css (`.stepper` 44×44 px, `.stepper` dentro del grupo de chips y `.stepper:disabled`) anulaban el contenedor del selector − valor +. En reprogramación "Mañana" se cortaba y botones/números se salían. Se quitaron (solo Stepper.tsx usa la clase). Comprobado con el CSS compilado a 320/390/768 px, sin desborde. **Publicar V5.1 con este commit incluido.**
+- Pendiente: ver el Stepper de Android en teléfono físico.
 
 ## Verificación y pendientes
 - Typecheck shared/mobile correcto. Pruebas check-booking-window y check-user-feedback correctas tras cambio de horario.
-- Build web final repetido por Claude: correcto (ver arriba).
-- Selector y cabecera revisados a 390x844 y 768x1024. Reprogramación (web) revisada y corregida por Claude; export Android correcto. Falta ver el Stepper en Android físico.
+- Build web final correcto después del cambio de horario.
+- Selector y cabecera revisados a 390x844 y 768x1024. Reprogramación web revisada y corregida por Claude; export Android correcto.
 - No desplegar hasta cerrar verificación. Web SUCCESS antes de Android OTA. No requiere cambio de backend para quitar restricción de finalización: esa restricción estaba en checkSlot compartido.
 - Correo todavía conserva identidad vino. Se detectó en captura; usuario aclaró que el enfoque inmediato es presentación y superposiciones. No se modificó functions/index.js en esta rama.
 
@@ -46,9 +44,4 @@ Propuesta por desarrollar: número de caso, vínculo a reserva, motivo, evidenci
 - Control automático contra publicación obsoleta todavía NO implementado.
 - Actualizar este documento después de cada publicación con commit, PR y grupo OTA.
 
-## Otras entregas registradas
-| Fecha (Guayaquil) | Quién | Rama / commit | Qué | Dónde se publica | Reversión |
-|---|---|---|---|---|---|
-| 21–22 oct 2026 | Claude | `main` 14da70a → 878be6d | Formulario anónimo de registro de profesionales (`herramientas/registro-profesionales/`): Apps Script + Sheets + Drive, estructura Firestore, cuenta bancaria obligatoria, categorías propias, verificación de rostro con prueba de vida y documentos por OCR. `Index.html` se genera con `fuente/construir.mjs` (Apps Script recorta comentarios) | Implementación de Apps Script del dueño (no Vercel ni EAS) | Pegar una versión anterior de la carpeta y publicar nueva versión en Apps Script |
-| 24 oct 2026 21:57 | Claude | `main` c3dc7af | ESTADO.md (ahora remite a este documento). Solo documentación; Vercel recompiló producción sin cambios de código | — | — |
-| 24 oct 2026 22:10 | Claude | `codex/ajustes-capturas-v5` | Revisión V5.1 + corrección del Stepper web (ver sección de revisión). No publicado | Solo vista previa de Vercel de la rama | Revertir el commit en la rama |
+Registro canónico de despliegues: ESTADO.md. Consultar ese archivo para los identificadores de publicación posteriores a este punto de control.
