@@ -243,7 +243,7 @@ export function authErrorMessage(e: unknown): string {
   if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return `Cerraste la ventana de ${name} antes de terminar.`;
   if (code === 'auth/account-exists-with-different-credential') {
     const email = (e as { customData?: { email?: string } }).customData?.email;
-    return `${email ? `El correo ${email}` : 'Ese correo'} ya tiene cuenta en HULUL con otro método. Entra con el que usaste la primera vez (Google, Facebook o correo y contraseña) y ${name} quedará unido a tu cuenta para la próxima.`;
+    return `${email ? `El correo ${email}` : 'Ese correo'} ya tiene cuenta en HULUL con otro método. Entra con el que usaste la primera vez (Google, Outlook o correo y contraseña) y ${name} quedará unido a tu cuenta para la próxima.`;
   }
   if (code === 'auth/operation-not-allowed') return `Entrar con ${name} aún no está activado en HULUL. Usa otra opción.`;
   if (code === 'auth/user-disabled') return 'Esta cuenta está desactivada. Escríbenos a reservas@hululec.com.';

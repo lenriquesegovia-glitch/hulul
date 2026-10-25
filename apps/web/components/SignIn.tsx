@@ -8,11 +8,13 @@ import { authErrorMessage, completeRedirectSignIn, inAppBrowser, pendingLink, PR
 /** Inicio de sesión o registro con Google, Outlook, Facebook, correo o celular (SMS). Sirve para clientes y profesionales. */
 
 /**
- * Outlook / Hotmail queda oculto hasta configurar la app en Microsoft Entra
- * (necesita una cuenta de Azure). Para mostrarlo: poner true y publicar.
- * Mientras tanto, quien usa Hotmail entra con correo y contraseña o celular.
+ * Botones que solo se muestran si el proveedor está activado en Firebase
+ * (Authentication → Método de acceso). Microsoft: app "HULUL" en Microsoft
+ * Entra, activada el 25-oct-2026. Facebook: falta crear la app en Meta for
+ * Developers y activarla en Firebase; luego poner true y publicar.
  */
-const SHOW_MICROSOFT = false;
+const SHOW_MICROSOFT = true;
+const SHOW_FACEBOOK = false;
 
 export function SignIn({ title, lead }: { title: string; lead: string }) {
   const [phone, setPhone] = useState('');
@@ -57,7 +59,7 @@ export function SignIn({ title, lead }: { title: string; lead: string }) {
 
       {inApp && (
         <p role="note" className="muted" style={{ fontSize: 14 }}>
-          Estás dentro de {inApp}. Para entrar con Google o Facebook, toca ⋮ o ··· arriba y elige «Abrir en el navegador». Aquí mismo puedes entrar con tu correo o celular.
+          Estás dentro de {inApp}. Para entrar con Google u Outlook, toca ⋮ o ··· arriba y elige «Abrir en el navegador». Aquí mismo puedes entrar con tu correo o celular.
         </p>
       )}
 
@@ -76,9 +78,11 @@ export function SignIn({ title, lead }: { title: string; lead: string }) {
             <MicrosoftMark /> {going === 'microsoft' ? 'Abriendo Outlook…' : 'Continuar con Outlook / Hotmail'}
           </button>
         )}
-        <button type="button" className="btn btn-ghost social-btn" disabled={busy} aria-busy={going === 'facebook'} onClick={() => social('facebook')}>
-          <FacebookMark /> {going === 'facebook' ? 'Abriendo Facebook…' : 'Continuar con Facebook'}
-        </button>
+        {SHOW_FACEBOOK && (
+          <button type="button" className="btn btn-ghost social-btn" disabled={busy} aria-busy={going === 'facebook'} onClick={() => social('facebook')}>
+            <FacebookMark /> {going === 'facebook' ? 'Abriendo Facebook…' : 'Continuar con Facebook'}
+          </button>
+        )}
         <button type="button" className="btn btn-ghost social-btn" disabled={busy} onClick={() => { setError(''); setMode(mode === 'email' ? 'phone' : 'email'); }}>
           {mode === 'email' ? <><PhoneMark /> Mejor con mi celular</> : <><MailMark /> Con correo y contraseña</>}
         </button>
