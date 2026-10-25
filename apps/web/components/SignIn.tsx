@@ -7,6 +7,13 @@ import { authErrorMessage, completeRedirectSignIn, inAppBrowser, pendingLink, PR
 
 /** Inicio de sesión o registro con Google, Outlook, Facebook, correo o celular (SMS). Sirve para clientes y profesionales. */
 
+/**
+ * Outlook / Hotmail queda oculto hasta configurar la app en Microsoft Entra
+ * (necesita una cuenta de Azure). Para mostrarlo: poner true y publicar.
+ * Mientras tanto, quien usa Hotmail entra con correo y contraseña o celular.
+ */
+const SHOW_MICROSOFT = false;
+
 export function SignIn({ title, lead }: { title: string; lead: string }) {
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
@@ -50,7 +57,7 @@ export function SignIn({ title, lead }: { title: string; lead: string }) {
 
       {inApp && (
         <p role="note" className="muted" style={{ fontSize: 14 }}>
-          Estás dentro de {inApp}. Para entrar con Google, Outlook o Facebook, toca ⋮ o ··· arriba y elige «Abrir en el navegador». Aquí mismo puedes entrar con tu correo o celular.
+          Estás dentro de {inApp}. Para entrar con Google o Facebook, toca ⋮ o ··· arriba y elige «Abrir en el navegador». Aquí mismo puedes entrar con tu correo o celular.
         </p>
       )}
 
@@ -64,9 +71,11 @@ export function SignIn({ title, lead }: { title: string; lead: string }) {
         <button type="button" className="btn btn-ghost social-btn" disabled={busy} aria-busy={going === 'google'} onClick={() => social('google')}>
           <GoogleMark /> {going === 'google' ? 'Abriendo Google…' : 'Continuar con Google'}
         </button>
-        <button type="button" className="btn btn-ghost social-btn" disabled={busy} aria-busy={going === 'microsoft'} onClick={() => social('microsoft')}>
-          <MicrosoftMark /> {going === 'microsoft' ? 'Abriendo Outlook…' : 'Continuar con Outlook / Hotmail'}
-        </button>
+        {SHOW_MICROSOFT && (
+          <button type="button" className="btn btn-ghost social-btn" disabled={busy} aria-busy={going === 'microsoft'} onClick={() => social('microsoft')}>
+            <MicrosoftMark /> {going === 'microsoft' ? 'Abriendo Outlook…' : 'Continuar con Outlook / Hotmail'}
+          </button>
+        )}
         <button type="button" className="btn btn-ghost social-btn" disabled={busy} aria-busy={going === 'facebook'} onClick={() => social('facebook')}>
           <FacebookMark /> {going === 'facebook' ? 'Abriendo Facebook…' : 'Continuar con Facebook'}
         </button>

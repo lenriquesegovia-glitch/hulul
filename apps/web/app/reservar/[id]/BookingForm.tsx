@@ -120,7 +120,7 @@ export function BookingForm({ proId }: { proId: string }) {
 
 function BookingGate({ pro }: { pro: Professional }) {
   return (
-    <ClientGate title="Crea tu cuenta para reservar" lead="Con Google, Outlook, Facebook, tu correo o tu celular. Así sigues tu servicio, recibes la confirmación y el diagnóstico de cada visita.">
+    <ClientGate title="Crea tu cuenta para reservar" lead="Con Google, Facebook, tu correo o tu celular. Así sigues tu servicio, recibes la confirmación y el diagnóstico de cada visita.">
       {({ user, profile }) => <BookingFormInner pro={pro} uid={user.uid} profile={profile} />}
     </ClientGate>
   );
