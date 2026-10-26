@@ -18,7 +18,10 @@
 .hh-search { position:relative; z-index:5; }
 .hh-search .search { width:100%; max-width:none; background:white; border:1px solid #536260; border-radius:14px; }
 .hh-search input { min-width:0; font-size:16px; }
-.hh-search button { min-height:48px; background:var(--hh-ink); color:#fff; }
+.hh-search .search > button[type=submit] { min-height:48px; background:var(--hh-ink); color:#fff; }
+/* Al escribir: se resalta el borde del buscador, no un recuadro grueso dentro del campo. */
+.hh-search .search input:focus-visible { outline:none; }
+.hh-search .search:focus-within { border-color:var(--hh-ink); box-shadow:0 0 0 3px rgba(18,63,67,.15); }
 .hh-explore { display:inline-flex; align-items:center; gap:16px; min-height:48px; margin-top:22px; color:var(--hh-ink); font-weight:700; text-decoration:none; }
 .hh-visual { min-width:0; margin:0; }
 .hh-visual img { display:block; width:100%; height:560px; object-fit:cover; object-position:58% 45%; border-radius:48% 8% 10% 32%; }
@@ -53,7 +56,7 @@
  .hh-visual { display:none; }
  .hh-search .search { flex-wrap:wrap; }
  .hh-search input { width:calc(100% - 40px); flex:1; }
- .hh-search button { width:100%; }
+ .hh-search .search > button[type=submit] { width:100%; }
  .hh-discovery h2,.hh-catalog h2 { font-size:24px; }
  .hh-discovery li { flex-basis:164px; }
  .hh-discovery .hh-featured-card { font-size:14px; }
