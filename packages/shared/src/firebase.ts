@@ -849,3 +849,15 @@ export async function appLoginToken(): Promise<string> {
 export async function webLoginToken(): Promise<string> {
   return (await callable<Record<string, never>, { token: string }>('tokenWeb')({})).data.token;
 }
+
+/* --------------------------- Tablero de administración --------------------------- */
+
+/** Datos del tablero /admin (solo ADMIN_EMAILS). Fechas AAAA-MM-DD; por defecto 180 días atrás y 90 adelante. */
+export async function adminDashboard(range?: { desde?: string; hasta?: string }): Promise<import('./dashboard').DashData> {
+  return (await callable<{ desde?: string; hasta?: string }, import('./dashboard').DashData>('adminTablero')(range ?? {})).data;
+}
+
+/** Marca una liquidación semanal como pagada con la referencia de la transferencia. */
+export async function adminMarkPayoutPaid(id: string, reference: string): Promise<void> {
+  await callable<{ id: string; reference: string }, { ok: boolean }>('marcarLiquidacion')({ id, reference });
+}

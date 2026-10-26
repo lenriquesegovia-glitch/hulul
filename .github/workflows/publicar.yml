@@ -58,7 +58,7 @@ jobs:
       - name: TypeScript (shared y Android)
         run: npm run typecheck
       - name: Pruebas de horarios y tarifas
-        run: node scripts/check-booking-window.cjs && node scripts/check-user-feedback.cjs
+        run: node scripts/check-booking-window.cjs && node scripts/check-user-feedback.cjs && node scripts/check-dashboard.mjs
       - name: Pruebas de funciones (dinero y correos)
         working-directory: functions
         run: npm ci --no-audit --no-fund && npm test

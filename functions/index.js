@@ -16,7 +16,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getApp, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
 import nodemailer from 'nodemailer';
@@ -30,6 +30,7 @@ import { safeMessage } from './mail-safety.js';
 import { CLAIM_STATUS, CLIENT_KINDS, PRO_KINDS, RESOLVE_HOURS, RESPONSE_HOURS, REMIND_BEFORE_HOURS, claimBlocked, cleanClaimPhotos, decisionPatch, deadlines, dueActions, isAdminToken, maskContact, responseStats, timeline } from './reclamos-core.js';
 import { VERIFIED_DOCS, expectOf, submissionCheck, verifySelfie, verifyText } from './doc-verify.js';
 import { MAX_FILE_BYTES, PRO_UID, REVIEW_LIST_STATUSES, maskBank, providerFiles, reviewMessage, reviewPatch } from './pro-review.js';
+import { bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
 
 /** Debe coincidir con la ubicación de la base de datos Firestore. */
@@ -2159,6 +2160,60 @@ export const adminProfesionales = onCall({ region: REGION }, async (req) => {
   });
   items.sort((a, b) => (b.submittedAt ?? 0) - (a.submittedAt ?? 0));
   return { items };
+});
+
+/**
+ * Tablero de administración (hululec.com/admin): reservas (CRM), clientes,
+ * contabilidad, proveedores y resumen ejecutivo. Solo ADMIN_EMAILS. Devuelve
+ * filas planas sin contactos completos ni direcciones; los cálculos se hacen en
+ * el navegador (packages/shared/src/dashboard.ts). Cada consulta queda en adminAccesos.
+ */
+export const adminTablero = onCall({ region: REGION, memory: '512MiB', timeoutSeconds: 60 }, async (req) => {
+  const admin = requireAdmin(req);
+  const now = Date.now();
+  const range = dashRange(req.data, now);
+  const fromTs = Timestamp.fromMillis(Date.parse(`${range.from}T05:00:00Z`) - 86_400_000);
+  const [bk, cl, lgRange, lgPending, po, pr, cs] = await Promise.all([
+    db().collection('bookings').where('date', '>=', range.from).where('date', '<=', range.to).limit(5000).get(),
+    db().collection('reclamos').limit(2000).get(),
+    db().collection('ledger').where('createdAt', '>=', fromTs).limit(20000).get(),
+    db().collection('ledger').where('payoutId', '==', null).limit(20000).get(),
+    db().collection('payouts').limit(3000).get(),
+    db().collection('providers').limit(3000).get(),
+    db().collection('clients').limit(10000).get(),
+  ]);
+  const claimsById = new Map(cl.docs.map((d) => [d.id, d.data()]));
+  const ledger = new Map();
+  for (const d of [...lgRange.docs, ...lgPending.docs]) ledger.set(d.id, ledgerRow(d.id, d.data()));
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, action: 'tablero', range, at: FieldValue.serverTimestamp() });
+  return {
+    range,
+    generatedAt: now,
+    bookings: bk.docs.map((d) => bookingRow(d.id, d.data(), claimsById.get(d.id) ?? null)),
+    ledger: [...ledger.values()],
+    payouts: po.docs.map((d) => payoutRow(d.id, d.data())),
+    providers: pr.docs.filter((d) => d.data().status && d.data().status !== 'borrador').map((d) => providerRow(d.id, d.data(), now)),
+    clients: cs.docs.map((d) => clientRow(d.id, d.data())),
+    claims: cl.docs.map((d) => claimRow(d.id, d.data())),
+  };
+});
+
+/** Tablero: marca una liquidación semanal como pagada (después de transferir). */
+export const marcarLiquidacion = onCall({ region: REGION }, async (req) => {
+  const admin = requireAdmin(req);
+  const id = String(req.data?.id ?? '');
+  const reference = String(req.data?.reference ?? '').trim().slice(0, 80);
+  if (!/^\d{4}-\d{2}-\d{2}_[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('invalid-argument', 'Liquidación no válida.');
+  if (reference.length < 4) throw new HttpsError('invalid-argument', 'Escribe el número o la referencia de la transferencia.');
+  const ref = db().doc(`payouts/${id}`);
+  await db().runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists) throw new HttpsError('not-found', 'No encontramos esa liquidación.');
+    if (s.data().status !== 'por_pagar') throw new HttpsError('failed-precondition', 'Esa liquidación ya no está por pagar.');
+    tx.update(ref, { status: 'pagado', paidAt: FieldValue.serverTimestamp(), paidBy: admin.email, paymentReference: reference });
+  });
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, action: 'liquidacion_pagada', payoutId: id, at: FieldValue.serverTimestamp() });
+  return { ok: true };
 });
 
 /** Panel: registro completo, con la lista de archivos y la cuenta bancaria tapada. */

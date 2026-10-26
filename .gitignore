@@ -21,3 +21,4 @@ firebase-debug.log
 # Claves secretas de Firebase (cuentas de servicio): nunca al repositorio.
 *firebase-adminsdk*.json
 .reglas/
+apps/web/public/muestra-tablero.json
