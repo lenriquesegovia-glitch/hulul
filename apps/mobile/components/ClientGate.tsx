@@ -7,7 +7,7 @@ import { e164Ecuador } from '@hulul/shared';
 import { createClientProfile, loadClientProfile, type ClientProfile } from '@hulul/shared/firebase';
 import { Checkbox } from '@/components/Checkbox';
 import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
-import { authErrorMessage, googleAvailable, logout, resetPassword, signInEmail, signInGoogle, useUser } from '@/lib/auth';
+import { authErrorMessage, logout, resetPassword, signInEmail, startWebSignIn, useUser, type WebProvider } from '@/lib/auth';
 import { c, font, radius } from '@/theme';
 
 /**
@@ -63,11 +63,9 @@ function SignIn({ title, lead }: { title: string; lead: string }) {
     try { await signInEmail(email.trim(), pass, create); } catch (e) { setMsg(authErrorMessage(e)); } finally { setBusy(false); }
   };
 
-  const withGoogle = googleAvailable();
-  const goGoogle = async () => {
+  const goWeb = async (p: WebProvider) => {
     setMsg('');
-    setBusy(true);
-    try { await signInGoogle(); } catch (e) { setMsg(authErrorMessage(e)); } finally { setBusy(false); }
+    try { await startWebSignIn(p); setMsg('Termina de entrar en el navegador; volverás solo a la app.'); } catch (e) { setMsg(authErrorMessage(e)); }
   };
 
   return (
@@ -76,15 +74,18 @@ function SignIn({ title, lead }: { title: string; lead: string }) {
         <H1 style={{ fontSize: 24 }}>{title}</H1>
         <Body muted>{lead}</Body>
       </View>
-      {withGoogle && (
-        <>
-          <Pressable accessibilityRole="button" disabled={busy} onPress={goGoogle} style={s.google}>
-            <Text style={s.googleG}>G</Text>
-            <Text style={s.googleText}>Continuar con Google</Text>
-          </Pressable>
-          <Body muted style={{ textAlign: 'center', fontSize: 13 }}>o con tu correo</Body>
-        </>
-      )}
+      <Pressable accessibilityRole="button" disabled={busy} onPress={() => goWeb('google')} style={s.google}>
+        <Text style={s.googleG}>G</Text>
+        <Text style={s.googleText}>Continuar con Google</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" disabled={busy} onPress={() => goWeb('microsoft')} style={s.google}>
+        <View style={s.msLogo}>
+          <View style={[s.msSq, { backgroundColor: '#F25022' }]} /><View style={[s.msSq, { backgroundColor: '#7FBA00' }]} />
+          <View style={[s.msSq, { backgroundColor: '#00A4EF' }]} /><View style={[s.msSq, { backgroundColor: '#FFB900' }]} />
+        </View>
+        <Text style={s.googleText}>Continuar con Outlook</Text>
+      </Pressable>
+      <Body muted style={{ textAlign: 'center', fontSize: 13 }}>o con tu correo</Body>
       <View style={s.seg}>
         {[['Crear cuenta', true], ['Ya tengo cuenta', false]].map(([l, v]) => (
           <Pressable key={String(l)} accessibilityRole="radio" accessibilityState={{ checked: create === v }} onPress={() => setCreate(v as boolean)} style={[s.segBtn, create === v && s.segOn]}>
@@ -109,7 +110,7 @@ function SignIn({ title, lead }: { title: string; lead: string }) {
         </Pressable>
       )}
       <Card style={{ backgroundColor: c.surfaceWarm }}>
-        <Body muted style={{ fontSize: 13 }}>{withGoogle ? 'Es la misma cuenta que usas en hululec.com. Si te registraste allí con Outlook, toca "Ya tengo cuenta" y luego "Olvidé mi contraseña" para crearle una contraseña.' : 'Por ahora en la app se entra con correo y contraseña. Si te registraste con Google u Outlook en hululec.com, toca "Ya tengo cuenta", escribe ese correo y luego "Olvidé mi contraseña" para crearle una. Es la misma cuenta.'}</Body>
+        <Body muted style={{ fontSize: 13 }}>Es la misma cuenta que usas en hululec.com. Con Google u Outlook se abre el navegador para entrar y vuelves solo a la app.</Body>
       </Card>
     </View>
   );
@@ -176,6 +177,8 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 const s = StyleSheet.create({
   google: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 50, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface },
   googleG: { fontFamily: font.display, fontSize: 18, color: '#4285F4' },
+  msLogo: { width: 18, height: 18, flexDirection: 'row', flexWrap: 'wrap', gap: 1 },
+  msSq: { width: 8.5, height: 8.5 },
   googleText: { fontFamily: font.bodyBold, fontSize: 15, color: c.text },
   label: { fontFamily: font.bodyBold, fontSize: 14, color: c.textSecondary },
   input: { minHeight: 50, paddingHorizontal: 14, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, fontFamily: font.body, fontSize: 16, color: c.text },

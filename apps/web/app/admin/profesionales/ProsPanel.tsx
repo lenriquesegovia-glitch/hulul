@@ -171,10 +171,14 @@ function ProDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
         <Row k="Enviado" v={when(p.submittedAt)} />
       </Section>
 
+      {f.alerts.length > 0 && (
+        <p className="notice" style={{ borderLeftColor: '#B42318' }}><strong>Revisar a mano:</strong> {f.alerts.join(' · ')}</p>
+      )}
+
       <Section title="Documentos">
         {f.files.length === 0 ? <span className="muted">No subió documentos.</span> : (
           <div className="file-grid">
-            {f.files.map((x) => <FileView key={x.path} uid={uid} file={x} />)}
+            {f.files.map((x) => <FileView key={x.path} uid={uid} file={x} check={x.key ? f.verification[x.key] : undefined} />)}
           </div>
         )}
       </Section>
@@ -242,7 +246,13 @@ function ProDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
   );
 }
 
-function FileView({ uid, file }: { uid: string; file: { label: string; path: string } }) {
+const CHECK_TONE: Record<string, { bg: string; fg: string; t: string }> = {
+  ok: { bg: '#E6F2E9', fg: '#206344', t: 'Verificado' },
+  revisar: { bg: '#FFF4E5', fg: '#9A5B00', t: 'Revisar' },
+  rechazado: { bg: '#FDECEA', fg: '#B42318', t: 'No pasó' },
+};
+
+function FileView({ uid, file, check }: { uid: string; file: { label: string; path: string }; check?: ProFile['verification'][string] }) {
   const [url, setUrl] = useState('');
   const [type, setType] = useState('');
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -264,6 +274,13 @@ function FileView({ uid, file }: { uid: string; file: { label: string; path: str
   return (
     <div className="file-card">
       <strong style={{ fontSize: 13.5 }}>{file.label}</strong>
+      {check && CHECK_TONE[check.status] && (
+        <span title={check.msg} style={{ alignSelf: 'flex-start', background: CHECK_TONE[check.status].bg, color: CHECK_TONE[check.status].fg, borderRadius: 999, padding: '2px 8px', fontSize: 12, fontWeight: 700 }}>
+          {CHECK_TONE[check.status].t}{check.current ? '' : ' (archivo anterior)'}
+        </span>
+      )}
+      {check?.flag && <span className="muted" style={{ fontSize: 12 }}>{check.flag}</span>}
+      {check && typeof check.checks.distancia === 'number' && <span className="muted" style={{ fontSize: 12 }}>Distancia de rostro: {String(check.checks.distancia)}{check.checks.pruebaDeVida ? ' · con prueba de vida' : ' · sin prueba de vida'}</span>}
       {url ? (
         type.startsWith('image/')
           // eslint-disable-next-line @next/next/no-img-element

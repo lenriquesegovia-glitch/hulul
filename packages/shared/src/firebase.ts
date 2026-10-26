@@ -803,7 +803,9 @@ export interface ProFile {
     submittedAt: number | null; reviewNote: string; reviewedBy: string; reviewedAt: number | null;
   };
   bank: { bank: string; type: string; number: string; holder: string; holderId: string } | null;
-  files: { label: string; path: string; name: string }[];
+  files: { key: string; label: string; path: string; name: string }[];
+  verification: Record<string, { status: string; msg: string; flag: string; current: boolean; checks: Record<string, unknown> }>;
+  alerts: string[];
   duplicates: string[];
   history: { decision: string; note: string; by: string; at: number | null }[];
 }
@@ -822,4 +824,22 @@ export async function adminProFile(uid: string, path: string): Promise<{ content
 
 export async function adminDecidePro(uid: string, decision: ProReviewDecision, note: string, catStatus: Record<string, string>): Promise<void> {
   await callable<{ uid: string; decision: ProReviewDecision; note: string; catStatus: Record<string, string> }, { ok: boolean }>('decidirProfesional')({ uid, decision, note, catStatus });
+}
+
+export type DocVerifyStatus = 'ok' | 'revisar' | 'rechazado';
+
+/** Verifica un documento recién subido (OCR en el servidor; la selfie con la distancia calculada en el celular). */
+export async function verifyProviderDoc(key: string, path: string, face?: { distance: number; liveness: boolean; mode: string; tries: number }): Promise<{ status: DocVerifyStatus; msg: string }> {
+  return (await callable<{ key: string; path: string; face?: unknown }, { status: DocVerifyStatus; msg: string }>('verificarDocumento')({ key, path, face })).data;
+}
+
+/** Resultados de verificación guardados (solo los lee el propio profesional). */
+export async function myDocVerification(uid: string): Promise<Record<string, { status: DocVerifyStatus; msg: string; path: string }>> {
+  const snap = await getDoc(doc(firestore(), 'providers', uid, 'private', 'verificacion'));
+  return (snap.exists() ? snap.data() : {}) as Record<string, { status: DocVerifyStatus; msg: string; path: string }>;
+}
+
+/** Sesión para la app después de entrar con Google u Outlook en la web (hululec.com/app-login). */
+export async function appLoginToken(): Promise<string> {
+  return (await callable<Record<string, never>, { token: string }>('tokenApp')({})).data.token;
 }

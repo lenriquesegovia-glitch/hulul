@@ -496,3 +496,19 @@ details p { margin-top: 10px; color: var(--text-2); }
 .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .file-card { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
 .file-card img { width: 100%; height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+
+/* Registro: verificación de documentos y selfie con prueba de vida */
+.doc-check { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.doc-check.ok { color: var(--success); }
+.doc-check.warn { color: #9A5B00; }
+.doc-check.bad { color: #B42318; }
+.doc-check.wait { color: var(--muted); }
+.cam { position: fixed; inset: 0; z-index: 1000; background: #0B1F21; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 20px; }
+.cam-box { position: relative; width: min(340px, 82vw); aspect-ratio: 3 / 4; border-radius: 24px; overflow: hidden; background: #000; }
+.cam-box video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.cam-oval { position: absolute; inset: 10% 16%; border: 3px solid rgba(255,255,255,.85); border-radius: 50%; box-shadow: 0 0 0 999px rgba(0,0,0,.35); pointer-events: none; }
+.cam-msg { font-size: 17px; font-weight: 700; text-align: center; min-height: 48px; max-width: 340px; margin: 0; }
+.cam-steps { display: flex; gap: 8px; }
+.cam-steps i { width: 36px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.25); }
+.cam-steps i.on { background: #7FD1A5; }
+.cam-cancel { color: #fff; border-color: rgba(255,255,255,.6); background: transparent; }

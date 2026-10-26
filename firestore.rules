@@ -165,7 +165,7 @@ service cloud.firestore {
         'phone', 'email', 'categories', 'services', 'rates', 'minHours', 'visitRates', 'catEvidence', 'proposals', 'catStatus', 'strikes', 'tester', 'cashDebt', 'fines', 'years', 'bio',
         'cities', 'days', 'from', 'to', 'acceptsCash', 'docs', 'offHours', 'holidays', 'surcharges',
         'taxRegime', 'eSignature', 'mandateAccepted', 'payoutBalance',
-        'reviewNote', 'reviewedAt', 'reviewedBy',
+        'reviewNote', 'reviewedAt', 'reviewedBy', 'verifyAlerts',
         'consentPrivacy', 'privacyVersion', 'termsAccepted', 'submittedAt', 'createdAt', 'updatedAt']);
     }
 
@@ -212,6 +212,7 @@ service cloud.firestore {
         && request.resource.data.get('reviewNote', null) == resource.data.get('reviewNote', null)
         && request.resource.data.get('reviewedAt', null) == resource.data.get('reviewedAt', null)
         && request.resource.data.get('reviewedBy', null) == resource.data.get('reviewedBy', null)
+        && request.resource.data.get('verifyAlerts', null) == resource.data.get('verifyAlerts', null)
         && request.resource.data.get('strikes', null) == resource.data.get('strikes', null)
         && request.resource.data.get('tester', null) == resource.data.get('tester', null)
         && request.resource.data.get('cashDebt', null) == resource.data.get('cashDebt', null)

@@ -1,6 +1,7 @@
 /**
  * Cuentas en la app (Firebase Authentication con sesión guardada en el
- * celular). En Expo Go se entra con correo y contraseña; Google, Facebook y
+ * celular). Correo y contraseña directo en la app; Google y Outlook por el
+ * navegador (hululec.com/app-login) y de vuelta a la app. Antes: Google, Facebook y
  * celular por SMS llegan con la app compilada para las tiendas.
  * Es la misma cuenta que en la web.
  */
@@ -14,6 +15,7 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithCredential,
+  signInWithCustomToken,
   initializeAuth,
   onAuthStateChanged,
   sendPasswordResetEmail,
@@ -92,6 +94,34 @@ export async function signInGoogle(): Promise<boolean> {
   return true;
 }
 
+/* ---- Google u Outlook por el navegador (misma cuenta que la web) ---- */
+// La app abre hululec.com/app-login; al entrar, la página vuelve con
+// hulul://login?token=…&state=… y la pantalla app/login.tsx termina aquí.
+const PENDING_KEY = 'hulul.appLoginState';
+const WEB_LOGIN = 'https://hululec.com/app-login';
+
+export type WebProvider = 'google' | 'microsoft';
+
+export async function startWebSignIn(p: WebProvider, back = '/cuenta'): Promise<void> {
+  const state = Array.from({ length: 24 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join('');
+  await AsyncStorage.setItem(PENDING_KEY, JSON.stringify({ state, at: Date.now(), back }));
+  const { openURL } = await import('expo-linking');
+  await openURL(`${WEB_LOGIN}?p=${p}&state=${state}`);
+}
+
+/** Termina la entrada que volvió del navegador. Devuelve a qué pantalla regresar. */
+export async function finishWebSignIn(token: string, state: string): Promise<string> {
+  const raw = await AsyncStorage.getItem(PENDING_KEY);
+  await AsyncStorage.removeItem(PENDING_KEY);
+  const pending = raw ? (JSON.parse(raw) as { state: string; at: number; back: string }) : null;
+  // Solo se acepta la sesión que pidió esta app, en los últimos 15 minutos.
+  if (!pending || pending.state !== state || Date.now() - pending.at > 15 * 60_000) {
+    throw Object.assign(new Error('state'), { code: 'auth/app-login-expired' });
+  }
+  await signInWithCustomToken(appAuth(), token);
+  return pending.back || '/cuenta';
+}
+
 export const resetPassword = (email: string) => sendPasswordResetEmail(appAuth(), email);
 export const logout = async () => {
   await signOut(appAuth());
@@ -115,6 +145,8 @@ export function authErrorMessage(e: unknown): string {
     'auth/google-no-token': 'Google no devolvió los datos de tu cuenta. Inténtalo de nuevo.',
     'auth/account-exists-with-different-credential': 'Ese correo ya tiene cuenta con otro método. Entra con tu correo y contraseña.',
     DEVELOPER_ERROR: 'Falta terminar de configurar el acceso con Google (huella SHA-1 en Firebase).',
+    'auth/app-login-expired': 'La entrada venció o no la pediste desde esta app. Vuelve a tocar «Continuar con Google» u «Outlook».',
+    'auth/invalid-custom-token': 'La entrada venció. Vuelve a intentarlo.',
   };
   return map[code] ?? 'No pudimos iniciar sesión. Inténtalo de nuevo.';
 }

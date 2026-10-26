@@ -66,11 +66,11 @@ export function providerFiles(p, uid) {
   const prefix = `providers/${uid}/`;
   for (const [key, v] of Object.entries(p?.docs ?? {})) {
     const path = typeof v === 'string' ? v : v?.path;
-    if (typeof path === 'string' && path.startsWith(prefix)) out.push({ label: DOC_LABELS[key] ?? key, path, name: v?.name ?? '' });
+    if (typeof path === 'string' && path.startsWith(prefix)) out.push({ key, label: DOC_LABELS[key] ?? key, path, name: v?.name ?? '' });
   }
   for (const [cat, ev] of Object.entries(p?.catEvidence ?? {})) {
     (ev?.files ?? []).forEach((path, i) => {
-      if (typeof path === 'string' && path.startsWith(prefix)) out.push({ label: `${cat} · respaldo ${i + 1}`, path, name: '' });
+      if (typeof path === 'string' && path.startsWith(prefix)) out.push({ key: '', label: `${cat} · respaldo ${i + 1}`, path, name: '' });
     });
   }
   return out;

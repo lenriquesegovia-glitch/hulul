@@ -13,7 +13,8 @@
 import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { initializeApp } from 'firebase-admin/app';
+import { getApp, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { defineSecret, defineString } from 'firebase-functions/params';
@@ -27,6 +28,7 @@ import { normalizeRankingBooking } from './home-ranking.js';
 import { hasProfanity, maskProfanity, PROFANITY_MESSAGE } from './profanity.js';
 import { safeMessage } from './mail-safety.js';
 import { CLAIM_STATUS, CLIENT_KINDS, PRO_KINDS, RESOLVE_HOURS, RESPONSE_HOURS, REMIND_BEFORE_HOURS, claimBlocked, cleanClaimPhotos, decisionPatch, deadlines, dueActions, isAdminToken, maskContact, responseStats, timeline } from './reclamos-core.js';
+import { VERIFIED_DOCS, expectOf, submissionCheck, verifySelfie, verifyText } from './doc-verify.js';
 import { MAX_FILE_BYTES, PRO_UID, REVIEW_LIST_STATUSES, maskBank, providerFiles, reviewMessage, reviewPatch } from './pro-review.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
 
@@ -501,7 +503,7 @@ function evidenceText(e) {
 }
 
 /** Correos cuando un profesional envía su registro a revisión. */
-export function providerEmails(p, uid, { from, notifyTo }) {
+export function providerEmails(p, uid, { from, notifyTo }, alerts = []) {
   const name = p.kind === 'empresa' ? `${p.businessName} (${p.firstName} ${p.lastName})` : `${p.firstName} ${p.lastName}`;
   const cats = (p.categories ?? []).map((c) => `${CATEGORIES[c] ?? c} · ${usd(visitRateOf(p, c))} por visita<br><span style="color:#6B6560;font-size:13px">${evidenceText(p.catEvidence?.[c])}</span>`).join('<br>');
   const proposals = (Array.isArray(p.proposals) ? p.proposals : []).map((a) => `<b>${esc(a.name)}</b> · ${usd(Number(a.rate) || 0)} por visita<br><span style="color:#6B6560;font-size:13px">${esc((a.services ?? []).join(', '))}<br>${esc(a.note)}</span>`).join('<br>');
@@ -513,6 +515,7 @@ export function providerEmails(p, uid, { from, notifyTo }) {
     ['RUC', esc(p.ruc)],
     ['Celular', esc(p.phone)],
     ['Correo', esc(p.email)],
+    ...(alerts.length ? [['Revisar a mano', `<span style="color:#B42318">${alerts.map(esc).join('<br>')}</span>`]] : [['Verificación', '<span style="color:#1F7A4A">Documentos y rostro verificados.</span>']]),
     ['Servicios', cats || '—'],
     ...(proposals ? [['Actividades nuevas (por aprobar)', proposals]] : []),
     ['Ciudades', esc((p.cities ?? []).join(', '))],
@@ -542,13 +545,23 @@ export const avisoRegistroProfesional = onDocumentUpdated(
     const before = event.data?.before.data();
     const after = event.data?.after.data();
     if (!after || after.status !== 'en_revision' || before?.status === 'en_revision') return;
+    const uid = event.params.uid;
+    // Todos los documentos obligatorios deben estar verificados (archivo actual y datos actuales).
+    // Si no, vuelve a "observado" con lo que falta, y le llega el aviso automáticamente.
+    const ver = (await db().doc(`providers/${uid}/private/verificacion`).get()).data() ?? {};
+    const { problems, alerts } = submissionCheck(after, ver, requiredDocsOf(after.categories ?? []));
+    if (problems.length) {
+      await event.data.after.ref.set({ status: 'observado', reviewNote: `Antes de revisar tu registro, corrige esto: ${problems.join(' ')}`, reviewedAt: FieldValue.serverTimestamp(), reviewedBy: 'verificacion-automatica' }, { merge: true });
+      logger.warn('Registro devuelto por documentos sin verificar', { uid, problems });
+      return;
+    }
     // Cada categoría queda en revisión (las que HULUL ya aprobó o rechazó se conservan).
     const catStatus = { ...(after.catStatus ?? {}) };
     for (const c of after.categories ?? []) if (!['aprobado', 'rechazado'].includes(catStatus[c])) catStatus[c] = 'en_revision';
-    await event.data.after.ref.set({ catStatus }, { merge: true });
+    await event.data.after.ref.set({ catStatus, verifyAlerts: alerts }, { merge: true });
     const mail = transport();
-    for (const m of providerEmails(after, event.params.uid, senders())) await mail.sendMail(m);
-    logger.info('Aviso de registro de profesional enviado', { uid: event.params.uid });
+    for (const m of providerEmails(after, uid, senders(), alerts)) await mail.sendMail(m);
+    logger.info('Aviso de registro de profesional enviado', { uid });
   },
 );
 
@@ -2149,9 +2162,10 @@ export const adminProfesional = onCall({ region: REGION }, async (req) => {
   const admin = requireAdmin(req);
   const uid = String(req.data?.uid ?? '');
   if (!PRO_UID.test(uid)) throw new HttpsError('invalid-argument', 'Profesional no válido.');
-  const [ps, bs, hist] = await Promise.all([
+  const [ps, bs, hist, vs] = await Promise.all([
     db().doc(`providers/${uid}`).get(), db().doc(`providers/${uid}/private/banco`).get(),
     db().collection(`providers/${uid}/revisiones`).orderBy('at', 'desc').limit(20).get(),
+    db().doc(`providers/${uid}/private/verificacion`).get(),
   ]);
   if (!ps.exists) throw new HttpsError('not-found', 'No encontramos ese profesional.');
   const p = ps.data();
@@ -2169,6 +2183,8 @@ export const adminProfesional = onCall({ region: REGION }, async (req) => {
     },
     bank: maskBank(bs.exists ? bs.data() : null),
     files: providerFiles(p, uid),
+    verification: Object.fromEntries(Object.entries(vs.data() ?? {}).map(([k, v]) => [k, { status: v.status, msg: v.msg ?? '', flag: v.flag ?? '', current: v.path === p.docs?.[k]?.path, checks: v.checks ?? {} }])),
+    alerts: p.verifyAlerts ?? [],
     duplicates: dup ? dup.docs.map((d) => d.id).filter((x) => x !== uid) : [],
     history: hist.docs.map((d) => ({ ...d.data(), at: millis(d.data().at) })),
   };
@@ -2235,3 +2251,96 @@ export const avisoRevisionProfesional = onDocumentUpdated(
     }
   },
 );
+
+
+/* ------------------------ Verificación de documentos ------------------------ */
+// Misma lógica que el formulario anónimo: cada documento se lee con OCR (Cloud
+// Vision) apenas se sube y se comprueba que sea de esta persona. El resultado
+// queda en providers/{uid}/private/verificacion (solo el servidor lo escribe) y
+// se vuelve a exigir al enviar el registro (avisoRegistroProfesional).
+
+const requiredDocsOf = (cats) => ['cedulaFrente', 'cedulaReverso', 'selfie', 'antecedentes', 'ruc', ...(cats.includes('salud') ? ['titulo'] : [])];
+
+async function googleToken() {
+  try {
+    const r = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', { headers: { 'Metadata-Flavor': 'Google' } });
+    if (r.ok) return (await r.json()).access_token;
+  } catch { /* fuera de Google Cloud */ }
+  const cred = getApp().options.credential;
+  if (!cred) throw new Error('Sin credenciales para Cloud Vision');
+  return (await cred.getAccessToken()).access_token;
+}
+
+/** Texto de una foto o PDF con Cloud Vision (OCR en español). */
+async function ocrText(buf, contentType) {
+  const token = await googleToken();
+  const pdf = contentType === 'application/pdf';
+  const url = `https://vision.googleapis.com/v1/${pdf ? 'files' : 'images'}:annotate`;
+  const req = pdf
+    ? { requests: [{ inputConfig: { content: buf.toString('base64'), mimeType: 'application/pdf' }, features: [{ type: 'DOCUMENT_TEXT_DETECTION' }], pages: [1, 2, 3], imageContext: { languageHints: ['es'] } }] }
+    : { requests: [{ image: { content: buf.toString('base64') }, features: [{ type: 'DOCUMENT_TEXT_DETECTION' }], imageContext: { languageHints: ['es'] } }] };
+  const r = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'x-goog-user-project': PROJECT }, body: JSON.stringify(req) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const msg = String(j?.error?.message ?? r.status);
+    logger.error('Cloud Vision', { status: r.status, msg });
+    if (/has not been used|is disabled|SERVICE_DISABLED/i.test(msg)) throw new HttpsError('failed-precondition', 'El verificador de documentos aún no está activo. Inténtalo más tarde.');
+    throw new HttpsError('unavailable', 'No pudimos leer el documento en este momento. Inténtalo otra vez.');
+  }
+  if (pdf) return (j.responses?.[0]?.responses ?? []).map((x) => x.fullTextAnnotation?.text ?? '').join('\n');
+  return j.responses?.[0]?.fullTextAnnotation?.text ?? '';
+}
+
+/**
+ * El profesional subió un documento a Storage: se verifica en el momento.
+ * data: { key, path, face? } — face solo para la selfie (distancia y prueba de vida, calculadas en el celular).
+ */
+export const verificarDocumento = onCall({ region: REGION, memory: '512MiB', timeoutSeconds: 60 }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const key = String(req.data?.key ?? '');
+  const path = String(req.data?.path ?? '');
+  if (!VERIFIED_DOCS.includes(key)) throw new HttpsError('invalid-argument', 'Documento no reconocido.');
+  if (!path.startsWith(`providers/${uid}/${key}-`) || path.includes('..')) throw new HttpsError('invalid-argument', 'Archivo no válido.');
+  const ps = await db().doc(`providers/${uid}`).get();
+  const p = ps.data() ?? {};
+  if (['aprobado', 'rechazado', 'suspendido'].includes(p.status)) throw new HttpsError('failed-precondition', 'Tu registro ya fue revisado.');
+  const ex = expectOf(p);
+  if (!ex.cedula || !ex.lastName) throw new HttpsError('failed-precondition', 'Primero completa tus datos (paso 1).');
+  let result;
+  if (key === 'selfie') {
+    result = verifySelfie(req.data?.face);
+  } else {
+    const file = getStorage().bucket().file(path);
+    const [exists] = await file.exists();
+    if (!exists) throw new HttpsError('not-found', 'No encontramos el archivo. Vuelve a subirlo.');
+    const [meta] = await file.getMetadata();
+    if (Number(meta.size) > MAX_FILE_BYTES) throw new HttpsError('failed-precondition', 'El archivo es muy grande. Súbelo de menos de 9 MB.');
+    const [buf] = await file.download();
+    const text = await ocrText(buf, meta.contentType);
+    result = verifyText(key, text, ex);
+  }
+  const entry = { status: result.status, msg: result.msg, ...(result.flag ? { flag: result.flag } : {}), checks: result.checks, path, expect: ex, at: Date.now() };
+  await db().doc(`providers/${uid}/private/verificacion`).set({ [key]: entry }, { merge: true });
+  logger.info('Documento verificado', { uid, key, status: result.status });
+  return { status: result.status, msg: result.msg };
+});
+
+/* --------------------- Entrar con Google u Outlook en la app --------------------- */
+// La app abre hululec.com/app-login en el navegador; la persona entra con Google
+// u Outlook y la página pide aquí una sesión para la app (token de un solo uso
+// de Firebase), que vuelve a la app por hulul://login. Requiere que la cuenta de
+// servicio de las funciones tenga el rol "Creador de tokens de cuenta de servicio".
+export const tokenApp = onCall({ region: REGION }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const age = Date.now() / 1000 - Number(req.auth.token.auth_time ?? 0);
+  if (age > 600) throw new HttpsError('failed-precondition', 'Vuelve a iniciar sesión para continuar en la app.');
+  try {
+    const token = await getAuth().createCustomToken(uid, { via: 'app-login' });
+    return { token };
+  } catch (e) {
+    logger.error('No se pudo crear la sesión para la app', { uid, e: String(e) });
+    throw new HttpsError('failed-precondition', 'Entrar con Google u Outlook en la app aún no está activo. Usa tu correo y contraseña.');
+  }
+});

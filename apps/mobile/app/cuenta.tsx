@@ -15,7 +15,7 @@ export default function AccountScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top']}>
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
         <BackButton />
-        <ClientGate title="Entra a tu cuenta" lead="Con tu correo. Si es tu primera vez, se crea tu cuenta.">
+        <ClientGate title="Entra a tu cuenta" lead="Con Google, Outlook o tu correo. Si es tu primera vez, se crea tu cuenta.">
           {({ user, profile }) => (
             <View style={{ gap: 20 }}>
               <H1>Mi cuenta</H1>

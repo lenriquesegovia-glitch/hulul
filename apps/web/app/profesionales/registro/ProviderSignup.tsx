@@ -42,6 +42,7 @@ import { SignIn } from '@/components/SignIn';
 import { EvidenceEditor, Field, RateField, rateProblem, ServicesPicker } from './ServiceBits';
 import { ProposalsEditor } from './Proposals';
 import { CityMultiPicker } from './CityMultiPicker';
+import { docsProblem, StepDocs, type DocCheck, type DocChecks } from './DocsStep';
 import { ServiceManager } from './ServiceManager';
 import { OffHoursEditor } from './OffHoursEditor';
 
@@ -138,6 +139,8 @@ function Wizard({ user }: { user: User }) {
   const [exists, setExists] = useState(false);
   const [status, setStatus] = useState<ProviderStatus>('borrador');
   const [reviewNote, setReviewNote] = useState('');
+  const [checks, setChecks] = useState<DocChecks>({});
+  const setCheck = (k: DocKey, c: DocCheck) => setChecks((x) => ({ ...x, [k]: c }));
   const [catStatus, setCatStatus] = useState<Partial<Record<CategorySlug, CategoryReview>> | undefined>();
   const [editing, setEditing] = useState(false);
   const [d, setD] = useState<Draft>(EMPTY);
@@ -160,6 +163,9 @@ function Wizard({ user }: { user: User }) {
         setExists(true);
         setStatus(data.status ?? 'borrador');
         setReviewNote(typeof data.reviewNote === 'string' ? data.reviewNote : '');
+        import('@hulul/shared/firebase').then((m) => m.myDocVerification(user.uid)).then((v) => {
+          setChecks(Object.fromEntries(Object.entries(v).map(([k, x]) => [k, { status: x.status, msg: x.msg, path: x.path }])) as DocChecks);
+        }).catch(() => {});
         setCatStatus(data.catStatus);
         setD({ ...EMPTY, ...pick(data) });
         setStep(Math.min(Number(data.step ?? 0), STEPS.length - 1));
@@ -204,7 +210,7 @@ function Wizard({ user }: { user: User }) {
   const go = async (to: number) => {
     setError('');
     if (to > step) {
-      const msg = validate(step, d, bank);
+      const msg = validate(step, d, bank, checks);
       if (msg) { setError(msg); return; }
     }
     setSaving(true);
@@ -227,7 +233,7 @@ function Wizard({ user }: { user: User }) {
     setError('');
     if (!consents.privacy || !consents.terms || !consents.truth) { setError('Debes aceptar las tres declaraciones para enviar tu registro.'); return; }
     for (let s = 0; s < 5; s++) {
-      const msg = validate(s, d, bank);
+      const msg = validate(s, d, bank, checks);
       if (msg) { setError(`${STEPS[s]}: ${msg}`); setStep(s); return; }
     }
     setSaving(true);
@@ -283,7 +289,7 @@ function Wizard({ user }: { user: User }) {
       {step === 0 && <StepData d={d} set={set} />}
       {step === 1 && <StepServices d={d} setD={setD} uid={user.uid} />}
       {step === 2 && <StepZones d={d} set={set} />}
-      {step === 3 && <StepDocs d={d} uid={user.uid} onUploaded={async (key, v) => {
+      {step === 3 && <StepDocs uid={user.uid} categories={d.categories} docs={d.docs} checks={checks} setCheck={setCheck} onUploaded={async (key, v) => {
         const next = { ...d, docs: { ...d.docs, [key]: v } };
         setD(next);
         const { db, fs } = await fb();
@@ -310,7 +316,7 @@ function Wizard({ user }: { user: User }) {
 
 /* ---------------------------- Validación ---------------------------- */
 
-function validate(step: number, d: Draft, bank: Bank): string {
+function validate(step: number, d: Draft, bank: Bank, checks: DocChecks = {}): string {
   if (step === 0) {
     if (d.firstName.trim().length < 2 || d.lastName.trim().length < 2) return 'Escribe tus nombres y apellidos.';
     if (!validCedula(d.cedula)) return 'La cédula no es válida. Revisa los 10 dígitos.';
@@ -347,6 +353,8 @@ function validate(step: number, d: Draft, bank: Bank): string {
     if (off) return off;
   }
   if (step === 3) {
+    const docsMsg = docsProblem(d.categories, d.docs, checks);
+    if (docsMsg) return docsMsg;
     const missing = requiredDocs(d.categories).filter((k) => !d.docs[k]);
     if (missing.length) return `Falta subir: ${missing.map((k) => PROVIDER_DOCS.find((x) => x.key === k)?.label).join(', ')}.`;
   }
@@ -518,59 +526,6 @@ function StepZones({ d, set }: { d: Draft; set: SetField }) {
         <span><strong>Acepto pagos en efectivo.</strong> Si el cliente paga en efectivo, la comisión de HULUL y el cargo de plataforma quedan como saldo a tu cargo y se descuentan de tus próximos pagos. Si tu saldo pendiente pasa de $30, el efectivo se desactiva hasta que lo pagues.</span>
       </label>
     </section>
-  );
-}
-
-function StepDocs({ d, uid, onUploaded }: { d: Draft; uid: string; onUploaded: (k: DocKey, v: { path: string; name: string }) => Promise<void> }) {
-  const required = requiredDocs(d.categories);
-  return (
-    <section className="stack gap-16">
-      <h2 className="fs-title">4. Documentos</h2>
-      <p className="muted" style={{ fontSize: 14 }}>Solo el equipo de HULUL los ve, para verificar tu identidad. Fotos o PDF de hasta {MAX_DOC_MB} MB.</p>
-      {PROVIDER_DOCS.map((spec) => (
-        <DocUpload key={spec.key} spec={spec} uid={uid} required={required.includes(spec.key)} value={d.docs[spec.key]} onUploaded={onUploaded} />
-      ))}
-    </section>
-  );
-}
-
-function DocUpload({ spec, uid, required, value, onUploaded }: {
-  spec: ProviderDocSpec; uid: string; required: boolean; value?: { path: string; name: string };
-  onUploaded: (k: DocKey, v: { path: string; name: string }) => Promise<void>;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const upload = async (file: File | undefined) => {
-    if (!file) return;
-    setErr('');
-    if (file.size > MAX_DOC_MB * 1024 * 1024) { setErr(`El archivo pesa más de ${MAX_DOC_MB} MB.`); return; }
-    if (!(file.type.startsWith('image/') || file.type === 'application/pdf')) { setErr('Sube una foto o un PDF.'); return; }
-    setBusy(true);
-    try {
-      const { storage, st } = await fb();
-      const ext = (file.name.split('.').pop() || (file.type === 'application/pdf' ? 'pdf' : 'jpg')).toLowerCase().slice(0, 5);
-      const path = `providers/${uid}/${spec.key}-${Date.now()}.${ext}`;
-      await st.uploadBytes(st.ref(storage, path), file, { contentType: file.type });
-      await onUploaded(spec.key, { path, name: file.name.slice(0, 120) });
-    } catch {
-      setErr('No se pudo subir. Revisa tu conexión e inténtalo de nuevo.');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className={`doc-row ${value ? 'done' : ''}`}>
-      <div className="stack gap-4" style={{ flex: 1, minWidth: 0 }}>
-        <strong style={{ fontSize: 15 }}>{spec.label} {required ? <span className="req">obligatorio</span> : <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>(opcional)</span>}</strong>
-        <span className="muted" style={{ fontSize: 13 }}>{value ? `✓ ${value.name}` : spec.help}</span>
-        {err && <span className="form-error" style={{ fontSize: 13 }}>{err}</span>}
-      </div>
-      <label className={`btn ${value ? 'btn-ghost' : 'btn-primary'} doc-btn`} aria-busy={busy}>
-        {busy ? 'Subiendo…' : value ? 'Cambiar' : spec.selfie ? 'Tomar foto' : 'Subir'}
-        <input type="file" accept={spec.accept} {...(spec.selfie ? { capture: 'user' as const } : {})} disabled={busy}
-          onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
-      </label>
-    </div>
   );
 }
 
