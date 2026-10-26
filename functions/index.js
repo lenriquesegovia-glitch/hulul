@@ -14,6 +14,7 @@ import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebas
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { initializeApp } from 'firebase-admin/app';
+import { getStorage } from 'firebase-admin/storage';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import { logger } from 'firebase-functions';
@@ -26,6 +27,7 @@ import { normalizeRankingBooking } from './home-ranking.js';
 import { hasProfanity, maskProfanity, PROFANITY_MESSAGE } from './profanity.js';
 import { safeMessage } from './mail-safety.js';
 import { CLAIM_STATUS, CLIENT_KINDS, PRO_KINDS, RESOLVE_HOURS, RESPONSE_HOURS, REMIND_BEFORE_HOURS, claimBlocked, cleanClaimPhotos, decisionPatch, deadlines, dueActions, isAdminToken, maskContact, responseStats, timeline } from './reclamos-core.js';
+import { MAX_FILE_BYTES, PRO_UID, REVIEW_LIST_STATUSES, maskBank, providerFiles, reviewMessage, reviewPatch } from './pro-review.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
 
 /** Debe coincidir con la ubicación de la base de datos Firestore. */
@@ -518,8 +520,9 @@ export function providerEmails(p, uid, { from, notifyTo }) {
     ['Efectivo', p.acceptsCash ? 'Acepta' : 'No'],
     ['Documentos', esc(Object.keys(p.docs ?? {}).join(', '))],
   ]) +
-    `<p style="font-size:13px;color:#6B6560;margin-top:12px">Para aprobar: en Firestore cambia <b>status</b> a <b>aprobado</b> (o <b>observado</b> si hay que corregir algo). Al aprobar, se aprueban todas las categorías en revisión; si alguna no la demostró, antes cambia <b>catStatus.&lt;categoría&gt;</b> a <b>rechazado</b> u <b>observado</b>. Los documentos están en Storage, carpeta providers/${esc(uid)}.</p>` +
-    button(`https://console.firebase.google.com/project/${PROJECT}/firestore/databases/-default-/data/~2Fproviders~2F${uid}`, 'Revisar en Firebase') +
+    `<p style="font-size:13px;color:#6B6560;margin-top:12px">Revísalo en el panel: ves sus documentos y lo apruebas, observas (con lo que debe corregir) o rechazas. El profesional recibe el aviso automáticamente.</p>` +
+    button(`https://hululec.com/admin/profesionales?uid=${uid}`, 'Revisar en el panel') +
+    button(`https://console.firebase.google.com/project/${PROJECT}/firestore/databases/-default-/data/~2Fproviders~2F${uid}`, 'Abrir en Firebase', '#536260') +
     button(`https://console.firebase.google.com/project/${PROJECT}/storage/hulul-59081.firebasestorage.app/files/~2Fproviders~2F${uid}`, 'Ver documentos', '#9A5B34') +
     button(`https://wa.me/${waNumber(p.phone)}?text=${encodeURIComponent(waText)}`, 'WhatsApp', '#1F7A4A');
   const out = [{ from, to: notifyTo, replyTo: p.email || undefined, subject: `Registro de profesional por revisar: ${name}`, html: layout('Nuevo profesional por revisar', admin) }];
@@ -527,7 +530,7 @@ export function providerEmails(p, uid, { from, notifyTo }) {
     out.push({
       from, to: p.email, replyTo: notifyTo,
       subject: 'Recibimos tu registro en HULUL',
-      html: layout('Tu registro está en revisión', `<p style="font-size:15px">Hola ${esc(firstName)}, recibimos tus datos y documentos. Los revisamos en 1 a 3 días hábiles y te escribimos por WhatsApp y correo con el resultado.</p>`),
+      html: layout('Tu registro está en revisión', `<p style="font-size:15px">Hola ${esc(firstName)}, recibimos tus datos y documentos. Los revisamos en 1 a 3 días hábiles y te avisamos por correo y en la app con el resultado.</p>`),
     });
   }
   return out;
@@ -2113,3 +2116,122 @@ export const resumenCliente = onCall({region:REGION}, async req => {
  const aggregate=booking.clientId ? (await db().doc('clientRatings/'+booking.clientId).get()).data() : null;
  return clientSummary(booking,aggregate);
 });
+
+
+/* ------------------------- Panel de profesionales ------------------------- */
+// /admin/profesionales: HULUL revisa cada registro con sus documentos y lo
+// aprueba, observa (con lo que debe corregir) o rechaza. Mismo acceso que el
+// panel de reclamos (ADMIN_EMAILS). Cada decisión queda en providers/{uid}/revisiones.
+
+const millis = (t) => (t?.toMillis?.() ?? (typeof t === 'number' ? t : null));
+
+/** Panel: registros por estado (en revisión, observados, aprobados…). */
+export const adminProfesionales = onCall({ region: REGION }, async (req) => {
+  requireAdmin(req);
+  const status = REVIEW_LIST_STATUSES.includes(req.data?.status) ? req.data.status : 'en_revision';
+  const snap = await db().collection('providers').where('status', '==', status).limit(300).get();
+  const items = snap.docs.map((d) => {
+    const p = d.data();
+    const name = p.kind === 'empresa' ? `${p.businessName ?? ''} (${p.firstName ?? ''} ${p.lastName ?? ''})` : `${p.firstName ?? ''} ${p.lastName ?? ''}`;
+    return {
+      uid: d.id, name: name.trim(), kind: p.kind ?? 'persona', email: p.email ?? '', phone: p.phone ?? '',
+      categories: p.categories ?? [], catStatus: p.catStatus ?? {}, proposals: (p.proposals ?? []).map((x) => x?.name).filter(Boolean),
+      cities: p.cities ?? [], docs: Object.keys(p.docs ?? {}).length, status: p.status,
+      submittedAt: millis(p.submittedAt) ?? millis(p.updatedAt), reviewedAt: millis(p.reviewedAt), reviewNote: p.reviewNote ?? '',
+    };
+  });
+  items.sort((a, b) => (b.submittedAt ?? 0) - (a.submittedAt ?? 0));
+  return { items };
+});
+
+/** Panel: registro completo, con la lista de archivos y la cuenta bancaria tapada. */
+export const adminProfesional = onCall({ region: REGION }, async (req) => {
+  const admin = requireAdmin(req);
+  const uid = String(req.data?.uid ?? '');
+  if (!PRO_UID.test(uid)) throw new HttpsError('invalid-argument', 'Profesional no válido.');
+  const [ps, bs, hist] = await Promise.all([
+    db().doc(`providers/${uid}`).get(), db().doc(`providers/${uid}/private/banco`).get(),
+    db().collection(`providers/${uid}/revisiones`).orderBy('at', 'desc').limit(20).get(),
+  ]);
+  if (!ps.exists) throw new HttpsError('not-found', 'No encontramos ese profesional.');
+  const p = ps.data();
+  const dup = p.cedula ? await db().collection('providers').where('cedula', '==', p.cedula).limit(5).get() : null;
+  logger.info('Panel: registro abierto', { uid, by: admin.email });
+  return {
+    uid,
+    provider: {
+      status: p.status, kind: p.kind, firstName: p.firstName, lastName: p.lastName, businessName: p.businessName ?? '', cedula: p.cedula, ruc: p.ruc,
+      phone: p.phone, email: p.email, years: p.years ?? 0, bio: p.bio ?? '', categories: p.categories ?? [], services: p.services ?? {},
+      visitRates: p.visitRates ?? {}, catEvidence: p.catEvidence ?? {}, catStatus: p.catStatus ?? {}, proposals: p.proposals ?? [],
+      cities: p.cities ?? [], days: p.days ?? [], from: p.from ?? '', to: p.to ?? '', acceptsCash: !!p.acceptsCash,
+      offHours: p.offHours ?? [], holidays: !!p.holidays, surcharges: p.surcharges ?? {}, taxRegime: p.taxRegime ?? '', eSignature: !!p.eSignature,
+      submittedAt: millis(p.submittedAt), reviewNote: p.reviewNote ?? '', reviewedBy: p.reviewedBy ?? '', reviewedAt: millis(p.reviewedAt),
+    },
+    bank: maskBank(bs.exists ? bs.data() : null),
+    files: providerFiles(p, uid),
+    duplicates: dup ? dup.docs.map((d) => d.id).filter((x) => x !== uid) : [],
+    history: hist.docs.map((d) => ({ ...d.data(), at: millis(d.data().at) })),
+  };
+});
+
+/** Panel: un archivo del registro (foto o PDF), en base64. Solo de la carpeta de ese profesional. */
+export const adminArchivoProfesional = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
+  requireAdmin(req);
+  const uid = String(req.data?.uid ?? '');
+  const path = String(req.data?.path ?? '');
+  if (!PRO_UID.test(uid) || !path.startsWith(`providers/${uid}/`) || path.includes('..')) throw new HttpsError('invalid-argument', 'Archivo no válido.');
+  const file = getStorage().bucket().file(path);
+  const [exists] = await file.exists();
+  if (!exists) throw new HttpsError('not-found', 'El archivo ya no existe.');
+  const [meta] = await file.getMetadata();
+  if (Number(meta.size) > MAX_FILE_BYTES) throw new HttpsError('failed-precondition', 'El archivo es muy grande para verlo aquí. Ábrelo desde la consola de Firebase.');
+  const [buf] = await file.download();
+  return { contentType: meta.contentType || 'application/octet-stream', data: buf.toString('base64') };
+});
+
+/** Panel: aprobar, observar (con lo que debe corregir) o rechazar. El aviso al profesional sale solo. */
+export const decidirProfesional = onCall({ region: REGION }, async (req) => {
+  const admin = requireAdmin(req);
+  const uid = String(req.data?.uid ?? '');
+  if (!PRO_UID.test(uid)) throw new HttpsError('invalid-argument', 'Profesional no válido.');
+  const ref = db().doc(`providers/${uid}`);
+  const out = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const r = reviewPatch(req.data, snap.exists ? snap.data() : null);
+    if (r.error) throw new HttpsError('failed-precondition', r.error);
+    tx.update(ref, { ...r.patch, reviewedAt: FieldValue.serverTimestamp(), reviewedBy: admin.email });
+    tx.set(ref.collection('revisiones').doc(), { decision: r.patch.status, note: r.patch.reviewNote, catStatus: r.patch.catStatus, by: admin.email, at: FieldValue.serverTimestamp() });
+    return r.patch;
+  });
+  logger.info('Panel: decisión de registro', { uid, decision: out.status, by: admin.email });
+  return { ok: true, status: out.status };
+});
+
+/**
+ * Aviso automático al profesional cuando su registro pasa a observado o
+ * rechazado (desde el panel o desde la consola de Firebase), con el motivo.
+ * Al aprobar, el correo lo envía directorioProfesionales; aquí va la notificación.
+ */
+export const avisoRevisionProfesional = onDocumentUpdated(
+  { document: 'providers/{uid}', region: REGION, secrets: [MAIL_PASSWORD] },
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after || before?.status === after.status || !['aprobado', 'observado', 'rechazado'].includes(after.status)) return;
+    const uid = event.params.uid;
+    const note = String(after.reviewNote ?? '').trim();
+    const m = reviewMessage(after.status, after.firstName, note || (after.status === 'aprobado' ? '' : 'Escríbenos respondiendo este correo y te contamos el detalle.'));
+    await pushTo(uid, m.push[0], m.push[1], { url: after.status === 'aprobado' ? AGENDA : 'https://hululec.com/profesionales/registro', to: 'pro' }).catch(() => {});
+    if (after.status === 'aprobado' || !after.email) return; // El correo de aprobado ya sale en directorioProfesionales.
+    try {
+      const { from, notifyTo } = senders();
+      await transport().sendMail({
+        from, to: after.email, replyTo: notifyTo, subject: m.subject,
+        html: layout(m.title, `<p style="font-size:15px">${esc(m.text)}</p>` + (after.status === 'observado' ? button('https://hululec.com/profesionales/registro', 'Corregir mi registro') : '')),
+      });
+      logger.info('Aviso de revisión enviado', { uid, status: after.status });
+    } catch (e) {
+      logger.warn('No se pudo enviar el aviso de revisión', { uid, e: String(e) });
+    }
+  },
+);

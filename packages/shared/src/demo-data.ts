@@ -1,5 +1,6 @@
 import type { CategorySlug } from './categories';
 import { cities } from './cities';
+import { serviceCity } from './locations';
 import type { Professional } from './models';
 import { CATEGORY_PRICING, clampRate } from './provider';
 import { regimeOf, type TaxRegime } from './tax';
@@ -59,7 +60,7 @@ export function toProfessional(p: PublicPro, category?: CategorySlug): Professio
     categories: p.categories,
     services: p.services?.[cat] ?? [],
     cities: p.cities,
-    zone: p.cities.map((c) => cities.find((x) => x.slug === c)?.name ?? c).join(' · '),
+    zone: p.cities.map((c) => cities.find((x) => x.slug === c)?.name ?? serviceCity(c)?.name ?? c).join(' · '),
     bio: p.bio,
     years: p.years,
     // Fichas publicadas antes del precio por visita (18-oct-2026): tarifa sugerida.

@@ -165,6 +165,7 @@ service cloud.firestore {
         'phone', 'email', 'categories', 'services', 'rates', 'minHours', 'visitRates', 'catEvidence', 'proposals', 'catStatus', 'strikes', 'tester', 'cashDebt', 'fines', 'years', 'bio',
         'cities', 'days', 'from', 'to', 'acceptsCash', 'docs', 'offHours', 'holidays', 'surcharges',
         'taxRegime', 'eSignature', 'mandateAccepted', 'payoutBalance',
+        'reviewNote', 'reviewedAt', 'reviewedBy',
         'consentPrivacy', 'privacyVersion', 'termsAccepted', 'submittedAt', 'createdAt', 'updatedAt']);
     }
 
@@ -198,7 +199,7 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null && request.auth.uid == uid
         && providerOk(uid, request.resource.data)
-        && !('catStatus' in request.resource.data) && !('strikes' in request.resource.data) && !('tester' in request.resource.data) && !('cashDebt' in request.resource.data) && !('fines' in request.resource.data) && !('payoutBalance' in request.resource.data)
+        && !('catStatus' in request.resource.data) && !('reviewNote' in request.resource.data) && !('strikes' in request.resource.data) && !('tester' in request.resource.data) && !('cashDebt' in request.resource.data) && !('fines' in request.resource.data) && !('payoutBalance' in request.resource.data)
         && !('strikeLog' in request.resource.data) && !('suspendedUntil' in request.resource.data) && !('strikesResetAt' in request.resource.data) && !('ratingCheckAt' in request.resource.data)
         && request.resource.data.status == 'borrador'
         && request.resource.data.createdAt == request.time;
@@ -207,6 +208,10 @@ service cloud.firestore {
         && resource.data.status in ['borrador', 'en_revision', 'observado']
         && providerOk(uid, request.resource.data)
         && request.resource.data.get('catStatus', null) == resource.data.get('catStatus', null)
+        // La nota de revisión la escribe solo HULUL (panel o consola).
+        && request.resource.data.get('reviewNote', null) == resource.data.get('reviewNote', null)
+        && request.resource.data.get('reviewedAt', null) == resource.data.get('reviewedAt', null)
+        && request.resource.data.get('reviewedBy', null) == resource.data.get('reviewedBy', null)
         && request.resource.data.get('strikes', null) == resource.data.get('strikes', null)
         && request.resource.data.get('tester', null) == resource.data.get('tester', null)
         && request.resource.data.get('cashDebt', null) == resource.data.get('cashDebt', null)

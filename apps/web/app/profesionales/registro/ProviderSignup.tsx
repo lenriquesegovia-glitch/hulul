@@ -7,7 +7,7 @@ import {
   BANKS_EC,
   categories,
   CATEGORY_REVIEW_LABEL,
-  cities,
+  serviceCity,
   e164Ecuador,
   evidenceProblem,
   getCategory,
@@ -41,6 +41,7 @@ import { logout, useUser } from '@/lib/auth';
 import { SignIn } from '@/components/SignIn';
 import { EvidenceEditor, Field, RateField, rateProblem, ServicesPicker } from './ServiceBits';
 import { ProposalsEditor } from './Proposals';
+import { CityMultiPicker } from './CityMultiPicker';
 import { ServiceManager } from './ServiceManager';
 import { OffHoursEditor } from './OffHoursEditor';
 
@@ -102,7 +103,6 @@ const EMPTY: Draft = {
 const EMPTY_BANK: Bank = { bank: '', type: 'ahorros', number: '', holder: '', holderId: '' };
 
 const HOURS = Array.from({ length: 16 }, (_, i) => `${String(6 + i).padStart(2, '0')}:00`);
-const ACTIVE_CITIES = cities.filter((c) => c.activa);
 
 const STEPS = ['Tus datos', 'Servicios', 'Zonas y horario', 'Documentos', 'Cobros', 'Enviar'];
 
@@ -137,6 +137,7 @@ function Wizard({ user }: { user: User }) {
   const [loaded, setLoaded] = useState(false);
   const [exists, setExists] = useState(false);
   const [status, setStatus] = useState<ProviderStatus>('borrador');
+  const [reviewNote, setReviewNote] = useState('');
   const [catStatus, setCatStatus] = useState<Partial<Record<CategorySlug, CategoryReview>> | undefined>();
   const [editing, setEditing] = useState(false);
   const [d, setD] = useState<Draft>(EMPTY);
@@ -158,6 +159,7 @@ function Wizard({ user }: { user: User }) {
         const data = snap.data();
         setExists(true);
         setStatus(data.status ?? 'borrador');
+        setReviewNote(typeof data.reviewNote === 'string' ? data.reviewNote : '');
         setCatStatus(data.catStatus);
         setD({ ...EMPTY, ...pick(data) });
         setStep(Math.min(Number(data.step ?? 0), STEPS.length - 1));
@@ -255,7 +257,7 @@ function Wizard({ user }: { user: User }) {
   if (!editing && (status === 'en_revision' || status === 'aprobado' || status === 'rechazado' || status === 'suspendido')) {
     return (
       <div className="stack gap-24">
-        <StatusCard status={status} name={d.firstName} user={user} onEdit={status === 'en_revision' ? () => { setEditing(true); setStep(0); } : undefined} />
+        <StatusCard status={status} name={d.firstName} user={user} note={reviewNote} onEdit={status === 'en_revision' ? () => { setEditing(true); setStep(0); } : undefined} />
         {status === 'aprobado' && <ServiceManager uid={user.uid} />}
       </div>
     );
@@ -268,7 +270,7 @@ function Wizard({ user }: { user: User }) {
         <button type="button" className="link-btn" onClick={logout}>Cerrar sesión</button>
       </div>
       {status === 'observado' && (
-        <p className="notice"><strong>Revisamos tu registro y hay algo por corregir.</strong> Te escribimos por WhatsApp con el detalle. Corrígelo y vuelve a enviarlo.</p>
+        <p className="notice"><strong>Revisamos tu registro y hay algo por corregir.</strong> {reviewNote || 'Te escribimos por correo con el detalle.'} Corrígelo y vuelve a enviarlo.</p>
       )}
       {catStatus && d.categories.some((c) => catStatus[c] === 'observado' || catStatus[c] === 'rechazado') && (
         <p className="notice">
@@ -489,12 +491,7 @@ function StepZones({ d, set }: { d: Draft; set: SetField }) {
     <section className="stack gap-16">
       <h2 className="fs-title">3. ¿Dónde y cuándo trabajas?</h2>
       <span className="field-label">Ciudades</span>
-      <div className="tag-row">
-        {ACTIVE_CITIES.map((c) => {
-          const on = d.cities.includes(c.slug);
-          return <button key={c.slug} type="button" aria-pressed={on} className={`tag ${on ? 'on' : ''}`} onClick={() => set('cities', toggle(d.cities, c.slug))}>{on && '✓ '}{c.name}</button>;
-        })}
-      </div>
+      <CityMultiPicker value={d.cities} onChange={(v) => set('cities', v)} />
       <span className="field-label">Días</span>
       <div className="tag-row">
         {[1, 2, 3, 4, 5, 6, 0].map((i) => {
@@ -621,7 +618,7 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
         <Row k="Celular" v={d.phone} />
         <Row k="Servicios" v={d.categories.map((x) => `${getCategory(x)?.name} ($${d.visitRates[x]} por visita)`).join(' · ') || '—'} />
         {d.proposals.length > 0 && <Row k="Actividades nuevas (en revisión)" v={d.proposals.map((p) => `${p.name} ($${p.rate} por visita)`).join(' · ')} />}
-        <Row k="Ciudades" v={d.cities.map((x) => cities.find((y) => y.slug === x)?.name).join(', ')} />
+        <Row k="Ciudades" v={d.cities.map((x) => serviceCity(x)?.name ?? x).join(', ')} />
         <Row k="Horario" v={`${d.days.map((i) => WEEKDAY_NAMES[i].slice(0, 3)).join(' ')} · ${d.from} a ${d.to}`} />
         <Row k="Fuera de horario" v={d.offHours.length ? `${[...d.offHours].sort((a, b) => ((a + 6) % 24) - ((b + 6) % 24)).map((h) => `${String(h).padStart(2, '0')}:00`).join(' ')} · tarifa completa $${d.surcharges.nocturno ?? 0}` : 'No'} />
         <Row k="Feriados" v={d.holidays ? `Sí · tarifa completa $${d.surcharges.feriado ?? 0}` : 'No'} />
@@ -655,11 +652,11 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
 
 /* ---------------------------- Estado ---------------------------- */
 
-function StatusCard({ status, name, user, onEdit }: { status: ProviderStatus; name: string; user: User; onEdit?: () => void }) {
+function StatusCard({ status, name, user, note, onEdit }: { status: ProviderStatus; name: string; user: User; note?: string; onEdit?: () => void }) {
   const info: Record<string, { t: string; d: string; ok?: boolean }> = {
-    en_revision: { t: `¡Listo${name ? `, ${name}` : ''}! Tu registro está en revisión`, d: 'Revisamos tus datos y documentos en 1 a 3 días hábiles. Te escribiremos por WhatsApp y correo con el resultado.', ok: true },
+    en_revision: { t: `¡Listo${name ? `, ${name}` : ''}! Tu registro está en revisión`, d: 'Revisamos tus datos y documentos en 1 a 3 días hábiles. Te avisaremos por correo y en la app con el resultado.', ok: true },
     aprobado: { t: '¡Ya estás en HULUL!', d: 'Tu perfil está publicado y los clientes pueden reservarte. En tu agenda aceptas las reservas, ves direcciones y marcas “Voy en camino”.', ok: true },
-    rechazado: { t: 'No pudimos aprobar tu registro', d: 'Te escribimos por correo con el motivo. Si crees que es un error, contáctanos.' },
+    rechazado: { t: 'No pudimos aprobar tu registro', d: note ? `Motivo: ${note} Si crees que es un error, responde el correo que te enviamos.` : 'Te escribimos por correo con el motivo. Si crees que es un error, contáctanos.' },
     suspendido: { t: 'Tu cuenta está suspendida', d: 'Te escribimos por correo con el motivo y los pasos para reactivarla.' },
   };
   const s = info[status];
@@ -704,7 +701,7 @@ function bioTemplates(d: Draft): { label: string; text: string }[] {
   const jobsText = jobs.length ? jobs.join(', ') : areas;
   const years = d.years ? `${d.years} años` : 'varios años';
   const name = d.kind === 'empresa' ? d.businessName || 'nuestra empresa' : d.firstName || '';
-  const cityText = d.cities.length ? d.cities.map((x) => cities.find((y) => y.slug === x)?.name).join(', ') : 'Guayaquil, Samborondón y Daule';
+  const cityText = d.cities.length ? d.cities.map((x) => serviceCity(x)?.name ?? x).join(', ') : 'Guayaquil, Samborondón y Daule';
   if (d.kind === 'empresa') {
     return [
       { label: 'Empresa con experiencia', text: `Somos ${name}, un equipo dedicado a ${areas} con ${years} de experiencia. Hacemos ${jobsText}. Trabajamos con personal propio y herramientas profesionales.` },

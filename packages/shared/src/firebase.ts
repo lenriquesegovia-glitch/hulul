@@ -779,3 +779,47 @@ export function watchInbox(uid:string,onData:(items:InboxItem[])=>void,onError:(
  return onSnapshot(query(collection(firestore(),'inboxes',uid,'items'),orderBy('createdAt','desc'),limit(100)),snap=>onData(snap.docs.map(d=>({id:d.id,...d.data()} as InboxItem))),onError);
 }
 export async function readInboxItem(uid:string,id:string) {await updateDoc(doc(firestore(),'inboxes',uid,'items',id),{read:true});}
+
+/* ------------------------- Panel de profesionales ------------------------- */
+
+export type ProReviewStatus = 'en_revision' | 'observado' | 'aprobado' | 'rechazado' | 'borrador';
+export type ProReviewDecision = 'aprobado' | 'observado' | 'rechazado';
+
+export interface ProListItem {
+  uid: string; name: string; kind: string; email: string; phone: string;
+  categories: string[]; catStatus: Record<string, string>; proposals: string[]; cities: string[];
+  docs: number; status: ProReviewStatus; submittedAt: number | null; reviewedAt: number | null; reviewNote: string;
+}
+
+export interface ProFile {
+  uid: string;
+  provider: {
+    status: ProReviewStatus; kind: string; firstName: string; lastName: string; businessName: string; cedula: string; ruc: string;
+    phone: string; email: string; years: number; bio: string; categories: string[]; services: Record<string, string[]>;
+    visitRates: Record<string, number>; catEvidence: Record<string, { kind: string; note: string; reference?: string; files: string[] }>;
+    catStatus: Record<string, string>; proposals: { id: string; name: string; services: string[]; rate?: number; note: string }[];
+    cities: string[]; days: number[]; from: string; to: string; acceptsCash: boolean; offHours: number[]; holidays: boolean;
+    surcharges: { nocturno?: number; feriado?: number }; taxRegime: string; eSignature: boolean;
+    submittedAt: number | null; reviewNote: string; reviewedBy: string; reviewedAt: number | null;
+  };
+  bank: { bank: string; type: string; number: string; holder: string; holderId: string } | null;
+  files: { label: string; path: string; name: string }[];
+  duplicates: string[];
+  history: { decision: string; note: string; by: string; at: number | null }[];
+}
+
+export async function adminListPros(status: ProReviewStatus): Promise<ProListItem[]> {
+  return (await callable<{ status: ProReviewStatus }, { items: ProListItem[] }>('adminProfesionales')({ status })).data.items;
+}
+
+export async function adminGetPro(uid: string): Promise<ProFile> {
+  return (await callable<{ uid: string }, ProFile>('adminProfesional')({ uid })).data;
+}
+
+export async function adminProFile(uid: string, path: string): Promise<{ contentType: string; data: string }> {
+  return (await callable<{ uid: string; path: string }, { contentType: string; data: string }>('adminArchivoProfesional')({ uid, path })).data;
+}
+
+export async function adminDecidePro(uid: string, decision: ProReviewDecision, note: string, catStatus: Record<string, string>): Promise<void> {
+  await callable<{ uid: string; decision: ProReviewDecision; note: string; catStatus: Record<string, string> }, { ok: boolean }>('decidirProfesional')({ uid, decision, note, catStatus });
+}
