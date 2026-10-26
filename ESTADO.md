@@ -1,7 +1,13 @@
 # HULUL — Estado y registro de entregas
 
-## En PR — Tablero de administración (/admin), 26 de octubre de 2026 (Claude)
-- PR #10 (rama `claude/tablero-admin`), verificar ✅ (run 40370799975). **Falta integrar a main y publicar backend + web** ("Publicar HULUL" con `backend=true`, `android=false`): la app no cambia.
+## En PR — Roles del panel (/admin/equipo), 26 de octubre de 2026 (Claude)
+- Rama `claude/roles-panel`. Roles: **Dueño** (correos de ADMIN_EMAILS: todo + equipo), **Socio** (todo menos equipo), **Contabilidad** (Resumen, Contabilidad, Proveedores; marca liquidaciones pagadas), **Oficial de cumplimiento (UAFE)** (solo lectura: reservas, clientes, proveedores, contabilidad y Cumplimiento; sin reclamos ni chats).
+- Se dan y quitan en hululec.com/admin/equipo (solo dueño): `adminRoles/{correo}` (solo servidor), funciones `adminEquipo`, `adminGuardarRol` (envía correo con el enlace), `adminQuitarRol`; cada cambio en `adminAccesos`. Todas las funciones del panel exigen el permiso de su sección (`functions/roles-core.js`, igual a `ROLE_PERMS` en `packages/shared/src/dashboard.ts`).
+- Nueva sección **Cumplimiento (UAFE)**: alertas (operación ≥ $1.000; cliente ≥ $5.000 / $10.000 al mes; efectivo ≥ $2.000 al mes; 5+ servicios en 7 días con el mismo profesional; profesional > $10.000 liquidados al mes) y registro de operaciones exportable. Umbrales de referencia en `COMPLIANCE_LIMITS`, por confirmar con la oficial.
+- Publicar con backend (funciones y reglas). El PR #10 (tablero) ya está en main y también necesita el backend publicado.
+
+## Integrado — Tablero de administración (/admin), 26 de octubre de 2026 (Claude)
+- PR #10 integrado a main por Luis, verificar ✅ (run 40370799975). **Falta publicar backend + web** ("Publicar HULUL" con `backend=true`, `android=false`): la app no cambia.
 - `/admin`: Resumen ejecutivo (pastel del 100 % de lo terminado: éxito, atrasado, mal servicio, en reclamo, falla del profesional, cliente ausente, cancelaciones; tasas, clientes reportados, ventas, ingreso HULUL, semanas, categorías, rankings), Reservas (CRM) por etapa en tarjetas / lista / por día con periodos, Clientes, Contabilidad (antes / durante / después, bolsas, libro, liquidaciones con "marcar pagada") y Proveedores (facturado, comisión, saldo, liquidaciones, actividad). Reclamos y Aprobar profesionales quedan en el mismo menú.
 - Funciones nuevas: `adminTablero` (solo ADMIN_EMAILS, contactos enmascarados, acceso en `adminAccesos`) y `marcarLiquidacion`. Lógica en `packages/shared/src/dashboard.ts` y `functions/tablero-core.js`; pruebas en `scripts/check-dashboard.mjs` y `functions/tablero-core.test.js`.
 - Revisión local con datos de muestra: `node scripts/muestra-tablero.mjs` y `NEXT_PUBLIC_ADMIN_MUESTRA=1 npx next dev` en apps/web (solo en desarrollo).

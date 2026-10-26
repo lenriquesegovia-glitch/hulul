@@ -4,7 +4,7 @@ import './admin.css';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { periodRange, type DashData, type DateRange, type PeriodKey } from '@hulul/shared/dashboard';
+import { canDo, complianceAlerts, periodRange, ROLE_INFO, type AdminPerm, type AdminRole, type DashData, type DateRange, type PeriodKey } from '@hulul/shared/dashboard';
 import { SignIn } from '@/components/SignIn';
 import { logout, useUser } from '@/lib/auth';
 
@@ -29,6 +29,9 @@ interface AdminCtx {
   range: DateRange;
   includeTests: boolean;
   setIncludeTests: (v: boolean) => void;
+  /** Rol de quien mira (lo decide el servidor en adminTablero). */
+  role: AdminRole | null;
+  can: (perm: AdminPerm) => boolean;
 }
 
 const Ctx = createContext<AdminCtx | null>(null);
@@ -48,31 +51,42 @@ const I = {
   proveedores: 'M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6',
   reclamos: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z',
   profesionales: 'M9 12l2 2 4-4M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3Z',
+  cumplimiento: 'M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3ZM9 12h6M12 9v6',
+  equipo: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1',
 };
 function Ico({ d }: { d: string }) {
   return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
 }
 
-const NAV: { group: string; items: { href: string; label: string; icon: keyof typeof I; count?: 'claims' | 'pros' }[] }[] = [
+const NAV: { group: string; items: { href: string; label: string; icon: keyof typeof I; perm: AdminPerm; count?: 'claims' | 'pros' | 'alerts' }[] }[] = [
   { group: 'Gestión', items: [
-    { href: '/admin', label: 'Resumen ejecutivo', icon: 'resumen' },
-    { href: '/admin/reservas', label: 'Reservas (CRM)', icon: 'reservas' },
-    { href: '/admin/clientes', label: 'Clientes', icon: 'clientes' },
+    { href: '/admin', label: 'Resumen ejecutivo', icon: 'resumen', perm: 'tablero' },
+    { href: '/admin/reservas', label: 'Reservas (CRM)', icon: 'reservas', perm: 'reservas' },
+    { href: '/admin/clientes', label: 'Clientes', icon: 'clientes', perm: 'clientes' },
   ] },
   { group: 'Finanzas', items: [
-    { href: '/admin/contabilidad', label: 'Contabilidad', icon: 'contabilidad' },
-    { href: '/admin/proveedores', label: 'Proveedores', icon: 'proveedores' },
+    { href: '/admin/contabilidad', label: 'Contabilidad', icon: 'contabilidad', perm: 'contabilidad' },
+    { href: '/admin/proveedores', label: 'Proveedores', icon: 'proveedores', perm: 'proveedores' },
   ] },
   { group: 'Control', items: [
-    { href: '/admin/reclamos', label: 'Reclamos', icon: 'reclamos', count: 'claims' },
-    { href: '/admin/profesionales', label: 'Aprobar profesionales', icon: 'profesionales', count: 'pros' },
+    { href: '/admin/cumplimiento', label: 'Cumplimiento (UAFE)', icon: 'cumplimiento', perm: 'cumplimiento', count: 'alerts' },
+    { href: '/admin/reclamos', label: 'Reclamos', icon: 'reclamos', perm: 'reclamos', count: 'claims' },
+    { href: '/admin/profesionales', label: 'Aprobar profesionales', icon: 'profesionales', perm: 'profesionales', count: 'pros' },
+    { href: '/admin/equipo', label: 'Equipo y roles', icon: 'equipo', perm: 'equipo' },
   ] },
 ];
+
+/** Permiso que exige cada ruta del panel. */
+const permOfPath = (path: string): AdminPerm => {
+  const item = NAV.flatMap((g) => g.items).filter((i) => i.href !== '/admin').find((i) => path.startsWith(i.href));
+  return item?.perm ?? 'tablero';
+};
 
 /** Solo en `next dev` con NEXT_PUBLIC_ADMIN_MUESTRA=1: datos de muestra sin iniciar sesión (no existe en producción). */
 const MUESTRA = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_ADMIN_MUESTRA === '1';
 
 const MUESTRA_USER = { email: 'muestra@hululec.com' };
+const MUESTRA_ROL = (process.env.NEXT_PUBLIC_ADMIN_ROL || 'dueno') as AdminRole;
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const realUser = useUser();
@@ -105,7 +119,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     setLoading(true); setError('');
     try {
       const d: DashData = MUESTRA
-        ? await (await fetch('/muestra-tablero.json')).json()
+        ? { ...(await (await fetch('/muestra-tablero.json')).json()), viewer: { email: 'muestra@hululec.com', role: MUESTRA_ROL } }
         : await (await import('@hulul/shared/firebase')).adminDashboard(want ? { desde: want.from, hasta: want.to } : undefined);
       setData(d);
       setNow(MUESTRA ? d.generatedAt : Date.now());
@@ -148,9 +162,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const counts = useMemo(() => ({
     claims: data?.claims.filter((c) => c.status !== 'resuelto').length ?? 0,
     pros: data?.providers.filter((p) => p.status === 'en_revision').length ?? 0,
-  }), [data]);
+    alerts: data && canDo(data.viewer?.role, 'cumplimiento') ? complianceAlerts(data, periodRange('ultimos_30', now)).filter((a) => a.level === 'alta').length : 0,
+  }), [data, now]);
 
-  const ctx: AdminCtx = { data, view, loading, error, reload: () => load(data?.range ? { from: data.range.from, to: data.range.to } : undefined), now, period, setPeriod, custom, setCustom, range, includeTests, setIncludeTests };
+  const role = data?.viewer?.role ?? null;
+  const can = useCallback((perm: AdminPerm) => canDo(role, perm), [role]);
+  const ctx: AdminCtx = { data, view, loading, error, reload: () => load(data?.range ? { from: data.range.from, to: data.range.to } : undefined), now, period, setPeriod, custom, setCustom, range, includeTests, setIncludeTests, role, can };
 
   if (user === undefined) return <div className="adm"><div /><main className="adm-main"><div className="adm-skel" /></main></div>;
   if (!user) {
@@ -163,6 +180,23 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Sin rol: el servidor rechazó el acceso.
+  if (!data && error && /acceso|rol|autorizad|verificado/i.test(error)) {
+    return (
+      <div className="adm" style={{ gridTemplateColumns: '1fr' }}>
+        <main className="adm-main" style={{ maxWidth: 520, margin: '40px auto' }}>
+          <div className="adm-card adm-grid" style={{ gap: 12 }}>
+            <h1 style={{ margin: 0, fontSize: 22 }}>Sin acceso al panel</h1>
+            <p style={{ margin: 0 }}>{error}</p>
+            <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>Entraste como <b>{user.email}</b>. Si te dieron acceso con otro correo, sal y entra con ese.</p>
+            <button type="button" className="adm-btn solid" style={{ justifySelf: 'start' }} onClick={() => logout()}>Salir</button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const allowed = !role || can(permOfPath(path));
   const active = (href: string) => (href === '/admin' ? path === '/admin' : path.startsWith(href));
 
   return (
@@ -180,7 +214,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#fff" /><path d="M9 23V12m14 11V12M9 17.5h14M7 12l9-6 9 6" stroke="#0B2F33" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
             <span><b>HULUL</b><small>Administración</small></span>
           </Link>
-          {NAV.map((g) => (
+          {NAV.map((g) => ({ ...g, items: g.items.filter((it) => !role || can(it.perm)) })).filter((g) => g.items.length > 0).map((g) => (
             <nav key={g.group} aria-label={g.group} style={{ display: 'grid', gap: 2 }}>
               <div className="adm-group">{g.group}</div>
               {g.items.map((it) => (
@@ -193,11 +227,20 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           ))}
           <div className="adm-side-foot">
             <span>{user.email}</span>
+            {role && <span className="adm-role">{ROLE_INFO[role].label}</span>}
             <Link href="/" style={{ color: '#fff', fontWeight: 700, textDecoration: 'none' }}>Ver hululec.com</Link>
             <button type="button" onClick={() => logout()}>Salir</button>
           </div>
         </aside>
-        <main className="adm-main">{children}</main>
+        <main className="adm-main">
+          {allowed ? children : (
+            <div className="adm-card adm-grid" style={{ gap: 10, maxWidth: 560 }}>
+              <h1 style={{ margin: 0, fontSize: 22 }}>Esta sección no es para tu rol</h1>
+              <p style={{ margin: 0 }}>Tu rol es <b>{role ? ROLE_INFO[role].label : '—'}</b>: {role ? ROLE_INFO[role].help : ''}</p>
+              <Link className="adm-btn" style={{ justifySelf: 'start' }} href="/admin">Ir al resumen</Link>
+            </div>
+          )}
+        </main>
       </div>
     </Ctx.Provider>
   );

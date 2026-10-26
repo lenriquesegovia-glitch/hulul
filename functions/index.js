@@ -30,6 +30,7 @@ import { safeMessage } from './mail-safety.js';
 import { CLAIM_STATUS, CLIENT_KINDS, PRO_KINDS, RESOLVE_HOURS, RESPONSE_HOURS, REMIND_BEFORE_HOURS, claimBlocked, cleanClaimPhotos, decisionPatch, deadlines, dueActions, isAdminToken, maskContact, responseStats, timeline } from './reclamos-core.js';
 import { VERIFIED_DOCS, expectOf, submissionCheck, verifySelfie, verifyText } from './doc-verify.js';
 import { MAX_FILE_BYTES, PRO_UID, REVIEW_LIST_STATUSES, maskBank, providerFiles, reviewMessage, reviewPatch } from './pro-review.js';
+import { can, dashForRole, normEmail, roleFor, roleInput } from './roles-core.js';
 import { bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
 
@@ -1734,10 +1735,20 @@ const ADMIN_EMAILS = defineString('ADMIN_EMAILS', { default: '', description: 'C
 const ADMIN_URL = 'https://hululec.com/admin/reclamos';
 const BOOKING_ID = /^[A-Za-z0-9]{10,40}$/;
 
-function requireAdmin(req) {
+/**
+ * Acceso al panel por rol (functions/roles-core.js): dueño = ADMIN_EMAILS; los demás
+ * (socio, contabilidad, cumplimiento) en adminRoles/{correo}. perm = permiso que exige la función.
+ */
+async function requireAdmin(req, perm = 'tablero') {
   if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
-  if (!isAdminToken(req.auth.token, ADMIN_EMAILS.value())) throw new HttpsError('permission-denied', 'No tienes acceso a este panel. Entra con una cuenta autorizada de HULUL.');
-  return { uid: req.auth.uid, email: String(req.auth.token.email).toLowerCase() };
+  const email = normEmail(req.auth.token?.email);
+  if (!email || req.auth.token?.email_verified !== true) throw new HttpsError('permission-denied', 'Entra con un correo verificado (Google u Outlook) autorizado por HULUL.');
+  const owner = isAdminToken(req.auth.token, ADMIN_EMAILS.value());
+  const roleDoc = owner ? null : (await db().doc(`adminRoles/${email}`).get()).data() ?? null;
+  const role = roleFor(req.auth.token, ADMIN_EMAILS.value(), roleDoc);
+  if (!role) throw new HttpsError('permission-denied', 'No tienes acceso a este panel. Pide a HULUL que te dé un rol.');
+  if (!can(role, perm)) throw new HttpsError('permission-denied', 'Tu rol no tiene acceso a esta sección.');
+  return { uid: req.auth.uid, email, role };
 }
 
 const logAccess = (id, admin, action) => db().collection(`reclamos/${id}/accesos`).add({ uid: admin.uid, email: admin.email, action, at: FieldValue.serverTimestamp() });
@@ -1848,7 +1859,7 @@ export const responderReclamo = onCall({ region: REGION, secrets: [MAIL_PASSWORD
 
 /** Panel: lista de reclamos (sin datos de contacto). */
 export const adminReclamos = onCall({ region: REGION }, async (req) => {
-  requireAdmin(req);
+  await requireAdmin(req, 'reclamos');
   const snap = await db().collection('reclamos').orderBy('openedAt', 'desc').limit(200).get();
   return {
     items: snap.docs.map((d) => {
@@ -1864,7 +1875,7 @@ export const adminReclamos = onCall({ region: REGION }, async (req) => {
 
 /** Panel: expediente completo. Cada apertura (y cada vez que se muestra el contacto) queda registrada. */
 export const adminReclamo = onCall({ region: REGION }, async (req) => {
-  const admin = requireAdmin(req);
+  const admin = await requireAdmin(req, 'reclamos');
   const id = String(req.data?.id ?? '');
   const reveal = req.data?.reveal === true;
   if (!BOOKING_ID.test(id)) throw new HttpsError('invalid-argument', 'Reclamo no válido.');
@@ -1916,7 +1927,7 @@ export const adminReclamo = onCall({ region: REGION }, async (req) => {
  * partes), y opcionalmente multa y falta al profesional, crédito y falta al cliente.
  */
 export const resolverReclamo = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, async (req) => {
-  const admin = requireAdmin(req);
+  const admin = await requireAdmin(req, 'reclamos');
   const id = String(req.data?.id ?? '');
   const outcome = String(req.data?.outcome ?? '');
   const note = String(req.data?.note ?? '').trim().slice(0, 1500);
@@ -2145,7 +2156,7 @@ const millis = (t) => (t?.toMillis?.() ?? (typeof t === 'number' ? t : null));
 
 /** Panel: registros por estado (en revisión, observados, aprobados…). */
 export const adminProfesionales = onCall({ region: REGION }, async (req) => {
-  requireAdmin(req);
+  await requireAdmin(req, 'profesionales');
   const status = REVIEW_LIST_STATUSES.includes(req.data?.status) ? req.data.status : 'en_revision';
   const snap = await db().collection('providers').where('status', '==', status).limit(300).get();
   const items = snap.docs.map((d) => {
@@ -2169,7 +2180,7 @@ export const adminProfesionales = onCall({ region: REGION }, async (req) => {
  * el navegador (packages/shared/src/dashboard.ts). Cada consulta queda en adminAccesos.
  */
 export const adminTablero = onCall({ region: REGION, memory: '512MiB', timeoutSeconds: 60 }, async (req) => {
-  const admin = requireAdmin(req);
+  const admin = await requireAdmin(req, 'tablero');
   const now = Date.now();
   const range = dashRange(req.data, now);
   const fromTs = Timestamp.fromMillis(Date.parse(`${range.from}T05:00:00Z`) - 86_400_000);
@@ -2185,22 +2196,76 @@ export const adminTablero = onCall({ region: REGION, memory: '512MiB', timeoutSe
   const claimsById = new Map(cl.docs.map((d) => [d.id, d.data()]));
   const ledger = new Map();
   for (const d of [...lgRange.docs, ...lgPending.docs]) ledger.set(d.id, ledgerRow(d.id, d.data()));
-  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, action: 'tablero', range, at: FieldValue.serverTimestamp() });
-  return {
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, role: admin.role, action: 'tablero', range, at: FieldValue.serverTimestamp() });
+  if (admin.role !== 'dueno') await db().doc(`adminRoles/${admin.email}`).set({ lastSeen: FieldValue.serverTimestamp() }, { merge: true });
+  return dashForRole({
     range,
     generatedAt: now,
+    viewer: { email: admin.email, role: admin.role },
     bookings: bk.docs.map((d) => bookingRow(d.id, d.data(), claimsById.get(d.id) ?? null)),
     ledger: [...ledger.values()],
     payouts: po.docs.map((d) => payoutRow(d.id, d.data())),
     providers: pr.docs.filter((d) => d.data().status && d.data().status !== 'borrador').map((d) => providerRow(d.id, d.data(), now)),
     clients: cs.docs.map((d) => clientRow(d.id, d.data())),
     claims: cl.docs.map((d) => claimRow(d.id, d.data())),
+  }, admin.role);
+});
+
+/* ---------------------------- Equipo y roles (solo dueño) ---------------------------- */
+
+const ROLE_NAMES = { socio: 'Socio', contabilidad: 'Contabilidad', cumplimiento: 'Oficial de cumplimiento (UAFE)' };
+
+/** Lista de personas con acceso al panel (dueños + adminRoles) y últimos cambios. */
+export const adminEquipo = onCall({ region: REGION }, async (req) => {
+  await requireAdmin(req, 'equipo');
+  const [roles, log] = await Promise.all([
+    db().collection('adminRoles').limit(200).get(),
+    db().collection('adminAccesos').where('action', 'in', ['rol_asignado', 'rol_quitado']).limit(200).get(),
+  ]);
+  const owners = String(ADMIN_EMAILS.value() ?? '').toLowerCase().split(/[,;\s]+/).filter(Boolean);
+  const ms = (t) => t?.toMillis?.() ?? null;
+  return {
+    members: [
+      ...owners.map((email) => ({ email, name: '', role: 'dueno', active: true, addedBy: 'ADMIN_EMAILS', addedAt: null, lastSeen: null })),
+      ...roles.docs.map((d) => { const r = d.data(); return { email: d.id, name: r.name ?? '', role: r.role, active: r.active !== false, addedBy: r.addedBy ?? '', addedAt: ms(r.addedAt), lastSeen: ms(r.lastSeen) }; }),
+    ],
+    log: log.docs.map((d) => { const a = d.data(); return { action: a.action, by: a.email, target: a.target ?? '', role: a.role ?? '', at: ms(a.at) }; })
+      .sort((a, b) => (b.at ?? 0) - (a.at ?? 0)).slice(0, 50),
   };
+});
+
+/** Da o cambia el rol de una persona (por correo). Rige desde su próxima consulta. */
+export const adminGuardarRol = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, async (req) => {
+  const admin = await requireAdmin(req, 'equipo');
+  const v = roleInput(req.data, ADMIN_EMAILS.value());
+  if (v.error) throw new HttpsError('invalid-argument', v.error);
+  await db().doc(`adminRoles/${v.email}`).set({ role: v.role, name: v.name, active: true, addedBy: admin.email, addedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, action: 'rol_asignado', target: v.email, role: v.role, at: FieldValue.serverTimestamp() });
+  try {
+    await transport().sendMail({
+      from: senders().from,
+      to: v.email,
+      subject: 'Tienes acceso al panel de HULUL',
+      html: layout('Tienes acceso al panel de HULUL', `<p>Hola ${esc(v.name)}:</p><p>${esc(admin.email)} te dio acceso al panel de administración con el rol <b>${esc(ROLE_NAMES[v.role])}</b>.</p><p>Entra con este mismo correo (${esc(v.email)}) usando Google u Outlook.</p>${button('https://hululec.com/admin', 'Abrir el panel')}`),
+    });
+  } catch (e) { logger.warn('Correo de acceso no enviado', e); }
+  return { ok: true };
+});
+
+/** Quita el acceso de una persona. */
+export const adminQuitarRol = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'equipo');
+  const email = normEmail(req.data?.email);
+  const ref = db().doc(`adminRoles/${email}`);
+  if (!email || !(await ref.get()).exists) throw new HttpsError('not-found', 'Esa persona no tiene acceso.');
+  await ref.delete();
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, action: 'rol_quitado', target: email, at: FieldValue.serverTimestamp() });
+  return { ok: true };
 });
 
 /** Tablero: marca una liquidación semanal como pagada (después de transferir). */
 export const marcarLiquidacion = onCall({ region: REGION }, async (req) => {
-  const admin = requireAdmin(req);
+  const admin = await requireAdmin(req, 'pagos');
   const id = String(req.data?.id ?? '');
   const reference = String(req.data?.reference ?? '').trim().slice(0, 80);
   if (!/^\d{4}-\d{2}-\d{2}_[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('invalid-argument', 'Liquidación no válida.');
@@ -2218,7 +2283,7 @@ export const marcarLiquidacion = onCall({ region: REGION }, async (req) => {
 
 /** Panel: registro completo, con la lista de archivos y la cuenta bancaria tapada. */
 export const adminProfesional = onCall({ region: REGION }, async (req) => {
-  const admin = requireAdmin(req);
+  const admin = await requireAdmin(req, 'profesionales');
   const uid = String(req.data?.uid ?? '');
   if (!PRO_UID.test(uid)) throw new HttpsError('invalid-argument', 'Profesional no válido.');
   const [ps, bs, hist, vs] = await Promise.all([
@@ -2251,7 +2316,7 @@ export const adminProfesional = onCall({ region: REGION }, async (req) => {
 
 /** Panel: un archivo del registro (foto o PDF), en base64. Solo de la carpeta de ese profesional. */
 export const adminArchivoProfesional = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
-  requireAdmin(req);
+  await requireAdmin(req, 'profesionales');
   const uid = String(req.data?.uid ?? '');
   const path = String(req.data?.path ?? '');
   if (!PRO_UID.test(uid) || !path.startsWith(`providers/${uid}/`) || path.includes('..')) throw new HttpsError('invalid-argument', 'Archivo no válido.');
@@ -2266,7 +2331,7 @@ export const adminArchivoProfesional = onCall({ region: REGION, memory: '512MiB'
 
 /** Panel: aprobar, observar (con lo que debe corregir) o rechazar. El aviso al profesional sale solo. */
 export const decidirProfesional = onCall({ region: REGION }, async (req) => {
-  const admin = requireAdmin(req);
+  const admin = await requireAdmin(req, 'profesionales');
   const uid = String(req.data?.uid ?? '');
   if (!PRO_UID.test(uid)) throw new HttpsError('invalid-argument', 'Profesional no válido.');
   const ref = db().doc(`providers/${uid}`);

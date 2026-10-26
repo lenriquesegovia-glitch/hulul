@@ -60,6 +60,8 @@ export interface DashClaim {
 export interface DashData {
   range: { from: string; to: string };
   generatedAt: number;
+  /** Quién consulta y con qué rol (lo decide el servidor). */
+  viewer?: { email: string; role: AdminRole };
   bookings: DashBooking[];
   ledger: DashLedger[];
   payouts: DashPayout[];
@@ -67,6 +69,28 @@ export interface DashData {
   clients: DashClient[];
   claims: DashClaim[];
 }
+
+/* ---------------------------------- Roles ---------------------------------- */
+
+/** Debe coincidir con functions/roles-core.js (el servidor es quien decide). */
+export type AdminRole = 'dueno' | 'socio' | 'contabilidad' | 'cumplimiento';
+export type AdminPerm = 'tablero' | 'reservas' | 'clientes' | 'contabilidad' | 'proveedores' | 'cumplimiento' | 'reclamos' | 'profesionales' | 'pagos' | 'equipo';
+
+export const ROLE_PERMS: Record<AdminRole, AdminPerm[]> = {
+  dueno: ['tablero', 'reservas', 'clientes', 'contabilidad', 'proveedores', 'cumplimiento', 'reclamos', 'profesionales', 'pagos', 'equipo'],
+  socio: ['tablero', 'reservas', 'clientes', 'contabilidad', 'proveedores', 'cumplimiento', 'reclamos', 'profesionales', 'pagos'],
+  contabilidad: ['tablero', 'contabilidad', 'proveedores', 'pagos'],
+  cumplimiento: ['tablero', 'reservas', 'clientes', 'contabilidad', 'proveedores', 'cumplimiento'],
+};
+
+export const ROLE_INFO: Record<AdminRole, { label: string; help: string }> = {
+  dueno: { label: 'Dueño', help: 'Todo el panel y el equipo (dar y quitar accesos).' },
+  socio: { label: 'Socio', help: 'Todo el panel: decide reclamos, aprueba profesionales y marca pagos. No gestiona el equipo.' },
+  contabilidad: { label: 'Contabilidad', help: 'Resumen, Contabilidad y Proveedores (facturas y RUC). Exporta y marca liquidaciones pagadas.' },
+  cumplimiento: { label: 'Oficial de cumplimiento (UAFE)', help: 'Solo lectura: reservas, clientes, proveedores, contabilidad y alertas de cumplimiento. Sin reclamos ni chats.' },
+};
+
+export const canDo = (role: AdminRole | undefined | null, perm: AdminPerm) => !!role && ROLE_PERMS[role].includes(perm);
 
 /* ------------------------------- Utilidades -------------------------------- */
 
@@ -547,4 +571,79 @@ export function toCsv(rows: Record<string, string | number | null | undefined>[]
     return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return '﻿' + [columns.map((c) => cell(c.label)).join(';'), ...rows.map((r) => columns.map((c) => cell(r[c.key])).join(';'))].join('\r\n');
+}
+
+/* ----------------------------- Cumplimiento (UAFE) ---------------------------- */
+
+/**
+ * Umbrales de referencia para alertas internas. No son la norma: los confirma la
+ * oficial de cumplimiento. RESU = reporte de operaciones que igualan o superan
+ * US$10.000 (en un mes, por cliente).
+ */
+export const COMPLIANCE_LIMITS = {
+  singleOperation: 1000,
+  clientMonthly: 10000,
+  clientMonthlyWarn: 5000,
+  cashMonthly: 2000,
+  proMonthlyPayouts: 10000,
+  samePairWeek: 5,
+};
+
+export type AlertLevel = 'alta' | 'media';
+export interface ComplianceAlert {
+  key: string; level: AlertLevel; kind: string; title: string; detail: string;
+  who: { type: 'cliente' | 'profesional'; id: string; name: string };
+  amount: number; bookings: string[];
+}
+
+const monthOf = (iso: string) => iso.slice(0, 7);
+const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const monthName = (ym: string) => `${MONTHS[Number(ym.slice(5, 7)) - 1] ?? ym} ${ym.slice(0, 4)}`;
+
+/** Alertas de operaciones inusuales o que llegan a umbrales, en las reservas cobradas del rango. */
+export function complianceAlerts(data: Pick<DashData, 'bookings' | 'payouts' | 'providers'>, range: DateRange, L = COMPLIANCE_LIMITS): ComplianceAlert[] {
+  const out: ComplianceAlert[] = [];
+  const paid = data.bookings.filter((b) => inRange(b.date, range) && !b.demo && (b.status === 'completada' || b.status === 'en_disputa' || (b.status === 'cancelada' && b.cancelFee > 0)));
+  for (const b of paid) {
+    const g = bookingMoney(b).gross;
+    if (g >= L.singleOperation) out.push({ key: `op_${b.id}`, level: 'media', kind: 'operacion', title: `Operación de ${money(g)}`, detail: `${b.code} · ${b.date} · ${b.paymentMethod || 'sin forma de pago'}`, who: { type: 'cliente', id: b.clientId, name: b.clientName }, amount: g, bookings: [b.code] });
+  }
+  const byClientMonth = new Map<string, { name: string; total: number; cash: number; codes: string[] }>();
+  for (const b of paid) {
+    const k = `${b.clientId}|${monthOf(b.date)}`;
+    const c = byClientMonth.get(k) ?? { name: b.clientName, total: 0, cash: 0, codes: [] };
+    const g = bookingMoney(b).gross;
+    c.total = r2(c.total + g); if (b.paymentMethod === 'efectivo') c.cash = r2(c.cash + g); c.codes.push(b.code);
+    byClientMonth.set(k, c);
+  }
+  for (const [k, c] of byClientMonth) {
+    const [id, month] = k.split('|');
+    if (c.total >= L.clientMonthly) out.push({ key: `resu_${k}`, level: 'alta', kind: 'acumulado', title: `Cliente con ${money(c.total)} en ${monthName(month)}`, detail: `Llega al umbral de ${money(L.clientMonthly)} al mes (revisar RESU).`, who: { type: 'cliente', id, name: c.name }, amount: c.total, bookings: c.codes });
+    else if (c.total >= L.clientMonthlyWarn) out.push({ key: `acum_${k}`, level: 'media', kind: 'acumulado', title: `Cliente con ${money(c.total)} en ${monthName(month)}`, detail: `Supera ${money(L.clientMonthlyWarn)} en el mes.`, who: { type: 'cliente', id, name: c.name }, amount: c.total, bookings: c.codes });
+    if (c.cash >= L.cashMonthly) out.push({ key: `cash_${k}`, level: 'alta', kind: 'efectivo', title: `${money(c.cash)} en efectivo en ${monthName(month)}`, detail: `Pagos en efectivo de un mismo cliente sobre ${money(L.cashMonthly)}.`, who: { type: 'cliente', id, name: c.name }, amount: c.cash, bookings: c.codes });
+  }
+  // Mismo cliente y mismo profesional, muchas veces en 7 días: posible fraccionamiento o acuerdo por fuera.
+  const pairs = new Map<string, DashBooking[]>();
+  for (const b of paid) if (b.clientId && b.proId) pairs.set(`${b.clientId}|${b.proId}`, [...(pairs.get(`${b.clientId}|${b.proId}`) ?? []), b]);
+  for (const [k, list] of pairs) {
+    const sorted = list.slice().sort((a, z) => a.date.localeCompare(z.date));
+    for (let i = 0; i < sorted.length; i++) {
+      const end = addDays(sorted[i].date, 6);
+      const win = sorted.filter((b) => b.date >= sorted[i].date && b.date <= end);
+      if (win.length >= L.samePairWeek) {
+        const total = r2(win.reduce((t, b) => t + bookingMoney(b).gross, 0));
+        out.push({ key: `pair_${k}_${sorted[i].date}`, level: 'media', kind: 'repetido', title: `${win.length} servicios en 7 días con el mismo profesional`, detail: `${win[0].clientName} → ${win[0].proName}, desde ${sorted[i].date}, por ${money(total)}.`, who: { type: 'cliente', id: win[0].clientId, name: win[0].clientName }, amount: total, bookings: win.map((b) => b.code) });
+        break;
+      }
+    }
+  }
+  const proName = new Map(data.providers.map((p) => [p.uid, p.name]));
+  const byProMonth = new Map<string, number>();
+  for (const p of data.payouts) if (inRange(p.week, range)) byProMonth.set(`${p.proId}|${monthOf(p.week)}`, r2((byProMonth.get(`${p.proId}|${monthOf(p.week)}`) ?? 0) + p.net));
+  for (const [k, total] of byProMonth) {
+    const [id, month] = k.split('|');
+    if (total >= L.proMonthlyPayouts) out.push({ key: `pro_${k}`, level: 'alta', kind: 'liquidaciones', title: `Profesional con ${money(total)} liquidados en ${monthName(month)}`, detail: `Supera ${money(L.proMonthlyPayouts)} al mes.`, who: { type: 'profesional', id, name: proName.get(id) ?? id }, amount: total, bookings: [] });
+  }
+  const lv = { alta: 0, media: 1 };
+  return out.sort((a, b) => lv[a.level] - lv[b.level] || b.amount - a.amount);
 }

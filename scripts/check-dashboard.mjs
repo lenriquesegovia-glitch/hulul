@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { bookingRow, ledgerRow, payoutRow, providerRow } from '../functions/tablero-core.js';
 import { ledgerEntriesFor } from '../functions/money.js';
 import {
-  accounting, caseFlags, caseOutcome, clientStats, executive, periodRange, providerInvoices, providerStats, stageOf, toCsv,
+  accounting, canDo, caseFlags, complianceAlerts, caseOutcome, clientStats, executive, periodRange, providerInvoices, providerStats, stageOf, toCsv,
 } from '../packages/shared/src/dashboard.ts';
 
 const now = Date.UTC(2026, 9, 26, 3); // domingo 25-oct-2026, 22:00 en Ecuador
@@ -107,5 +107,20 @@ assert.equal(pepe.spent, 25.29 + 20);
 // Exportar
 const csv = toCsv([{ a: 'x;y', b: 1.5 }], [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }]);
 assert.ok(csv.includes('"x;y";1,5'));
+
+// Roles (deben coincidir con functions/roles-core.js)
+const { ROLE_PERMS: serverPerms } = await import('../functions/roles-core.js');
+const { ROLE_PERMS: webPerms } = await import('../packages/shared/src/dashboard.ts');
+assert.deepEqual(webPerms, serverPerms, 'permisos iguales en servidor y panel');
+assert.ok(canDo('contabilidad', 'pagos') && !canDo('cumplimiento', 'pagos') && !canDo('socio', 'equipo'));
+
+// Cumplimiento (UAFE)
+const big = bookingRow('big0000000000', { ...base, clientId: 'C9', contactName: 'Grande', date: '2026-10-20', slot: '10:00', status: 'completada', visit: 1200, total: 1400, paymentMethod: 'efectivo' });
+const many = Array.from({ length: 9 }, (_, i) => bookingRow(`m${i}000000000000`, { ...base, clientId: 'C9', contactName: 'Grande', date: `2026-10-${String(10 + i).padStart(2, '0')}`, slot: '10:00', status: 'completada', visit: 1000, total: 1200, paymentMethod: 'efectivo' }));
+const alerts = complianceAlerts({ bookings: [big, ...many], payouts: [], providers: [] }, { from: '2026-10-01', to: '2026-10-31' });
+const kinds = new Set(alerts.map((a) => a.kind));
+for (const k of ['operacion', 'acumulado', 'efectivo', 'repetido']) assert.ok(kinds.has(k), `alerta ${k}`);
+assert.equal(alerts[0].level, 'alta');
+assert.equal(complianceAlerts({ bookings, payouts: [], providers: [] }, { from: '2026-10-01', to: '2026-10-31' }).length, 0, 'operaciones normales sin alertas');
 
 console.log('Tablero: OK');

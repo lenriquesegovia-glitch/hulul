@@ -10,7 +10,7 @@ type Tab = 'resumen' | 'liquidaciones' | 'movimientos';
 const PAYOUT_TONE: Record<string, string> = { por_pagar: 't-warn', pagado: 't-ok' };
 
 export function AccountingPanel() {
-  const { view, range, now, reload } = useAdmin();
+  const { view, range, now, reload, can } = useAdmin();
   const [tab, setTab] = useState<Tab>('resumen');
   const [bucket, setBucket] = useState('');
   const [payStatus, setPayStatus] = useState<'por_pagar' | 'pagado' | 'todas'>('por_pagar');
@@ -154,14 +154,14 @@ export function AccountingPanel() {
                         <td className="num">{money(p.gross)}</td><td className="num">{money(p.deductions)}</td><td className="num">{money(p.retentions.renta + p.retentions.iva)}</td>
                         <td className="num"><b>{money(p.net)}</b></td>
                         <td style={{ fontSize: 13 }}>{p.bank || <span style={{ color: 'var(--bad)' }}>Sin cuenta</span>}</td>
-                        <td>{p.status === 'por_pagar' && <button type="button" className="adm-btn solid" disabled={busy === p.id} onClick={() => markPaid(p)}>{busy === p.id ? 'Guardando…' : 'Marcar pagada'}</button>}</td>
+                        <td>{p.status === 'por_pagar' && can('pagos') && <button type="button" className="adm-btn solid" disabled={busy === p.id} onClick={() => markPaid(p)}>{busy === p.id ? 'Guardando…' : 'Marcar pagada'}</button>}</td>
                       </tr>
                     )) : <tr><td colSpan={9} className="adm-empty">No hay liquidaciones en esta vista.</td></tr>}
                   </tbody>
                   {payouts.length > 0 && <tfoot><tr><td colSpan={6}>{payouts.length} liquidaciones</td><td className="num">{money(payouts.reduce((t, p) => t + p.net, 0))}</td><td colSpan={2} /></tr></tfoot>}
                 </table>
               </div>
-              <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>Cada lunes a las 06:00 se arma la liquidación de lo que ya pasó las 48 h y no tiene reclamo. Transfiere desde la cuenta de la empresa y márcala aquí con la referencia.</p>
+              <p className="muted" style={{ fontSize: 12.5, margin: 0 }}>Cada lunes a las 06:00 se arma la liquidación de lo que ya pasó las 48 h y no tiene reclamo. {can('pagos') ? 'Transfiere desde la cuenta de la empresa y márcala aquí con la referencia.' : 'Solo lectura para tu rol.'}</p>
             </>
           )}
 
