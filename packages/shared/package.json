@@ -6,7 +6,8 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./firebase": "./src/firebase.ts"
+    "./firebase": "./src/firebase.ts",
+    "./dashboard": "./src/dashboard.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
