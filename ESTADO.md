@@ -1,6 +1,15 @@
 # HULUL — Estado y registro de entregas
 
-## Estado vigente — V5.5 publicada el 25 de octubre de 2026 (Claude)
+## Estado vigente — Acceso, registro verificado y panel de profesionales, publicado el 25 de octubre de 2026 (Claude)
+- main **a4b350a** (con ef19299 y 3cfd16a). "Publicar HULUL" manual: verificar ✅ → backend ✅ → web ✅ → android ✅ (OTA production).
+- Acceso: web con Google, Outlook (Microsoft Entra, secreto vence oct-2028) y correo; sin SMS; Facebook oculto. App: Google y Outlook por el navegador (`/app-login` → `tokenApp` → `hulul://login`, pantalla `app/login.tsx`), sin APK nuevo.
+- Registro de profesionales: ciudades de los 222 cantones; actividades nuevas (`proposals`, en revisión); verificación de documentos como el formulario anónimo (OCR Cloud Vision en `verificarDocumento`, lógica en `functions/doc-verify.js`; selfie con prueba de vida comparada en el celular); al enviar se vuelve a exigir y, si falta algo, vuelve a observado.
+- Panel `/admin/profesionales` (mismo acceso ADMIN_EMAILS): documentos con resultado de verificación, decisión por categoría, aprobar / pedir corrección / rechazar con motivo; avisos automáticos (correo y notificación).
+- Google Cloud: activadas Cloud Vision API e IAM Service Account Credentials API; rol Creador de tokens de cuenta de servicio a 1070795690327-compute@.
+- Copia local antigua C:\Users\lsego\Hulul tiene 56 commits de atraso y archivos que chocan: publicar solo con el publicador de GitHub Actions o desde una copia limpia.
+- Detalle en el documento del proyecto claude/hulul-acceso.md.
+
+## Anterior — V5.5 publicada el 25 de octubre de 2026 (Claude)
 - PR #9 → main **49937f0**. "Publicar HULUL" run 40241447524: verificar ✅ (incluye reglas en emulador) → backend ✅ → web ✅ (Vercel Production 7320276990) → android ✅ (OTA production).
 - **Protocolo de reclamos** (decidido por el dueño): abren cliente o profesional hasta 48 h después; la otra parte responde en 24 h; HULUL decide en máximo 72 h. Si reclama el cliente, el pago queda retenido.
 - Datos: `reclamos/{reserva}` (solo servidor escribe; leen las dos partes), `reclamos/{id}/privado/textos` (originales sin moderar) y `reclamos/{id}/accesos` (registro de cada apertura, contacto mostrado y decisión). Fotos en Storage `reclamos/{uid}/{reserva}/`.
