@@ -1,6 +1,6 @@
 import {ClientSummary} from '@/components/ClientSummary';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import * as Location from 'expo-location';
@@ -19,6 +19,7 @@ import { earned, STATUS_LABEL, todayEc, useBooking } from '@/lib/agenda';
 import { photosAvailable, pickPhotos, uploadLocalPhotos } from '@/lib/photos';
 import { useUser } from '@/lib/auth';
 import { c, font, radius } from '@/theme';
+import { KeyboardScroll } from '@/components/KeyboardScroll';
 
 const CHAT_OPEN = ['pendiente', 'confirmada', 'en_camino', 'en_curso', 'por_aprobar'];
 const errText = (e: unknown) => (e as { message?: string }).message || 'No se pudo guardar. Inténtalo de nuevo.';
@@ -31,15 +32,15 @@ export default function JobScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <View style={{ flex: 1 }}>
+        <KeyboardScroll contentContainerStyle={s.content}>
           <BackButton />
           {aviso && <Card><Body>{aviso}</Body>{mensaje && <Body muted>{mensaje}</Body>}</Card>}
           {b === undefined && <ActivityIndicator color={c.primary} style={{ marginTop: 40 }} />}
           {b === null && <Body>No encontramos este trabajo.</Body>}
           {b && user && <Job b={b} uid={user.uid} />}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardScroll>
+      </View>
     </SafeAreaView>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -17,6 +17,7 @@ import { useUser } from '@/lib/auth';
 import { BackButton, Body, Button, Card, H1, PrimaryButton } from '@/components/ui';
 import { CancelBox } from '../cuenta';
 import { c, font, radius } from '@/theme';
+import { KeyboardScroll } from '@/components/KeyboardScroll';
 
 const STEPS = [
   { status: 'pendiente', t: 'Reserva recibida' },
@@ -46,13 +47,13 @@ export default function BookingDetailScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <KeyboardScroll contentContainerStyle={s.content}>
         <BackButton />
           {aviso && <Card><Body>{aviso}</Body>{mensaje && <Body muted>{mensaje}</Body>}</Card>}
         {b === undefined && <Body muted>Cargando…</Body>}
         {b === null && <Body>No encontramos esta reserva.</Body>}
         {b && <Detail b={b} />}
-      </ScrollView>
+      </KeyboardScroll>
     </SafeAreaView>
   );
 }

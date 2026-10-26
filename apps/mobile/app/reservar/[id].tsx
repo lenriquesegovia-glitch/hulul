@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { photosAvailable, pickPhotos, uploadLocalPhotos } from '@/lib/photos';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router, useLocalSearchParams } from 'expo-router';
@@ -15,6 +15,7 @@ import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
 import { ActivityIndicator } from 'react-native';
 import { usePro } from '@/lib/pros';
+import { KeyboardScroll } from '@/components/KeyboardScroll';
 
 const OTHER = 'Otro';
 const NOTES_MAX = 940;
@@ -246,8 +247,8 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <View style={{ flex: 1 }}>
+        <KeyboardScroll contentContainerStyle={s.content}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <BackButton />
             <View>
@@ -479,13 +480,13 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             </Checkbox>
             {agreeError && <Text style={s.error}>Marca la casilla para confirmar la reserva.</Text>}
           </View>
-        </ScrollView>
+        </KeyboardScroll>
 
         <View style={s.footer}>
           {saveError ? <Text style={[s.error, { marginBottom: 8 }]}>{saveError}</Text> : null}
           <PrimaryButton label={sending ? 'Registrando tu reserva…' : `Confirmar reserva de prueba · ${formatUSD(q.total)}`} onPress={onConfirm} />
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }

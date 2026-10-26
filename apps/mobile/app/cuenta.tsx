@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { cancelTerms, formatUSD, getCategory, usd } from '@hulul/shared';
@@ -8,12 +8,13 @@ import { ClientGate } from '@/components/ClientGate';
 import { BackButton, Body, Button, Card, H1, H2, Pill, PrimaryButton } from '@/components/ui';
 import { logout } from '@/lib/auth';
 import { c, font, radius } from '@/theme';
+import { KeyboardScroll } from '@/components/KeyboardScroll';
 
 /** Mi cuenta: datos del cliente y sus reservas. */
 export default function AccountScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }} edges={['top']}>
-      <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <KeyboardScroll contentContainerStyle={s.content}>
         <BackButton />
         <ClientGate title="Entra a tu cuenta" lead="Con Google, Outlook o tu correo. Si es tu primera vez, se crea tu cuenta.">
           {({ user, profile }) => (
@@ -28,7 +29,7 @@ export default function AccountScreen() {
             </View>
           )}
         </ClientGate>
-      </ScrollView>
+      </KeyboardScroll>
     </SafeAreaView>
   );
 }
