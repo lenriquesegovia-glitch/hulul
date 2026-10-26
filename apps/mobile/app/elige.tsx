@@ -1,9 +1,10 @@
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { categoryImage } from '@hulul/shared';
 import { Body, H1 } from '@/components/ui';
 import { c, font, radius } from '@/theme';
+import { openWebAs } from '@/lib/web';
 
 /** Después de aceptar la privacidad: ¿cliente o profesional? Lleva directo al registro. */
 export default function ChooseRoleScreen() {
@@ -18,7 +19,7 @@ export default function ChooseRoleScreen() {
       title: 'Quiero ofrecer mis servicios',
       sub: 'Soy técnico o profesional y quiero recibir trabajos',
       img: categoryImage('electricidad', 500),
-      go: () => { Linking.openURL('https://hululec.com/profesionales/registro'); router.replace('/'); },
+      go: () => { openWebAs('/profesionales/registro'); router.replace('/'); },
     },
   ];
   return (

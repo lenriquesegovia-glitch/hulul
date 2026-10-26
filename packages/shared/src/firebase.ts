@@ -843,3 +843,8 @@ export async function myDocVerification(uid: string): Promise<Record<string, { s
 export async function appLoginToken(): Promise<string> {
   return (await callable<Record<string, never>, { token: string }>('tokenApp')({})).data.token;
 }
+
+/** Pase de un solo uso para abrir hululec.com con la sesión de la app (hululec.com/entrar). */
+export async function webLoginToken(): Promise<string> {
+  return (await callable<Record<string, never>, { token: string }>('tokenWeb')({})).data.token;
+}

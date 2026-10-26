@@ -2344,3 +2344,29 @@ export const tokenApp = onCall({ region: REGION }, async (req) => {
     throw new HttpsError('failed-precondition', 'Entrar con Google u Outlook en la app aún no está activo. Usa tu correo y contraseña.');
   }
 });
+
+
+/**
+ * De la app a la web con la sesión iniciada (p. ej. "Quiero ofrecer mis
+ * servicios" abre el registro en hululec.com sin volver a entrar). La app pide
+ * un pase de un solo uso y abre hululec.com/entrar#token=…; la página lo usa y
+ * lo borra de la dirección. Límite: 20 pases por hora por cuenta.
+ */
+export const tokenWeb = onCall({ region: REGION }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const ref = db().doc(`pases/${uid}`);
+  const now = Date.now();
+  await db().runTransaction(async (tx) => {
+    const d = (await tx.get(ref)).data() ?? {};
+    const recent = (Array.isArray(d.at) ? d.at : []).filter((t) => now - t < 3600_000);
+    if (recent.length >= 20) throw new HttpsError('resource-exhausted', 'Demasiados intentos. Espera unos minutos.');
+    tx.set(ref, { at: [...recent, now] });
+  });
+  try {
+    return { token: await getAuth().createCustomToken(uid, { via: 'app-to-web' }) };
+  } catch (e) {
+    logger.error('No se pudo crear el pase a la web', { uid, e: String(e) });
+    throw new HttpsError('failed-precondition', 'No pudimos abrir la web con tu sesión. Entra con tu cuenta en la página.');
+  }
+});

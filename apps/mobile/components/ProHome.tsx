@@ -7,8 +7,8 @@ import { firestore, type ProBooking } from '@hulul/shared/firebase';
 import { Icon } from '@/components/Icon';
 import { Body, H1, H2 } from '@/components/ui';
 import { c, font, radius } from '@/theme';
+import { openWebAs } from '@/lib/web';
 
-const SERVICES_URL = 'https://hululec.com/profesionales/registro';
 
 const STATUS: Record<string, string> = {
   pendiente: 'Nueva solicitud', confirmada: 'Confirmada', en_camino: 'En camino', en_curso: 'En curso',
@@ -132,7 +132,7 @@ export function ProHome({ uid, name }: { uid: string; name: string }) {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
         <Pressable accessibilityRole="button" onPress={open} style={s.tile}><Icon name="calendar" size={22} color={c.primary} /><Text style={s.tileText}>Mi agenda</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={() => router.push('/estado-cuenta')} style={s.tile}><Icon name="card" size={22} color={c.primary} /><Text style={s.tileText}>Estado de cuenta</Text></Pressable>
-        <Pressable accessibilityRole="button" onPress={() => Linking.openURL(SERVICES_URL)} style={s.tile}><Icon name="card" size={22} color={c.primary} /><Text style={s.tileText}>Servicios y tarifas</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => openWebAs('/profesionales/registro')} style={s.tile}><Icon name="card" size={22} color={c.primary} /><Text style={s.tileText}>Servicios y tarifas</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/profesional/[id]', params: { id: uid } })} style={s.tile}><Icon name="user" size={22} color={c.primary} /><Text style={s.tileText}>Mi perfil</Text></Pressable>
       </View>
     </View>

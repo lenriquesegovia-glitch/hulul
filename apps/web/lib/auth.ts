@@ -137,12 +137,14 @@ async function finishLink(res: UserCredential | null): Promise<void> {
 /**
  * Llamar una vez al mostrar la pantalla de acceso: termina una entrada que
  * volvió por redirección (celulares) y devuelve su error, si lo hubo.
+ * Devuelve true si la persona acaba de entrar por redirección.
  */
-export async function completeRedirectSignIn(): Promise<void> {
+export async function completeRedirectSignIn(): Promise<boolean> {
   const name = (() => { try { return sessionStorage.getItem('hulul.redirectProvider') as SocialProvider | null; } catch { return null; } })();
   try {
     const res = await getRedirectResult(webAuth());
     await finishLink(res);
+    return !!res;
   } catch (e) {
     if (name && (e as { code?: string }).code === 'auth/account-exists-with-different-credential') savePending(name, e);
     throw Object.assign(e as object, { provider: name ?? undefined });
@@ -213,6 +215,15 @@ export async function signInEmail(email: string, password: string, create: boole
 export const resetPassword = (email: string) => sendPasswordResetEmail(webAuth(), email);
 
 export const logout = () => signOut(webAuth());
+
+/** Id de Firebase de cada botón (para saber con qué entró la sesión actual). */
+export const PROVIDER_ID: Record<SocialProvider, string> = { google: 'google.com', microsoft: 'microsoft.com', facebook: 'facebook.com' };
+
+/** Entra con un pase de un solo uso que manda la app (hululec.com/entrar). */
+export async function signInWithAppPass(token: string): Promise<void> {
+  const { signInWithCustomToken } = await import('firebase/auth');
+  await signInWithCustomToken(webAuth(), token);
+}
 
 /** Mensaje claro para los errores más comunes de Firebase Authentication. */
 export function authErrorMessage(e: unknown): string {

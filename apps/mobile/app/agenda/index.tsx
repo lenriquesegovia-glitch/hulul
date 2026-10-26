@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { formatUSD, getCategory } from '@hulul/shared';
@@ -10,6 +10,7 @@ import { useUser } from '@/lib/auth';
 import { useProviderStatus } from '@/lib/pros';
 import { earned, STATUS_LABEL, todayEc, useProBookings } from '@/lib/agenda';
 import { c, font, radius } from '@/theme';
+import { openWebAs } from '@/lib/web';
 
 /** Agenda del profesional dentro de la app: solicitudes, próximos trabajos e historial. */
 export default function AgendaScreen() {
@@ -46,7 +47,7 @@ export default function AgendaScreen() {
     return wrap(
       <>
         <Body>{status === 'en_revision' ? 'Tu registro está en revisión. Cuando te aprobemos, aquí verás tus trabajos.' : 'Esta cuenta aún no es de profesional aprobado.'}</Body>
-        <PrimaryButton label="Ir a mi registro" onPress={() => Linking.openURL('https://hululec.com/profesionales/registro')} />
+        <PrimaryButton label="Ir a mi registro" onPress={() => openWebAs('/profesionales/registro')} />
       </>,
     );
   }
@@ -59,7 +60,7 @@ export default function AgendaScreen() {
       {g.closing.length > 0 && <Section title="Por cerrar" items={g.closing} />}
       {g.history.length > 0 && <Section title="Historial" items={g.history} muted />}
       <View style={{ flexDirection: 'row', gap: 10 }}>
-        <Pressable accessibilityRole="button" onPress={() => Linking.openURL('https://hululec.com/profesionales/registro')} style={s.tile}><Text style={s.tileText}>Servicios y tarifas</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => openWebAs('/profesionales/registro')} style={s.tile}><Text style={s.tileText}>Servicios y tarifas</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={() => user && router.push({ pathname: '/profesional/[id]', params: { id: user.uid } })} style={s.tile}><Text style={s.tileText}>Mi perfil público</Text></Pressable>
       </View>
     </>,

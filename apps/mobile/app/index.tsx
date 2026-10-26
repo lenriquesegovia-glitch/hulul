@@ -5,7 +5,7 @@ import {Inbox} from '@/components/Inbox';
 import { BrandLogo } from '@/components/BrandLogo';
 import { useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { categories, categoryImage, getCategory, suggestServices, homeCopy, featuredHomeServices, discoveryTitle } from '@hulul/shared';
@@ -16,6 +16,7 @@ import { Body, H1, H2 } from '@/components/ui';
 import { c, font, radius } from '@/theme';
 import { useUser } from '@/lib/auth';
 import { useProviderStatus } from '@/lib/pros';
+import { openWebAs } from '@/lib/web';
 
 
 export default function Home() {
@@ -130,7 +131,7 @@ export default function Home() {
         </View>
 
 
-        <Pressable accessibilityRole="button" onPress={() => (isPro ? router.push('/agenda') : Linking.openURL('https://hululec.com/profesionales/registro'))} style={({ pressed }) => [s.proCard, pressed && { opacity: 0.9 }]}>
+        <Pressable accessibilityRole="button" onPress={() => (isPro ? router.push('/agenda') : openWebAs('/profesionales/registro'))} style={({ pressed }) => [s.proCard, pressed && { opacity: 0.9 }]}>
           <Image source={{ uri: categoryImage('electricidad', 700) }} style={s.proImg} resizeMode="cover" />
           <View style={{ padding: 16, gap: 8 }}>
             <Text style={s.proEyebrow}>PARA TÉCNICOS Y PROFESIONALES</Text>
