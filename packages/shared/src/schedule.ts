@@ -21,6 +21,7 @@ export const CATEGORY_SCHEDULE: Record<CategorySlug, ScheduleGroup> = {
   pintura: 'obra', piscinas: 'obra', jardineria: 'obra', fumigacion: 'obra', mudanzas: 'obra',
   limpieza: 'hogar', electrodomesticos: 'hogar', tecnologia: 'hogar', clases: 'hogar', mascotas: 'hogar', belleza: 'hogar',
   salud: 'urgente', cerrajeria: 'urgente',
+  'servicios-profesionales': 'obra',
 };
 
 /** Horario normal (horas enteras): desde START hasta END, sin recargo. */

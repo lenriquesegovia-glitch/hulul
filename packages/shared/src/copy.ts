@@ -11,7 +11,7 @@ export type ServiceStyle = 'tecnico' | 'servicio';
 
 const TECNICO: CategorySlug[] = [
   'climatizacion', 'plomeria', 'electricidad', 'electrodomesticos', 'piscinas', 'pintura',
-  'cerrajeria', 'carpinteria', 'albanileria', 'fumigacion', 'tecnologia',
+  'cerrajeria', 'carpinteria', 'albanileria', 'fumigacion', 'tecnologia', 'servicios-profesionales',
 ];
 
 export function serviceStyle(slug?: string): ServiceStyle {
@@ -38,6 +38,7 @@ const DETAIL_EXAMPLE: Partial<Record<CategorySlug, string>> = {
   fumigacion: 'Ej.: casa de 120 m², hormigas en la cocina',
   mudanzas: 'Ej.: departamento de 2 habitaciones, 3er piso sin ascensor',
   tecnologia: 'Ej.: configurar el wifi y una impresora',
+  'servicios-profesionales': 'Ej.: revisar la instalación de agua de una casa de 2 pisos antes de comprarla',
 };
 
 /** Foto opcional al reservar: qué sirve mostrar. */

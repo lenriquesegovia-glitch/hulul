@@ -16,7 +16,8 @@ export type CategorySlug =
   | 'albanileria'
   | 'fumigacion'
   | 'mudanzas'
-  | 'tecnologia';
+  | 'tecnologia'
+  | 'servicios-profesionales';
 
 export type IconName =
   | 'snow'
@@ -36,7 +37,8 @@ export type IconName =
   | 'monitor'
   | 'scissors'
   | 'paw'
-  | 'book';
+  | 'book'
+  | 'compass';
 
 export interface Category {
   slug: CategorySlug;
@@ -223,6 +225,17 @@ export const categories: Category[] = [
     icon: 'monitor',
     incluye: ['Diagnóstico del equipo', 'Arreglo si se resuelve en la visita', 'Repuestos: cobro adicional en la app'],
     servicios: ['Reparación de computadoras', 'Internet y WiFi', 'Cámaras de seguridad', 'Instalación de TV y soportes', 'Reparación de celulares', 'Impresoras', 'Alarmas y cerco eléctrico', 'Domótica y casa inteligente'],
+  },
+  {
+    slug: 'servicios-profesionales',
+    name: 'Servicios profesionales',
+    tileName: 'Servicios profe\u00ADsionales',
+    seoName: 'Ingenieros y arquitectos a domicilio: supervisión, inspección y asesoría',
+    sub: 'Supervisión, inspección y asesoría técnica en una visita',
+    icon: 'compass',
+    incluye: ['Profesionales con título registrado en la SENESCYT', 'Una visita puntual con diagnóstico o informe', 'Si hace falta un proyecto completo, lo acuerdas con el profesional'],
+    servicios: ['Supervisión hidrosanitaria', 'Supervisión de obra', 'Inspección de vivienda antes de comprar', 'Revisión de instalaciones eléctricas', 'Revisión estructural (grietas, fisuras)', 'Asesoría de remodelación', 'Medición y levantamiento de planos', 'Asesoría en permisos de construcción', 'Avalúo de vivienda'],
+    aviso: 'Es una visita puntual: diagnóstico, inspección o asesoría. Diseños, planos completos o la dirección de una obra se acuerdan aparte con el profesional.',
   },
 ];
 export function getCategory(slug: string): Category | undefined {

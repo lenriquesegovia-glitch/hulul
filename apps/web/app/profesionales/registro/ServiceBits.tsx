@@ -11,6 +11,7 @@ import {
   rateRange,
   referencePrices,
   subservicesOf,
+  TITLE_REQUIRED,
   type CategoryEvidence,
   type CategorySlug,
   type ReferencePrices,
@@ -103,7 +104,7 @@ const EMPTY_EVIDENCE: CategoryEvidence = { kind: 'experiencia', note: '', refere
 export function EvidenceEditor({ category, uid, value, onChange }: {
   category: CategorySlug; uid: string; value: CategoryEvidence | undefined; onChange: (v: CategoryEvidence) => void;
 }) {
-  const e = value ?? { ...EMPTY_EVIDENCE, kind: category === 'salud' ? 'certificado' : 'experiencia' };
+  const e = value ?? { ...EMPTY_EVIDENCE, kind: TITLE_REQUIRED.includes(category) ? 'certificado' : 'experiencia' };
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const name = getCategory(category)?.name ?? category;
@@ -138,7 +139,7 @@ export function EvidenceEditor({ category, uid, value, onChange }: {
     <div className="stack gap-12" style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
       <strong style={{ fontSize: 15 }}>¿Cómo demuestras que sabes hacer trabajos de {name.toLowerCase()}?</strong>
       <div className="stack gap-8">
-        {EVIDENCE_OPTIONS.filter((o) => category !== 'salud' || o.value === 'certificado').map((o) => (
+        {EVIDENCE_OPTIONS.filter((o) => !TITLE_REQUIRED.includes(category) || o.value === 'certificado').map((o) => (
           <label key={o.value} className="check">
             <input type="radio" name={`ev-${category}`} checked={e.kind === o.value} onChange={() => set({ kind: o.value })} />
             <span><strong>{o.label}.</strong> {o.help}</span>

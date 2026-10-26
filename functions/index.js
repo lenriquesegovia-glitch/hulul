@@ -73,12 +73,16 @@ const MAIL_PROVIDER = defineString('MAIL_PROVIDER', { default: 'gmail', descript
 const FROM_EMAIL = defineString('FROM_EMAIL', { description: 'Correo de HULUL que envía los avisos' });
 const NOTIFY_TO = defineString('NOTIFY_TO', { description: 'Correo donde recibes los avisos de reservas' });
 
+/** Categorías que exigen título SENESCYT (igual que TITLE_REQUIRED en packages/shared/src/provider.ts). */
+const TITLE_CATS = ['salud', 'servicios-profesionales'];
+
 const CATEGORIES = {
   climatizacion: 'Climatización', plomeria: 'Plomería', electricidad: 'Electricidad',
   electrodomesticos: 'Electrodomésticos', limpieza: 'Limpieza', belleza: 'Belleza',
   mascotas: 'Mascotas', clases: 'Clases', jardineria: 'Jardinería', piscinas: 'Piscinas',
   pintura: 'Pintura', salud: 'Salud', cerrajeria: 'Cerrajería', carpinteria: 'Carpintería',
   albanileria: 'Albañilería', fumigacion: 'Fumigación', mudanzas: 'Mudanzas', tecnologia: 'Tecnología',
+  'servicios-profesionales': 'Servicios profesionales',
 };
 const PAYMENTS = { tarjeta: 'Tarjeta', transferencia: 'Transferencia', deuna: 'DeUna' };
 
@@ -90,7 +94,7 @@ const BUCKET = 'hulul-59081.firebasestorage.app';
 const SUGGESTED = {
   climatizacion: 25, plomeria: 20, electricidad: 20, electrodomesticos: 20, limpieza: 25, jardineria: 20,
   piscinas: 20, pintura: 25, belleza: 15, mascotas: 12, clases: 12, salud: 20, cerrajeria: 20, carpinteria: 20,
-  albanileria: 25, fumigacion: 30, mudanzas: 40, tecnologia: 20,
+  albanileria: 25, fumigacion: 30, mudanzas: 40, tecnologia: 20, 'servicios-profesionales': 40,
 };
 const MIN_VISIT_RATE = 5;
 const MAX_VISIT_RATE = 1000;
@@ -133,7 +137,7 @@ function offHoursRefusal(p, date, slot) {
 }
 
 // Mismos textos que packages/shared/src/policy.ts y copy.ts.
-const TECNICO = ['climatizacion', 'plomeria', 'electricidad', 'electrodomesticos', 'piscinas', 'pintura', 'cerrajeria', 'carpinteria', 'albanileria', 'fumigacion', 'tecnologia'];
+const TECNICO = ['climatizacion', 'plomeria', 'electricidad', 'electrodomesticos', 'piscinas', 'pintura', 'cerrajeria', 'carpinteria', 'albanileria', 'fumigacion', 'tecnologia', 'servicios-profesionales'];
 const isTech = (cat) => TECNICO.includes(cat);
 const OUTCOMES = { resuelto: 'Listo', parcial: 'Falta completar', no_resuelto: 'Requiere otra solución' };
 const OUTCOMES_SERVICE = { resuelto: 'Servicio completo', parcial: 'Completado en parte', no_resuelto: 'No se pudo realizar' };
@@ -1115,7 +1119,7 @@ function cleanServices(list) {
 function cleanEvidence(e, uid, cat) {
   const kind = String(e?.kind ?? '');
   if (!['certificado', 'experiencia'].includes(kind)) throw new HttpsError('invalid-argument', 'Indica cómo demuestras que sabes hacerlo.');
-  if (cat === 'salud' && kind !== 'certificado') throw new HttpsError('invalid-argument', 'Salud exige título registrado en la SENESCYT.');
+  if (TITLE_CATS.includes(cat) && kind !== 'certificado') throw new HttpsError('invalid-argument', 'Esta categoría exige título registrado en la SENESCYT.');
   const note = String(e?.note ?? '').trim().slice(0, 500);
   const reference = String(e?.reference ?? '').trim().slice(0, 160);
   const files = (Array.isArray(e?.files) ? e.files : []).map(String).slice(0, 6);
@@ -2259,7 +2263,7 @@ export const avisoRevisionProfesional = onDocumentUpdated(
 // queda en providers/{uid}/private/verificacion (solo el servidor lo escribe) y
 // se vuelve a exigir al enviar el registro (avisoRegistroProfesional).
 
-const requiredDocsOf = (cats) => ['cedulaFrente', 'cedulaReverso', 'selfie', 'antecedentes', 'ruc', ...(cats.includes('salud') ? ['titulo'] : [])];
+const requiredDocsOf = (cats) => ['cedulaFrente', 'cedulaReverso', 'selfie', 'antecedentes', 'ruc', ...(cats.some((c) => TITLE_CATS.includes(c)) ? ['titulo'] : [])];
 
 async function googleToken() {
   try {

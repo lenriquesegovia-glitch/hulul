@@ -24,6 +24,8 @@ const PHOTOS: Record<CategorySlug, string> = {
   fumigacion: 'photo-1747659629851-a92bd71149f6',
   mudanzas: 'photo-1714647211902-bb711d643a17',
   tecnologia: 'photo-1550041473-d296a3a8a18a',
+  // Provisional (misma foto libre de albañilería) hasta tener una propia de ingeniería.
+  'servicios-profesionales': 'photo-1701850009190-2859ba2aeea6',
 };
 
 /** URL de la foto de una categoría, recortada al ancho pedido. */

@@ -27,6 +27,7 @@ const ALIASES: Record<CategorySlug, string[]> = {
   tecnologia: ['Técnico de computadoras', 'Laptop', 'WiFi', 'Internet', 'Cámaras', 'Celular', 'Televisor', 'Impresora', 'Router'],
   limpieza: ['Empleada doméstica', 'Señora de limpieza', 'Aseo de casa', 'Limpieza de departamento', 'Limpieza de muebles', 'Limpieza de colchones'],
   belleza: ['Uñas', 'Manicure', 'Pedicure', 'Corte de cabello', 'Barbero', 'Cejas', 'Pestañas', 'Peluquería'],
+  'servicios-profesionales': ['Ingeniero', 'Ingeniero civil', 'Arquitecto', 'Ingeniero eléctrico', 'Supervisor de obra', 'Fiscalizador', 'Hidrosanitario', 'Inspección de casa', 'Grietas', 'Planos', 'Permiso de construcción', 'Avalúo', 'Perito'],
   mascotas: ['Baño de perros', 'Groomer', 'Paseador de perros', 'Gatos', 'Cuidado de perros'],
   clases: ['Profesor particular', 'Tutor', 'Refuerzo escolar', 'Inglés', 'Matemáticas', 'Guitarra', 'Piano'],
 };

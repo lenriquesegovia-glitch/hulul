@@ -94,6 +94,10 @@ export const icons: Record<UiIconName, IconShape[]> = {
     { kind: 'circle', cx: 6.5, cy: 17.5, r: 1.8 },
     { kind: 'circle', cx: 17, cy: 17.5, r: 1.8 },
   ],
+  compass: [
+    { kind: 'circle', cx: 12, cy: 5, r: 2 },
+    { kind: 'path', d: 'M11 6.8L6 21M13 6.8L18 21M7.8 16h8.4M12 3V2' },
+  ],
   monitor: [
     { kind: 'rect', x: 3, y: 4, width: 18, height: 12, rx: 1.5 },
     { kind: 'path', d: 'M9 20h6M12 16v4' },

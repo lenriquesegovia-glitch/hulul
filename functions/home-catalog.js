@@ -739,5 +739,50 @@ export default [
     "id": "tecnologia:Domótica y casa inteligente",
     "categoryId": "tecnologia",
     "label": "Domótica y casa inteligente"
+  },
+  {
+    "id": "servicios-profesionales:Supervisión hidrosanitaria",
+    "categoryId": "servicios-profesionales",
+    "label": "Supervisión hidrosanitaria"
+  },
+  {
+    "id": "servicios-profesionales:Supervisión de obra",
+    "categoryId": "servicios-profesionales",
+    "label": "Supervisión de obra"
+  },
+  {
+    "id": "servicios-profesionales:Inspección de vivienda antes de comprar",
+    "categoryId": "servicios-profesionales",
+    "label": "Inspección de vivienda antes de comprar"
+  },
+  {
+    "id": "servicios-profesionales:Revisión de instalaciones eléctricas",
+    "categoryId": "servicios-profesionales",
+    "label": "Revisión de instalaciones eléctricas"
+  },
+  {
+    "id": "servicios-profesionales:Revisión estructural (grietas, fisuras)",
+    "categoryId": "servicios-profesionales",
+    "label": "Revisión estructural (grietas, fisuras)"
+  },
+  {
+    "id": "servicios-profesionales:Asesoría de remodelación",
+    "categoryId": "servicios-profesionales",
+    "label": "Asesoría de remodelación"
+  },
+  {
+    "id": "servicios-profesionales:Medición y levantamiento de planos",
+    "categoryId": "servicios-profesionales",
+    "label": "Medición y levantamiento de planos"
+  },
+  {
+    "id": "servicios-profesionales:Asesoría en permisos de construcción",
+    "categoryId": "servicios-profesionales",
+    "label": "Asesoría en permisos de construcción"
+  },
+  {
+    "id": "servicios-profesionales:Avalúo de vivienda",
+    "categoryId": "servicios-profesionales",
+    "label": "Avalúo de vivienda"
   }
 ];

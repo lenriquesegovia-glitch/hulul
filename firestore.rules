@@ -174,9 +174,9 @@ service cloud.firestore {
         && d.uid == uid
         && d.status in ['borrador', 'en_revision', 'observado']
         && d.updatedAt == request.time
-        // Sin límite de categorías (hay 18). Cada una se valida por separado;
+        // Sin límite práctico de categorías (hay 19). Cada una se valida por separado;
         // su estado (catStatus) lo escribe solo el servidor.
-        && (!('categories' in d) || (d.categories is list && d.categories.size() <= 18))
+        && (!('categories' in d) || (d.categories is list && d.categories.size() <= 40))
         && (!('visitRates' in d) || d.visitRates is map)
         && (!('catEvidence' in d) || d.catEvidence is map)
         // Actividades que no están entre las categorías: quedan en revisión.

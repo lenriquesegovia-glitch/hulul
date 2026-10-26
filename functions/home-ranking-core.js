@@ -7,7 +7,7 @@ export const homeCopy = {
     tagline: 'Soluciones para tu día',
 };
 export function discoveryTitle(mode) {
-    return mode === 'popular' ? 'Las más solicitadas' : 'Servicios destacados';
+    return 'Lo más solicitado esta semana';
 }
 /** Full snapshot recomputation; safe to retry. No reservation writes or triggers. */
 export function buildRanking(events, catalog, featuredIds, nowMs, policy = { minimumTotal: 20, minimumClientsPerService: 3 }) {

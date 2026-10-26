@@ -45,7 +45,11 @@ export const CATEGORY_PRICING: Record<CategorySlug, { suggested: number; hours: 
   fumigacion: { suggested: 30, hours: 2 },
   mudanzas: { suggested: 40, hours: 3 },
   tecnologia: { suggested: 20, hours: 1 },
+  'servicios-profesionales': { suggested: 40, hours: 2 },
 };
+
+/** Categorías que exigen título registrado en la SENESCYT (y validación con certificado). */
+export const TITLE_REQUIRED: CategorySlug[] = ['salud', 'servicios-profesionales'];
 
 /** Límites técnicos de la tarifa por visita (solo para evitar errores de tipeo). */
 export const MIN_VISIT_RATE = 5;
@@ -131,7 +135,7 @@ export const MAX_EVIDENCE_FILES = 6;
 /** ¿Está completa la validación de una categoría? Devuelve el problema o ''. */
 export function evidenceProblem(slug: CategorySlug, e: CategoryEvidence | undefined): string {
   if (!e) return 'Falta demostrar que sabes hacerlo.';
-  if (slug === 'salud' && e.kind !== 'certificado') return 'Salud exige título registrado en la SENESCYT.';
+  if (TITLE_REQUIRED.includes(slug) && e.kind !== 'certificado') return `${slug === 'salud' ? 'Salud' : 'Servicios profesionales'} exige título registrado en la SENESCYT.`;
   if (e.note.trim().length < 5) return e.kind === 'certificado' ? 'Escribe qué certificado o título tienes.' : 'Cuenta tu experiencia: años y dónde trabajaste.';
   if (e.kind === 'certificado' && e.files.length < 1) return 'Sube la foto o PDF del certificado.';
   if (e.kind === 'experiencia') {
@@ -163,7 +167,7 @@ export const TRADE_NAME: Record<CategorySlug, string> = {
   piscinas: 'técnico de piscinas', pintura: 'pintor', belleza: 'profesional de belleza', mascotas: 'cuidador de mascotas',
   clases: 'profesor particular', salud: 'profesional de la salud', cerrajeria: 'cerrajero', carpinteria: 'carpintero',
   albanileria: 'maestro albañil', fumigacion: 'técnico en control de plagas', mudanzas: 'transportista de mudanzas',
-  tecnologia: 'técnico en tecnología',
+  tecnologia: 'técnico en tecnología', 'servicios-profesionales': 'ingeniero o arquitecto',
 };
 
 /** Subservicios de una categoría (los mismos "más solicitados" de la web). */
@@ -197,7 +201,7 @@ export const PROVIDER_DOCS: ProviderDocSpec[] = [
 /** Documentos obligatorios según las categorías elegidas. */
 export function requiredDocs(cats: CategorySlug[]): ProviderDocSpec['key'][] {
   const base: ProviderDocSpec['key'][] = ['cedulaFrente', 'cedulaReverso', 'selfie', 'antecedentes', 'ruc'];
-  return cats.includes('salud') ? [...base, 'titulo'] : base;
+  return cats.some((c) => TITLE_REQUIRED.includes(c)) ? [...base, 'titulo'] : base;
 }
 
 export const MAX_DOC_MB = 10;
