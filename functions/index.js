@@ -1731,7 +1731,7 @@ const BOOKING_ID = /^[A-Za-z0-9]{10,40}$/;
 
 function requireAdmin(req) {
   if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
-  if (!isAdminToken(req.auth.token, ADMIN_EMAILS.value())) throw new HttpsError('permission-denied', 'No tienes acceso al panel de reclamos.');
+  if (!isAdminToken(req.auth.token, ADMIN_EMAILS.value())) throw new HttpsError('permission-denied', 'No tienes acceso a este panel. Entra con una cuenta autorizada de HULUL.');
   return { uid: req.auth.uid, email: String(req.auth.token.email).toLowerCase() };
 }
 
@@ -2213,10 +2213,10 @@ export const decidirProfesional = onCall({ region: REGION }, async (req) => {
   const ref = db().doc(`providers/${uid}`);
   const out = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    const r = reviewPatch(req.data, snap.exists ? snap.data() : null);
+    const r = reviewPatch(req.data, snap.exists ? snap.data() : null, Object.keys(CATEGORIES));
     if (r.error) throw new HttpsError('failed-precondition', r.error);
     tx.update(ref, { ...r.patch, reviewedAt: FieldValue.serverTimestamp(), reviewedBy: admin.email });
-    tx.set(ref.collection('revisiones').doc(), { decision: r.patch.status, note: r.patch.reviewNote, catStatus: r.patch.catStatus, by: admin.email, at: FieldValue.serverTimestamp() });
+    tx.set(ref.collection('revisiones').doc(), { decision: r.patch.status, note: r.patch.reviewNote, catStatus: r.patch.catStatus, ...(r.assigned.length ? { assigned: r.assigned } : {}), by: admin.email, at: FieldValue.serverTimestamp() });
     return r.patch;
   });
   logger.info('Panel: decisión de registro', { uid, decision: out.status, by: admin.email });

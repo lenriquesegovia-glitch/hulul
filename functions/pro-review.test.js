@@ -31,8 +31,26 @@ test('decisión inválida o borrador', () => {
   assert.ok(reviewPatch({ decision: 'aprobado' }, { ...pro, status: 'borrador' }).error);
 });
 
-test('solo actividades nuevas no se puede aprobar', () => {
-  assert.ok(reviewPatch({ decision: 'aprobado' }, { status: 'en_revision', categories: [], proposals: [{ name: 'Chef' }] }).error);
+test('solo actividades nuevas: no se aprueba sin asignarlas', () => {
+  assert.ok(reviewPatch({ decision: 'aprobado' }, { status: 'en_revision', categories: [], proposals: [{ id: 'chef', name: 'Chef' }] }, ['plomeria']).error);
+});
+
+test('actividad nueva asignada a una categoría existente se aprueba', () => {
+  const cur = { status: 'en_revision', categories: [], services: {}, visitRates: {}, catEvidence: {},
+    proposals: [{ id: 'nueva-supervision', name: 'Servicios profesionales', services: ['Supervisión hidrosanitaria'], rate: 50, note: 'Ingeniero civil, certificados' }] };
+  const r = reviewPatch({ decision: 'aprobado', assign: { 'nueva-supervision': 'plomeria' } }, cur, ['plomeria', 'electricidad']);
+  assert.equal(r.patch.status, 'aprobado');
+  assert.deepEqual(r.patch.categories, ['plomeria']);
+  assert.deepEqual(r.patch.services.plomeria, ['Supervisión hidrosanitaria']);
+  assert.equal(r.patch.visitRates.plomeria, 50);
+  assert.equal(r.patch.catStatus.plomeria, 'aprobado');
+  assert.deepEqual(r.patch.proposals, []);
+  assert.equal(r.patch.catEvidence.plomeria.note, 'Ingeniero civil, certificados');
+});
+
+test('asignar a una categoría que no existe falla', () => {
+  const cur = { status: 'en_revision', categories: [], proposals: [{ id: 'x', name: 'X', services: ['a'] }] };
+  assert.ok(reviewPatch({ decision: 'aprobado', assign: { x: 'inventada' } }, cur, ['plomeria']).error);
 });
 
 test('mensajes incluyen el motivo', () => {

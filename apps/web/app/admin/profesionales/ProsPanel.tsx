@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CATEGORY_REVIEW_LABEL, getCategory, serviceCity, TAX_REGIME_LABEL, WEEKDAY_NAMES, type TaxRegime } from '@hulul/shared';
+import { categories, CATEGORY_REVIEW_LABEL, getCategory, rateRange, serviceCity, TAX_REGIME_LABEL, WEEKDAY_NAMES, type CategorySlug, type TaxRegime } from '@hulul/shared';
 import type { ProFile, ProListItem, ProReviewDecision, ProReviewStatus } from '@hulul/shared/firebase';
 import { SignIn } from '@/components/SignIn';
 import { logout, useUser } from '@/lib/auth';
@@ -32,7 +32,7 @@ const NOTE_TEMPLATES = [
   'La foto de tu rostro no se ve clara. Tómala de frente, con buena luz y sin lentes oscuros.',
 ];
 
-const errMsg = (e: unknown) => (e as { message?: string }).message || 'No se pudo cargar.';
+const errMsg = (e: unknown) => ((e as { message?: string }).message || 'No se pudo cargar.').replace(/\s*\[\d{3}\]\s*$/, '');
 const catName = (slug: string) => getCategory(slug as never)?.name ?? slug;
 const cityName = (slug: string) => serviceCity(slug)?.name ?? slug;
 const when = (ms: number | null) => (ms ? new Date(ms).toLocaleString('es-EC', { timeZone: 'America/Guayaquil', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -105,6 +105,7 @@ function ProDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
   const [err, setErr] = useState('');
   const [note, setNote] = useState('');
   const [cats, setCats] = useState<Record<string, string>>({});
+  const [assign, setAssign] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState('');
 
@@ -126,7 +127,8 @@ function ProDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
     setBusy(true); setErr('');
     try {
       const { adminDecidePro } = await import('@hulul/shared/firebase');
-      await adminDecidePro(uid, decision, note.trim(), cats);
+      await adminDecidePro(uid, decision, note.trim(), cats, assign);
+      setAssign({});
       setDone({ aprobado: 'Aprobado. Ya aparece en HULUL y le llegó el aviso.', observado: 'Marcado como observado. Le llegó el aviso con lo que debe corregir.', rechazado: 'Rechazado. Le llegó el aviso con el motivo.' }[decision]);
       setNote('');
       await load();
@@ -210,14 +212,33 @@ function ProDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
 
       {p.proposals.length > 0 && (
         <Section title="Actividades nuevas que propone">
-          <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>No están en HULUL todavía. Si te parecen bien, hay que crear la categoría (o sumarla a una existente) antes de que los clientes la vean.</p>
-          {p.proposals.map((a) => (
-            <div key={a.id} className="stack gap-4" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-              <strong>{a.name} · ${a.rate ?? '—'} por visita</strong>
-              <span style={{ fontSize: 13.5 }}>{a.services.join(' · ')}</span>
-              <span className="muted" style={{ fontSize: 13.5 }}>{a.note}</span>
-            </div>
-          ))}
+          <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>No están en HULUL todavía. Para aprobarlas, elige en «Aprobar dentro de…» la categoría existente donde entra cada una. Si ninguna encaja, déjalas como propuesta.</p>
+          {p.proposals.map((a) => {
+            const to = assign[a.id] as CategorySlug | undefined;
+            const range = to ? rateRange(to) : null;
+            return (
+              <div key={a.id} className="stack gap-8" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                <strong>{a.name} · ${a.rate ?? '—'} por visita</strong>
+                <span style={{ fontSize: 13.5 }}>{a.services.join(' · ')}</span>
+                <span className="muted" style={{ fontSize: 13.5 }}>{a.note}</span>
+                {canDecide && (
+                  <label className="stack gap-4" style={{ fontSize: 13.5 }}>
+                    <span style={{ fontWeight: 700 }}>Aprobar dentro de…</span>
+                    <select value={to ?? ''} onChange={(e) => setAssign({ ...assign, [a.id]: e.target.value })} aria-label={`Categoría para ${a.name}`}>
+                      <option value="">Dejar como propuesta (no se aprueba)</option>
+                      {categories.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
+                    </select>
+                    {to && range && (
+                      <span className="muted" style={{ fontSize: 12.5 }}>
+                        Sus trabajos pasan a {catName(to)} y se aprueba junto con el registro. En {catName(to)} la tarifa va de ${range.min} a ${range.max}
+                        {Number(a.rate) > range.max || Number(a.rate) < range.min ? `: los clientes verán $${Math.min(range.max, Math.max(range.min, Number(a.rate) || range.min))}, no $${a.rate}.` : '.'}
+                      </span>
+                    )}
+                  </label>
+                )}
+              </div>
+            );
+          })}
         </Section>
       )}
 
@@ -239,7 +260,7 @@ function ProDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
 
       {f.history.length > 0 && (
         <Section title="Historial">
-          {f.history.map((h, i) => <Row key={i} k={when(h.at)} v={`${STATUS_LABEL[h.decision] ?? h.decision} por ${h.by}${h.note ? ` · ${h.note}` : ''}`} />)}
+          {f.history.map((h, i) => <Row key={i} k={when(h.at)} v={`${STATUS_LABEL[h.decision] ?? h.decision} por ${h.by}${h.note ? ` · ${h.note}` : ''}${h.assigned?.length ? ` · Actividades sumadas: ${h.assigned.map((x) => `${x.name} → ${catName(x.category)}`).join(', ')}` : ''}`} />)}
         </Section>
       )}
     </div>

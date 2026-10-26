@@ -807,7 +807,7 @@ export interface ProFile {
   verification: Record<string, { status: string; msg: string; flag: string; current: boolean; checks: Record<string, unknown> }>;
   alerts: string[];
   duplicates: string[];
-  history: { decision: string; note: string; by: string; at: number | null }[];
+  history: { decision: string; note: string; by: string; at: number | null; assigned?: { name: string; category: string }[] }[];
 }
 
 export async function adminListPros(status: ProReviewStatus): Promise<ProListItem[]> {
@@ -822,8 +822,9 @@ export async function adminProFile(uid: string, path: string): Promise<{ content
   return (await callable<{ uid: string; path: string }, { contentType: string; data: string }>('adminArchivoProfesional')({ uid, path })).data;
 }
 
-export async function adminDecidePro(uid: string, decision: ProReviewDecision, note: string, catStatus: Record<string, string>): Promise<void> {
-  await callable<{ uid: string; decision: ProReviewDecision; note: string; catStatus: Record<string, string> }, { ok: boolean }>('decidirProfesional')({ uid, decision, note, catStatus });
+/** assign: { idDeActividadPropuesta: categoría } suma esa actividad nueva a una categoría existente. */
+export async function adminDecidePro(uid: string, decision: ProReviewDecision, note: string, catStatus: Record<string, string>, assign: Record<string, string> = {}): Promise<void> {
+  await callable<{ uid: string; decision: ProReviewDecision; note: string; catStatus: Record<string, string>; assign: Record<string, string> }, { ok: boolean }>('decidirProfesional')({ uid, decision, note, catStatus, assign });
 }
 
 export type DocVerifyStatus = 'ok' | 'revisar' | 'rechazado';
