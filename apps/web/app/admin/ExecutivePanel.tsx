@@ -14,7 +14,7 @@ const RATE_STYLE: Record<string, [string, string]> = {
 };
 
 export function ExecutivePanel() {
-  const { view, range } = useAdmin();
+  const { view, range, can } = useAdmin();
   const ex = useMemo(() => (view ? executive(view.bookings, range) : null), [view, range]);
 
   return (
@@ -34,7 +34,7 @@ export function ExecutivePanel() {
 
           <div className="adm-pipe">
             {STAGES.map((s) => (
-              <Link key={s.key} href={`/admin/reservas?etapa=${s.key}`} style={{ ['--c' as string]: STAGE_COLOR[s.key] }} title={s.help}>
+              <Link key={s.key} href={can('reservas') ? `/admin/reservas?etapa=${s.key}` : '#'} onClick={(e) => { if (!can('reservas')) e.preventDefault(); }} style={{ ['--c' as string]: STAGE_COLOR[s.key] }} title={s.help}>
                 <b>{ex.byStage[s.key]}</b><span>{s.label}</span>
               </Link>
             ))}
@@ -68,7 +68,7 @@ export function ExecutivePanel() {
                   </div>
                 ))}
               </div>
-              <p className="muted" style={{ fontSize: 12.5, margin: '12px 0 0' }}>Reclamos abiertos en el periodo: <b>{ex.counts.claims}</b> · <Link href="/admin/reclamos">ver reclamos</Link></p>
+              <p className="muted" style={{ fontSize: 12.5, margin: '12px 0 0' }}>Reclamos abiertos en el periodo: <b>{ex.counts.claims}</b> {can('reclamos') && <>· <Link href="/admin/reclamos">ver reclamos</Link></>}</p>
             </section>
           </div>
 
@@ -116,7 +116,7 @@ export function ExecutivePanel() {
               <p className="sub">Reportados, ausentes o que cancelan seguido.</p>
               {ex.watchClients.length ? (
                 <ul style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 8, fontSize: 14 }}>
-                  {ex.watchClients.map((c) => <li key={c.clientId}><Link href={`/admin/clientes?id=${c.clientId}`}><b>{c.name || '—'}</b></Link><div className="muted" style={{ fontSize: 12.5 }}>{[c.reported && n(c.reported, 'reporte', 'reportes'), c.absent && n(c.absent, 'ausencia', 'ausencias'), c.cancelled && n(c.cancelled, 'cancelación', 'cancelaciones')].filter(Boolean).join(' · ')}</div></li>)}
+                  {ex.watchClients.map((c) => <li key={c.clientId}>{can('clientes') ? <Link href={`/admin/clientes?id=${c.clientId}`}><b>{c.name || '—'}</b></Link> : <b>{c.name || '—'}</b>}<div className="muted" style={{ fontSize: 12.5 }}>{[c.reported && n(c.reported, 'reporte', 'reportes'), c.absent && n(c.absent, 'ausencia', 'ausencias'), c.cancelled && n(c.cancelled, 'cancelación', 'cancelaciones')].filter(Boolean).join(' · ')}</div></li>)}
                 </ul>
               ) : <div className="adm-empty">Nadie con problemas.</div>}
             </section>

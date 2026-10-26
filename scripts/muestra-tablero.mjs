@@ -83,6 +83,13 @@ for (let d = -45; d <= 40; d++) {
   }
 }
 
+// Casos para ver alertas de cumplimiento: un cliente con trabajos grandes en efectivo, repetidos.
+for (let i = 0; i < 6; i++) {
+  const day = ecDay(now - (12 - i) * DAY); const pro = providers[5];
+  bookings.push([id20('BIG', i), { date: day, slot: '09:00', category: 'albanileria', professionalId: pro.uid, professionalName: 'Pedro Sarmiento', clientId: id20('CLI', 3), contactName: CLIENTS[3], contactPhone: '0991234563',
+    paymentMethod: 'efectivo', visit: 900, surcharge: 0, fee: 1.99, iva: 0.3, total: 1036.29, taxRegime: 'general', status: 'completada', arrivedAt: T(at(day, '09:00')), finishedAt: T(at(day, '15:00')), rating: 5, outcome: 'resuelto', createdAt: T(at(day, '09:00') - 2 * DAY), source: 'web' }]);
+}
+
 // Libro y liquidaciones semanales (lunes), como lo hace el servidor.
 const ledger = []; const payouts = [];
 for (const [bid, b] of bookings) {

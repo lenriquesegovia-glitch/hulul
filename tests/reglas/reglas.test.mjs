@@ -66,5 +66,11 @@ await no('nadie crea un reclamo desde la app', setDoc(doc(cli1, 'reclamos/b2'), 
 await no('las partes no leen los textos originales', getDoc(doc(cli1, 'reclamos/b1/privado/textos')));
 await no('las partes no leen el registro de accesos', getDoc(doc(cli1, 'reclamos/b1/accesos/a1')));
 
+console.log('Roles del panel');
+const intruso = env.authenticatedContext('x', { email: 'conta@correo.com', email_verified: true }).firestore();
+await no('nadie se da un rol desde la app', setDoc(doc(intruso, 'adminRoles/conta@correo.com'), { role: 'socio' }));
+await no('nadie lee los roles desde la app', getDoc(doc(intruso, 'adminRoles/conta@correo.com')));
+await no('nadie lee el registro de accesos del panel', getDoc(doc(intruso, 'adminAccesos/a1')));
+
 await env.cleanup();
 console.log(`\nReglas: ${n} comprobaciones correctas.`);

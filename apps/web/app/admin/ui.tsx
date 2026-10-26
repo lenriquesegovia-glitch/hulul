@@ -234,6 +234,7 @@ const CANCEL_BY: Record<string, string> = {
 };
 
 export function BookingDetail({ b, onClose }: { b: DashBooking; onClose: () => void }) {
+  const { can } = useAdmin();
   const f = caseFlags(b);
   const m = bookingMoney(b);
   const out = caseOutcome(b, f);
@@ -246,7 +247,7 @@ export function BookingDetail({ b, onClose }: { b: DashBooking; onClose: () => v
     { label: 'Empezó el trabajo', at: b.startedAt },
     { label: 'Terminó', at: b.finishedAt, color: '#206344' },
     { label: `Cancelada por ${CANCEL_BY[b.cancelledBy] ?? b.cancelledBy}`, at: b.cancelledAt, color: '#B42318' },
-    { label: b.claim ? `Reclamo del ${b.claim.openedBy}: ${b.claim.kindLabel}` : '', at: b.claim?.openedAt ?? null, color: '#6A3A8C' },
+    { label: b.claim ? `Reclamo del ${b.claim.openedBy}${b.claim.kindLabel ? `: ${b.claim.kindLabel}` : ''}` : '', at: b.claim?.openedAt ?? null, color: '#6A3A8C' },
   ].filter((e) => e.label && e.at);
   events.sort((a, z) => (a.at ?? 0) - (z.at ?? 0));
   return (
@@ -256,7 +257,7 @@ export function BookingDetail({ b, onClose }: { b: DashBooking; onClose: () => v
       <div className="adm-card">
         <h3 style={{ marginBottom: 10 }}>Partes</h3>
         <dl className="adm-kv">
-          <dt>Cliente</dt><dd><Link href={`/admin/clientes?id=${encodeURIComponent(b.clientId)}`}>{b.clientName || '—'}</Link> <span className="muted" style={{ fontWeight: 500 }}>{b.clientPhone}</span></dd>
+          <dt>Cliente</dt><dd>{can('clientes') ? <Link href={`/admin/clientes?id=${encodeURIComponent(b.clientId)}`}>{b.clientName || '—'}</Link> : (b.clientName || '—')} <span className="muted" style={{ fontWeight: 500 }}>{b.clientPhone}</span></dd>
           <dt>Profesional</dt><dd><Link href={`/admin/proveedores?id=${encodeURIComponent(b.proId)}`}>{b.proName || '—'}</Link></dd>
           <dt>Origen</dt><dd>{b.source === 'app' ? 'App' : 'Web'}</dd>
           {b.rating !== null && <><dt>Calificación al profesional</dt><dd>★ {b.rating}</dd></>}
@@ -290,7 +291,7 @@ export function BookingDetail({ b, onClose }: { b: DashBooking; onClose: () => v
           <dt>Forma de pago</dt><dd>{b.paymentMethod || '—'}</dd>
         </dl>
       </div>
-      {b.claim && <Link className="adm-btn solid" href={`/admin/reclamos?caso=${encodeURIComponent(b.id)}`}>Abrir el expediente del reclamo</Link>}
+      {b.claim && can('reclamos') && <Link className="adm-btn solid" href={`/admin/reclamos?caso=${encodeURIComponent(b.id)}`}>Abrir el expediente del reclamo</Link>}
     </Drawer>
   );
 }

@@ -861,3 +861,18 @@ export async function adminDashboard(range?: { desde?: string; hasta?: string })
 export async function adminMarkPayoutPaid(id: string, reference: string): Promise<void> {
   await callable<{ id: string; reference: string }, { ok: boolean }>('marcarLiquidacion')({ id, reference });
 }
+
+/* ------------------------------ Equipo y roles (dueño) ----------------------------- */
+
+export interface AdminMember { email: string; name: string; role: import('./dashboard').AdminRole; active: boolean; addedBy: string; addedAt: number | null; lastSeen: number | null }
+export interface AdminTeam { members: AdminMember[]; log: { action: string; by: string; target: string; role: string; at: number | null }[] }
+
+export async function adminTeam(): Promise<AdminTeam> {
+  return (await callable<Record<string, never>, AdminTeam>('adminEquipo')({})).data;
+}
+export async function adminSetRole(input: { email: string; name: string; role: 'socio' | 'contabilidad' | 'cumplimiento' }): Promise<void> {
+  await callable<typeof input, { ok: boolean }>('adminGuardarRol')(input);
+}
+export async function adminRemoveRole(email: string): Promise<void> {
+  await callable<{ email: string }, { ok: boolean }>('adminQuitarRol')({ email });
+}
