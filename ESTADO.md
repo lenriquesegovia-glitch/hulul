@@ -1,5 +1,11 @@
 # HULUL — Estado y registro de entregas
 
+## En PR — Tablero de administración (/admin), 26 de octubre de 2026 (Claude)
+- PR #10 (rama `claude/tablero-admin`), verificar ✅ (run 40370799975). **Falta integrar a main y publicar backend + web** ("Publicar HULUL" con `backend=true`, `android=false`): la app no cambia.
+- `/admin`: Resumen ejecutivo (pastel del 100 % de lo terminado: éxito, atrasado, mal servicio, en reclamo, falla del profesional, cliente ausente, cancelaciones; tasas, clientes reportados, ventas, ingreso HULUL, semanas, categorías, rankings), Reservas (CRM) por etapa en tarjetas / lista / por día con periodos, Clientes, Contabilidad (antes / durante / después, bolsas, libro, liquidaciones con "marcar pagada") y Proveedores (facturado, comisión, saldo, liquidaciones, actividad). Reclamos y Aprobar profesionales quedan en el mismo menú.
+- Funciones nuevas: `adminTablero` (solo ADMIN_EMAILS, contactos enmascarados, acceso en `adminAccesos`) y `marcarLiquidacion`. Lógica en `packages/shared/src/dashboard.ts` y `functions/tablero-core.js`; pruebas en `scripts/check-dashboard.mjs` y `functions/tablero-core.test.js`.
+- Revisión local con datos de muestra: `node scripts/muestra-tablero.mjs` y `NEXT_PUBLIC_ADMIN_MUESTRA=1 npx next dev` en apps/web (solo en desarrollo).
+
 ## Estado vigente — Acceso, registro verificado y panel de profesionales, publicado el 25 de octubre de 2026 (Claude)
 - main **a4b350a** (con ef19299 y 3cfd16a). "Publicar HULUL" manual: verificar ✅ → backend ✅ → web ✅ → android ✅ (OTA production).
 - Acceso: web con Google, Outlook (Microsoft Entra, secreto vence oct-2028) y correo; sin SMS; Facebook oculto. App: Google y Outlook por el navegador (`/app-login` → `tokenApp` → `hulul://login`, pantalla `app/login.tsx`), sin APK nuevo.
