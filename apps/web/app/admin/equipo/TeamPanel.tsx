@@ -72,6 +72,11 @@ export function TeamPanel() {
   return (
     <>
       <PageHead title="Equipo y roles" lead="Quién entra al panel y qué puede ver o hacer. Solo tú das o quitas accesos." />
+      <div className="adm-help">
+        <b>Cómo funciona</b>
+        <span>1. Escribes el nombre, el correo y el rol de la persona. 2. Le llega <b>un solo correo</b> de bienvenida con el enlace; no recibe nada más después. 3. Entra a hululec.com/admin con ese correo (Google u Outlook) y solo ve lo que su rol permite.</span>
+        <span>Para que ya no entre: en «Personas con acceso», botón rojo <b>Quitar</b> junto a su nombre. Desde ese momento ya no puede abrir el panel. Para cambiarle lo que ve, cambia su rol en la misma fila.</span>
+      </div>
       {msg && <div className={msg.ok ? 'adm-note' : 'adm-err'} role="status">{msg.text}</div>}
 
       <div className="adm-grid g-2">

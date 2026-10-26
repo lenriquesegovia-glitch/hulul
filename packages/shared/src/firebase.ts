@@ -876,3 +876,16 @@ export async function adminSetRole(input: { email: string; name: string; role: '
 export async function adminRemoveRole(email: string): Promise<void> {
   await callable<{ email: string }, { ok: boolean }>('adminQuitarRol')({ email });
 }
+
+/* --------------------------- Pagos masivos (banca web) --------------------------- */
+
+export interface BankFileResult { fileName: string; mime: string; content: string; count: number; total: number; skipped: { id: string; proId: string; name: string; net: number; reason: string }[] }
+
+/** Archivo de la semana para cargar en la banca web (solo roles con permiso de pagos). */
+export async function adminBankFile(week: string): Promise<BankFileResult> {
+  return (await callable<{ week: string }, BankFileResult>('archivoPagos')({ week })).data;
+}
+/** Marca pagado el lote de una semana con la referencia u orden del banco. */
+export async function adminMarkBatchPaid(week: string, reference: string): Promise<number> {
+  return (await callable<{ week: string; reference: string }, { ok: boolean; count: number }>('marcarLotePagado')({ week, reference })).data.count;
+}

@@ -39,7 +39,7 @@ export function appointmentAt(date, slot) {
 }
 
 /** Reserva → fila del tablero. claim = reclamos/{id} si existe. */
-export function bookingRow(id, b, claim = null) {
+export function bookingRow(id, b, claim = null, review = null) {
   const extra = b.extra && typeof b.extra === 'object'
     ? { amount: num(b.extra.amount), status: str(b.extra.status, 30), method: str(b.extra.method, 20) }
     : null;
@@ -51,6 +51,8 @@ export function bookingRow(id, b, claim = null) {
     slot: str(b.slot, 5),
     at: appointmentAt(b.date, b.slot),
     createdAt: ms(b.createdAt),
+    acceptedAt: ms(b.acceptedAt),
+    enRouteAt: ms(b.enRouteAt),
     category: str(b.category, 40),
     status: str(b.status, 20),
     demo: !!b.demo,
@@ -83,6 +85,7 @@ export function bookingRow(id, b, claim = null) {
     rings: Array.isArray(b.rings) ? b.rings.length : 0,
     outcome: str(b.outcome, 20),
     rating: Number(b.rating) > 0 ? Number(b.rating) : null,
+    ratingText: str(review?.text, 300),
     clientStars: Number(b.clientRating?.stars) > 0 ? Number(b.clientRating.stars) : null,
     photos: (Array.isArray(b.diagnosisPhotos) ? b.diagnosisPhotos.length : 0),
     claim: claim ? {

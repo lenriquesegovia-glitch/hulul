@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@hulul/shared": "*",
+    "exceljs": "^4.4.0",
     "firebase": "^13.0.0",
     "leaflet": "^1.9.4",
     "next": "16.4.2",
