@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { getCategory } from '@hulul/shared';
 import {
   bookingMoney, caseFlags, caseOutcome, money, OUTCOMES, PERIOD_LABEL, percent, stageOf, STATUS_LABEL,
@@ -23,12 +23,42 @@ export const initials = (name: string) => name.split(/\s+/).filter(Boolean).slic
 export const STAGE_COLOR: Record<Stage, string> = { programada: '#1F4E79', ejecucion: '#C98A1B', ejecutada: '#206344', reclamo: '#6A3A8C', cancelada: '#8FA6A3' };
 export const STAGE_TONE: Record<Stage, string> = { programada: 't-info', ejecucion: 't-warn', ejecutada: 't-ok', reclamo: 't-violet', cancelada: 't-mute' };
 
-/** Descarga un CSV generado en el navegador. */
-export function downloadCsv(name: string, csv: string) {
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+/** Descarga un archivo de texto tal cual (p. ej., el archivo del banco). */
+export function downloadText(name: string, content: string, mime = 'text/csv;charset=utf-8') {
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
   const a = document.createElement('a');
   a.href = url; a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/** Lee el CSV que arma toCsv (';', comillas, coma decimal) para pasarlo a Excel. */
+function parseCsv(csv: string): string[][] {
+  const text = csv.replace(/^\ufeff/, '');
+  const rows: string[][] = []; let row: string[] = []; let cell = ''; let q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; continue; }
+    if (ch === '"') q = true;
+    else if (ch === ';') { row.push(cell); cell = ''; }
+    else if (ch === '\n') { row.push(cell.replace(/\r$/, '')); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  row.push(cell); rows.push(row);
+  return rows;
+}
+
+/** Exporta a Excel (.xlsx) las tablas del panel (antes CSV). */
+export async function downloadCsv(name: string, csv: string) {
+  const [head, ...body] = parseCsv(csv);
+  const isNum = (v: string) => /^-?(0|[1-9]\d*)(,\d+)?$/.test(v);
+  const moneyCols = head.map((_, k) => body.some((r) => /,\d{1,2}$/.test(r[k] ?? '')) && body.every((r) => !r[k] || isNum(r[k])));
+  const { downloadXlsx } = await import('./excel');
+  await downloadXlsx(name.replace(/\.csv$/, '.xlsx'), [{
+    name: 'Datos',
+    columns: head.map((h, k) => ({ key: String(k), header: h.charAt(0).toUpperCase() + h.slice(1), money: moneyCols[k] })),
+    rows: body.map((r) => Object.fromEntries(r.map((v, k) => [String(k), isNum(v) ? Number(v.replace(',', '.')) : v]))),
+    totals: head.map((_, k) => String(k)).filter((k) => moneyCols[Number(k)]),
+  }]);
 }
 
 /* --------------------------------- Encabezado -------------------------------- */
@@ -85,8 +115,11 @@ export function Loading() {
 
 /* -------------------------------- Indicadores -------------------------------- */
 
-export function Kpi({ label, value, hint, accent }: { label: string; value: React.ReactNode; hint?: React.ReactNode; accent?: boolean }) {
-  return <div className={`adm-kpi${accent ? ' accent' : ''}`}><span>{label}</span><b>{value}</b>{hint && <small>{hint}</small>}</div>;
+export function Kpi({ label, value, hint, accent, onClick, href }: { label: string; value: React.ReactNode; hint?: React.ReactNode; accent?: boolean; onClick?: () => void; href?: string }) {
+  const body = <><span>{label}</span><b>{value}</b>{hint && <small>{hint}</small>}{(onClick || href) && <i className="adm-kpi-go" aria-hidden="true">Ver detalle →</i>}</>;
+  if (href) return <Link href={href} className={`adm-kpi click${accent ? ' accent' : ''}`}>{body}</Link>;
+  if (onClick) return <button type="button" onClick={onClick} className={`adm-kpi click${accent ? ' accent' : ''}`}>{body}</button>;
+  return <div className={`adm-kpi${accent ? ' accent' : ''}`}>{body}</div>;
 }
 
 export function Badge({ tone, children }: { tone: string; children: React.ReactNode }) {
@@ -96,7 +129,7 @@ export function Badge({ tone, children }: { tone: string; children: React.ReactN
 /* ---------------------------------- Gráficos --------------------------------- */
 
 /** Pastel (anillo) con leyenda: cantidad y porcentaje de cada parte. */
-export function Donut({ items, center, sub }: { items: { label: string; color: string; count: number }[]; center: React.ReactNode; sub: string }) {
+export function Donut({ items, center, sub }: { items: { label: string; color: string; count: number; onClick?: () => void }[]; center: React.ReactNode; sub: string }) {
   const total = items.reduce((s, i) => s + i.count, 0);
   const R = 70, C = 2 * Math.PI * R;
   let acc = 0;
@@ -115,7 +148,7 @@ export function Donut({ items, center, sub }: { items: { label: string; color: s
       </svg>
       <ul className="adm-legend">
         {items.map((i) => (
-          <li key={i.label} className={i.count ? '' : 'zero'}>
+          <li key={i.label} className={`${i.count ? '' : 'zero'}${i.onClick && i.count ? ' adm-clickrow' : ''}`} {...(i.onClick && i.count ? { role: 'button', tabIndex: 0, onClick: i.onClick } : {})}>
             <i style={{ background: i.color }} /><span>{i.label}</span><span className="n">{i.count}</span><span className="p">{total ? percent(i.count / total) : '—'}</span>
           </li>
         ))}
@@ -125,13 +158,13 @@ export function Donut({ items, center, sub }: { items: { label: string; color: s
 }
 
 /** Barras horizontales. */
-export function HBars({ items, max }: { items: { label: string; value: number; display: React.ReactNode; color?: string; parts?: { value: number; color: string }[] }[]; max?: number }) {
+export function HBars({ items, max }: { items: { label: string; value: number; display: React.ReactNode; color?: string; parts?: { value: number; color: string }[]; onClick?: () => void }[]; max?: number }) {
   const top = max ?? Math.max(1, ...items.map((i) => i.value));
   if (!items.length) return <div className="adm-empty">Sin datos en este periodo.</div>;
   return (
     <div className="adm-hbars">
-      {items.map((i) => (
-        <div key={i.label} className="adm-hbar">
+      {items.map((i, k) => (
+        <div key={`${i.label}-${k}`} className={`adm-hbar${i.onClick ? ' adm-clickrow' : ''}`} {...(i.onClick ? { role: 'button', tabIndex: 0, onClick: i.onClick, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') i.onClick!(); } } : {})}>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={i.label}>{i.label}</span>
           <span className="track">
             {i.parts ? i.parts.map((p, k) => <span key={k} className="fill" style={{ width: `${(p.value / top) * 100}%`, background: p.color }} />)
@@ -292,6 +325,24 @@ export function BookingDetail({ b, onClose }: { b: DashBooking; onClose: () => v
         </dl>
       </div>
       {b.claim && can('reclamos') && <Link className="adm-btn solid" href={`/admin/reclamos?caso=${encodeURIComponent(b.id)}`}>Abrir el expediente del reclamo</Link>}
+    </Drawer>
+  );
+}
+
+/* --------------------------- Lista que se abre al hacer clic --------------------------- */
+
+/** Abre las reservas que forman un número del panel, para validarlo una por una. */
+export function BookingListDrawer({ title, ids, onClose }: { title: string; ids: string[]; onClose: () => void }) {
+  const { view } = useAdmin();
+  const [open, setOpen] = useState<DashBooking | null>(null);
+  const set = new Set(ids);
+  const list = (view?.bookings ?? []).filter((b) => set.has(b.id)).sort((a, z) => (z.at ?? 0) - (a.at ?? 0));
+  const total = list.reduce((t, b) => t + bookingMoney(b).gross, 0);
+  if (open) return <BookingDetail b={open} onClose={() => setOpen(null)} />;
+  return (
+    <Drawer title={title} sub={`${list.length} ${list.length === 1 ? 'reserva' : 'reservas'} · ${money(total)}`} onClose={onClose}>
+      {list.length ? <div className="adm-grid" style={{ gap: 10 }}>{list.map((b) => <BookingCard key={b.id} b={b} onOpen={setOpen} showStage />)}</div>
+        : <div className="adm-empty">No hay reservas en este grupo.</div>}
     </Drawer>
   );
 }

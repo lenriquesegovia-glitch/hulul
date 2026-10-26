@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { bookingRow, ledgerRow, payoutRow, providerRow } from '../functions/tablero-core.js';
 import { ledgerEntriesFor } from '../functions/money.js';
 import {
-  accounting, canDo, caseFlags, complianceAlerts, caseOutcome, clientStats, executive, periodRange, providerInvoices, providerStats, stageOf, toCsv,
+  accounting, canDo, caseFlags, complianceAlerts, hululSales, journal, ledgerByAccount, quality, weekMoney, caseOutcome, clientStats, executive, periodRange, providerInvoices, providerStats, stageOf, toCsv,
 } from '../packages/shared/src/dashboard.ts';
 
 const now = Date.UTC(2026, 9, 26, 3); // domingo 25-oct-2026, 22:00 en Ecuador
@@ -122,5 +122,26 @@ const kinds = new Set(alerts.map((a) => a.kind));
 for (const k of ['operacion', 'acumulado', 'efectivo', 'repetido']) assert.ok(kinds.has(k), `alerta ${k}`);
 assert.equal(alerts[0].level, 'alta');
 assert.equal(complianceAlerts({ bookings, payouts: [], providers: [] }, { from: '2026-10-01', to: '2026-10-31' }).length, 0, 'operaciones normales sin alertas');
+
+// Contabilidad NIIF: partida doble cuadrada; tarjeta deja en cero la cuenta por cobrar al cliente.
+{
+  const card = bookingRow('card000000000', { ...base, date: '2026-10-20', slot: '10:00', status: 'completada' });
+  const cash = bookingRow('cash000000000', { ...base, date: '2026-10-20', slot: '11:00', status: 'completada', paymentMethod: 'efectivo' });
+  const mk = (b, raw) => ledgerEntriesFor(raw).map((e, i) => ledgerRow(`${b.id}_${i}`, { ...e, bookingId: b.id, proId: 'P1', createdAt: T(at('2026-10-20', '12:00')), payoutId: null }));
+  const lg = [...mk(card, { ...base, status: 'completada' }), ...mk(cash, { ...base, status: 'completada', paymentMethod: 'efectivo' })];
+  const lines = journal({ ledger: lg, payouts: [], bookings: [card, cash], providers: [] }, { from: '2026-10-01', to: '2026-10-31' });
+  const d = lines.reduce((t, l) => t + l.debit, 0), c = lines.reduce((t, l) => t + l.credit, 0);
+  assert.ok(Math.abs(d - c) < 0.001, 'debe = haber');
+  const acc = Object.fromEntries(ledgerByAccount(lines).map((a) => [a.code, a.balance]));
+  assert.equal(acc['1010205'], 0, 'tarjeta: el cobro cancela la cuenta del cliente');
+  assert.ok(acc['4102'] < 0 && acc['2010701'] < 0, 'ingreso e IVA al haber');
+  const sales = hululSales({ ledger: lg, bookings: [card, cash], providers: [] }, { from: '2026-10-01', to: '2026-10-31' });
+  assert.equal(sales.filter((x) => x.to === 'cliente').length, 2);
+  assert.equal(sales.filter((x) => x.to === 'profesional').length, 2);
+  const q = quality(bookings, { from: '2026-10-01', to: '2026-10-31' });
+  assert.equal(q.stars.reduce((t, s) => t + s.count, 0), q.rated);
+  const wm = weekMoney({ ledger: lg, payouts: [], bookings: [card, cash] }, now);
+  assert.equal(typeof wm.nextPayout.estimate, 'number');
+}
 
 console.log('Tablero: OK');

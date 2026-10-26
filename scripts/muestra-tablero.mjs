@@ -42,7 +42,7 @@ const providers = PROS.map(([f, l, cats, , rating, regime], i) => {
   } };
 });
 
-const bookings = []; const claims = {};
+const bookings = []; const claims = {}; const reviews = {};
 let n = 0;
 for (let d = -45; d <= 40; d++) {
   const day = ecDay(now + d * DAY);
@@ -79,6 +79,8 @@ for (let d = -45; d <= 40; d++) {
         clientId: b.clientId, proId: b.professionalId, category: b.category, openedAt: T(t + DAY), resolveDueAt: T(t + 4 * DAY), decision: open ? null : { outcome: pick(['cliente', 'profesional']), at: T(t + 3 * DAY), multaPro: 0, creditoCliente: 0 } };
     }
     if (b.clientRating && rnd() < 0.5) claims[bid] = { code: `R-${bid.slice(2, 6)}`, bookingId: bid, openedBy: 'profesional', kind: 'trato', kindLabel: 'Trato del cliente', status: 'resuelto', clientId: b.clientId, proId: b.professionalId, category: b.category, openedAt: T(t + DAY), decision: { outcome: 'profesional', at: T(t + 2 * DAY) } };
+    if (b.status !== 'pendiente') b.acceptedAt = T(b.createdAt.toMillis() + (3 + Math.floor(rnd() * 40)) * 60_000);
+    if (b.rating) reviews[bid] = { text: b.rating <= 2 ? pick(['Llegó tarde y no avisó.', 'Dejó el trabajo a medias, tuve que llamar a otro.', 'Muy caro para lo que hizo.', 'No trajo los materiales.']) : b.rating === 3 ? pick(['Cumplió, pero se demoró más de lo dicho.', 'Bien, aunque dejó sucio.']) : pick(['Excelente, muy puntual.', 'Todo perfecto, lo vuelvo a llamar.', '']) };
     bookings.push([bid, b]);
   }
 }
@@ -114,7 +116,7 @@ for (let w = 5; w >= 0; w--) {
 const out = {
   range: { from: ecDay(now - 180 * DAY), to: ecDay(now + 90 * DAY) },
   generatedAt: now,
-  bookings: bookings.map(([id, b]) => bookingRow(id, b, claims[id] ?? null)),
+  bookings: bookings.map(([id, b]) => bookingRow(id, b, claims[id] ?? null, reviews[id] ?? null)),
   ledger: ledger.map((e) => ledgerRow(e.id, e)),
   payouts: payouts.map(([id, p]) => payoutRow(id, p)),
   providers: providers.map((p) => providerRow(p.uid, p.raw, now)),

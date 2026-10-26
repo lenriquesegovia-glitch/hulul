@@ -31,6 +31,7 @@ import { CLAIM_STATUS, CLIENT_KINDS, PRO_KINDS, RESOLVE_HOURS, RESPONSE_HOURS, R
 import { VERIFIED_DOCS, expectOf, submissionCheck, verifySelfie, verifyText } from './doc-verify.js';
 import { MAX_FILE_BYTES, PRO_UID, REVIEW_LIST_STATUSES, maskBank, providerFiles, reviewMessage, reviewPatch } from './pro-review.js';
 import { can, dashForRole, normEmail, roleFor, roleInput } from './roles-core.js';
+import { bankFile, BANK_FORMATS, DEFAULT_BANK_FORMAT, paymentLines } from './bank-files.js';
 import { bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
 
@@ -2184,7 +2185,7 @@ export const adminTablero = onCall({ region: REGION, memory: '512MiB', timeoutSe
   const now = Date.now();
   const range = dashRange(req.data, now);
   const fromTs = Timestamp.fromMillis(Date.parse(`${range.from}T05:00:00Z`) - 86_400_000);
-  const [bk, cl, lgRange, lgPending, po, pr, cs] = await Promise.all([
+  const [bk, cl, lgRange, lgPending, po, pr, cs, rv] = await Promise.all([
     db().collection('bookings').where('date', '>=', range.from).where('date', '<=', range.to).limit(5000).get(),
     db().collection('reclamos').limit(2000).get(),
     db().collection('ledger').where('createdAt', '>=', fromTs).limit(20000).get(),
@@ -2192,7 +2193,9 @@ export const adminTablero = onCall({ region: REGION, memory: '512MiB', timeoutSe
     db().collection('payouts').limit(3000).get(),
     db().collection('providers').limit(3000).get(),
     db().collection('clients').limit(10000).get(),
+    db().collection('reviews').where('createdAt', '>=', fromTs).limit(5000).get(),
   ]);
+  const reviewsById = new Map(rv.docs.map((d) => [d.id, d.data()]));
   const claimsById = new Map(cl.docs.map((d) => [d.id, d.data()]));
   const ledger = new Map();
   for (const d of [...lgRange.docs, ...lgPending.docs]) ledger.set(d.id, ledgerRow(d.id, d.data()));
@@ -2202,13 +2205,66 @@ export const adminTablero = onCall({ region: REGION, memory: '512MiB', timeoutSe
     range,
     generatedAt: now,
     viewer: { email: admin.email, role: admin.role },
-    bookings: bk.docs.map((d) => bookingRow(d.id, d.data(), claimsById.get(d.id) ?? null)),
+    bookings: bk.docs.map((d) => bookingRow(d.id, d.data(), claimsById.get(d.id) ?? null, reviewsById.get(d.id) ?? null)),
     ledger: [...ledger.values()],
     payouts: po.docs.map((d) => payoutRow(d.id, d.data())),
     providers: pr.docs.filter((d) => d.data().status && d.data().status !== 'borrador').map((d) => providerRow(d.id, d.data(), now)),
     clients: cs.docs.map((d) => clientRow(d.id, d.data())),
     claims: cl.docs.map((d) => claimRow(d.id, d.data())),
   }, admin.role);
+});
+
+/* ------------------------- Pagos masivos (banca web) ------------------------- */
+
+const WEEK = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Liquidaciones por pagar de una semana, con los nombres de los profesionales. */
+async function pendingBatch(week) {
+  if (!WEEK.test(week)) throw new HttpsError('invalid-argument', 'Semana no válida.');
+  const snap = await db().collection('payouts').where('week', '==', week).get();
+  const payouts = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((p) => p.status === 'por_pagar');
+  const names = {};
+  await Promise.all([...new Set(payouts.map((p) => p.proId))].map(async (uid) => {
+    const p = (await db().doc(`providers/${uid}`).get()).data() ?? {};
+    names[uid] = p.kind === 'empresa' && p.businessName ? p.businessName : `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim();
+  }));
+  return { payouts, names };
+}
+
+/**
+ * Archivo para cargar en la banca web los pagos de una semana. Lleva cuentas
+ * completas: solo roles con permiso de pagos, y cada descarga queda registrada.
+ */
+export const archivoPagos = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const week = String(req.data?.week ?? '');
+  const format = String(req.data?.format ?? DEFAULT_BANK_FORMAT);
+  if (!BANK_FORMATS[format]) throw new HttpsError('invalid-argument', 'Formato no disponible.');
+  const { payouts, names } = await pendingBatch(week);
+  const lines = paymentLines(payouts, names);
+  if (!lines.ok.length) throw new HttpsError('failed-precondition', lines.skipped.length ? 'Ninguna liquidación de esa semana tiene la cuenta completa.' : 'No hay pagos pendientes esa semana.');
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, role: admin.role, action: 'archivo_pagos', week, format, count: lines.ok.length, total: lines.total, at: FieldValue.serverTimestamp() });
+  const f = BANK_FORMATS[format];
+  return {
+    fileName: `hulul-pagos-${week}.${f.ext}`, mime: f.mime, content: bankFile(lines.ok, format),
+    count: lines.ok.length, total: lines.total, skipped: lines.skipped,
+  };
+});
+
+/** Después de cargar el archivo en el banco: marca pagado todo el lote de la semana. */
+export const marcarLotePagado = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const week = String(req.data?.week ?? '');
+  const reference = String(req.data?.reference ?? '').trim().slice(0, 80);
+  if (reference.length < 4) throw new HttpsError('invalid-argument', 'Escribe el número de orden o la referencia que te dio el banco.');
+  const { payouts, names } = await pendingBatch(week);
+  const { ok } = paymentLines(payouts, names);
+  if (!ok.length) throw new HttpsError('failed-precondition', 'No hay pagos pendientes con cuenta completa esa semana.');
+  const batch = db().batch();
+  for (const l of ok) batch.update(db().doc(`payouts/${l.id}`), { status: 'pagado', paidAt: FieldValue.serverTimestamp(), paidBy: admin.email, paymentReference: reference, paidInBatch: true });
+  await batch.commit();
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, role: admin.role, action: 'lote_pagado', week, reference, count: ok.length, at: FieldValue.serverTimestamp() });
+  return { ok: true, count: ok.length };
 });
 
 /* ---------------------------- Equipo y roles (solo dueño) ---------------------------- */

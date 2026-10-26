@@ -17,6 +17,7 @@ export interface DashClaimRef {
 
 export interface DashBooking {
   id: string; code: string; date: string; slot: string; at: number | null; createdAt: number | null;
+  acceptedAt?: number | null; enRouteAt?: number | null; ratingText?: string;
   category: string; status: string; demo: boolean; source: string;
   clientId: string; clientName: string; clientPhone: string; proId: string; proName: string;
   paymentMethod: string; visit: number; surcharge: number; surchargeKind: string; fee: number; iva: number; total: number; taxRegime: string;
@@ -646,4 +647,250 @@ export function complianceAlerts(data: Pick<DashData, 'bookings' | 'payouts' | '
   }
   const lv = { alta: 0, media: 1 };
   return out.sort((a, b) => lv[a.level] - lv[b.level] || b.amount - a.amount);
+}
+
+/* ------------------------------ Calidad del servicio ----------------------------- */
+
+const OUTCOME_LABEL: Record<string, string> = { resuelto: 'Resuelto', parcial: 'Completado en parte', no_resuelto: 'No se pudo resolver' };
+const CANCEL_LABEL = (b: DashBooking, f: CaseFlags) =>
+  f.clientAbsent ? 'Cliente ausente' : f.proNoShow ? 'Profesional no se presentó' : f.proCancelled ? 'Profesional tarde o canceló'
+    : f.clientCancelled ? 'Canceló el cliente' : b.cancelledBy === 'sistema' ? 'Nadie aceptó a tiempo' : b.cancelledBy === 'reclamo' ? 'Anulada por reclamo' : 'Otro motivo';
+
+/** Un grupo de reservas que se puede abrir (cada número del resumen lleva a su lista). */
+export interface Bucket { key: string; label: string; count: number; ids: string[]; value?: number }
+const bucket = (m: Map<string, Bucket>, key: string, label: string, id: string, value?: number) => {
+  const b = m.get(key) ?? { key, label, count: 0, ids: [], value: 0 };
+  b.count += 1; b.ids.push(id); if (value !== undefined) b.value = r2((b.value ?? 0) + value);
+  m.set(key, b);
+};
+
+export interface Quality {
+  stars: Bucket[]; avgRating: number | null; rated: number;
+  ratingByWeek: { week: string; avg: number | null; count: number }[];
+  punctuality: { arrived: number; onTime: Bucket; late: Bucket; avgLateMin: number | null };
+  outcomes: Bucket[];
+  accept: { avgMin: number | null; within15: number; count: number };
+  loyalty: { clients: number; returning: Bucket; samePro: Bucket };
+  claimReasons: Bucket[]; cancelReasons: Bucket[];
+  categories: { category: string; avg: number | null; rated: number; done: number; ids: string[] }[];
+  comments: { id: string; code: string; date: string; category: string; proName: string; clientName: string; rating: number; text: string }[];
+}
+
+/** Lo cualitativo del periodo: estrellas, puntualidad, resultado, fidelidad, motivos y comentarios. */
+export function quality(all: DashBooking[], range: DateRange): Quality {
+  const rows = all.filter((b) => inRange(b.date, range));
+  const stars = new Map<string, Bucket>(); [5, 4, 3, 2, 1].forEach((n) => stars.set(String(n), { key: String(n), label: `${n} ★`, count: 0, ids: [] }));
+  const outcomes = new Map<string, Bucket>(); Object.entries(OUTCOME_LABEL).forEach(([k, l]) => outcomes.set(k, { key: k, label: l, count: 0, ids: [] }));
+  const claims = new Map<string, Bucket>(); const cancels = new Map<string, Bucket>();
+  const weeks = new Map<string, number[]>();
+  const cats = new Map<string, { r: number[]; done: number; ids: string[] }>();
+  const onTime: Bucket = { key: 'a_tiempo', label: 'Llegó a tiempo', count: 0, ids: [] };
+  const late: Bucket = { key: 'tarde', label: 'Llegó tarde', count: 0, ids: [] };
+  let lateSum = 0, ratingSum = 0, rated = 0, acceptSum = 0, acceptN = 0, within15 = 0;
+  const comments: Quality['comments'] = [];
+
+  for (const b of rows) {
+    const f = caseFlags(b);
+    if (b.rating !== null) {
+      bucket(stars, String(Math.round(b.rating)), `${Math.round(b.rating)} ★`, b.id);
+      ratingSum += b.rating; rated += 1;
+      const w = mondayOf(b.date); weeks.set(w, [...(weeks.get(w) ?? []), b.rating]);
+      if (b.ratingText && b.rating <= 3) comments.push({ id: b.id, code: b.code, date: b.date, category: b.category, proName: b.proName, clientName: b.clientName, rating: b.rating, text: b.ratingText });
+    }
+    if (f.lateMin !== null) {
+      if (f.lateMin > LATE_TOLERANCE_MIN) { late.count += 1; late.ids.push(b.id); lateSum += f.lateMin; } else { onTime.count += 1; onTime.ids.push(b.id); }
+    }
+    if (b.outcome && OUTCOME_LABEL[b.outcome]) bucket(outcomes, b.outcome, OUTCOME_LABEL[b.outcome], b.id);
+    if (b.acceptedAt && b.createdAt && b.acceptedAt >= b.createdAt) {
+      const min = (b.acceptedAt - b.createdAt) / 60_000; acceptSum += min; acceptN += 1; if (min <= 15) within15 += 1;
+    }
+    if (b.claim) bucket(claims, b.claim.kindLabel || b.claim.kind || 'otro', b.claim.kindLabel || (b.claim.openedBy === 'profesional' ? 'Reclamo del profesional' : 'Reclamo del cliente'), b.id);
+    if (b.status === 'cancelada') { const l = CANCEL_LABEL(b, f); bucket(cancels, l, l, b.id); }
+    const c = cats.get(b.category) ?? { r: [], done: 0, ids: [] };
+    if (b.status === 'completada') { c.done += 1; c.ids.push(b.id); }
+    if (b.rating !== null) c.r.push(b.rating);
+    cats.set(b.category, c);
+  }
+
+  // Fidelidad: clientes del periodo que ya tenían una reserva completada antes, y que repiten profesional.
+  const done = all.filter((b) => b.status === 'completada');
+  const clientIds = [...new Set(rows.filter((b) => b.status === 'completada').map((b) => b.clientId).filter(Boolean))];
+  const returning: Bucket = { key: 'vuelven', label: 'Clientes que vuelven', count: 0, ids: [] };
+  const samePro: Bucket = { key: 'mismo_pro', label: 'Repiten con el mismo profesional', count: 0, ids: [] };
+  for (const id of clientIds) {
+    const mine = done.filter((b) => b.clientId === id).sort((a, z) => a.date.localeCompare(z.date));
+    if (mine.length >= 2) { returning.count += 1; returning.ids.push(...mine.filter((b) => inRange(b.date, range)).map((b) => b.id)); }
+    const byPro = new Map<string, number>(); for (const b of mine) byPro.set(b.proId, (byPro.get(b.proId) ?? 0) + 1);
+    if ([...byPro.values()].some((n) => n >= 2)) { samePro.count += 1; samePro.ids.push(...mine.filter((b) => inRange(b.date, range)).map((b) => b.id)); }
+  }
+
+  const sortB = (m: Map<string, Bucket>) => [...m.values()].filter((b) => b.count > 0).sort((a, z) => z.count - a.count);
+  return {
+    stars: [...stars.values()], avgRating: rated ? r2(ratingSum / rated) : null, rated,
+    ratingByWeek: [...weeks.entries()].sort(([a], [z]) => a.localeCompare(z)).map(([week, r]) => ({ week, avg: r.length ? r2(r.reduce((t, x) => t + x, 0) / r.length) : null, count: r.length })),
+    punctuality: { arrived: onTime.count + late.count, onTime, late, avgLateMin: late.count ? Math.round(lateSum / late.count) : null },
+    outcomes: [...outcomes.values()],
+    accept: { avgMin: acceptN ? Math.round(acceptSum / acceptN) : null, within15, count: acceptN },
+    loyalty: { clients: clientIds.length, returning, samePro },
+    claimReasons: sortB(claims), cancelReasons: sortB(cancels),
+    categories: [...cats.entries()].filter(([, c]) => c.done > 0 || c.r.length > 0)
+      .map(([category, c]) => ({ category, avg: c.r.length ? r2(c.r.reduce((t, x) => t + x, 0) / c.r.length) : null, rated: c.r.length, done: c.done, ids: c.ids }))
+      .sort((a, z) => (z.avg ?? 0) - (a.avg ?? 0)),
+    comments: comments.sort((a, z) => z.date.localeCompare(a.date)).slice(0, 8),
+  };
+}
+
+/* ------------------------------- Dinero de la semana ------------------------------ */
+
+export interface WeekMoney {
+  week: { from: string; to: string };
+  /** Lo que entró esta semana (cobros con tarjeta + ingreso de HULUL registrado). */
+  collected: number; income: number;
+  /** Lo que HULUL debe pagar: liquidaciones por pagar hoy y lo que entra en la del próximo lunes. */
+  toPayNow: { amount: number; count: number; ids: string[] };
+  nextPayout: { date: string; estimate: number; pros: number };
+  credits: number; vatDue: number;
+  net: number;
+}
+
+/** Entradas y salidas de dinero de la semana actual (lunes a domingo, hora de Ecuador). */
+export function weekMoney(data: Pick<DashData, 'ledger' | 'payouts' | 'bookings'>, now: number): WeekMoney {
+  const today = ecDate(now); const from = mondayOf(today); const to = addDays(from, 6);
+  const wk = { from, to };
+  let collected = 0, income = 0, credits = 0, vatDue = 0;
+  for (const e of data.ledger) {
+    if (!msInRange(e.createdAt, wk)) continue;
+    if (e.bucket === 'recaudo') collected = r2(collected + e.amount);
+    if (e.bucket === 'ingreso_hulul') income = r2(income + e.amount);
+    if (e.bucket === 'pasivo_cliente') credits = r2(credits + e.amount);
+    if (e.bucket === 'iva_por_pagar') vatDue = r2(vatDue + e.amount);
+  }
+  const due = data.payouts.filter((p) => p.status === 'por_pagar');
+  const toPayNow = { amount: r2(due.reduce((t, p) => t + p.net, 0)), count: due.length, ids: due.map((p) => p.id) };
+  // Próximo lunes 06:00: entra lo que ya pasó las 48 h y no está en reclamo.
+  const nextMonday = addDays(from, 7);
+  const cutoff = Date.parse(`${nextMonday}T11:00:00Z`);
+  const disputed = new Set(data.bookings.filter((b) => b.status === 'en_disputa').map((b) => b.id));
+  const byPro = new Map<string, number>();
+  for (const e of data.ledger) {
+    if (e.payoutId || (e.availableAt ?? 0) > cutoff || (e.bookingId && disputed.has(e.bookingId))) continue;
+    byPro.set(e.proId, r2((byPro.get(e.proId) ?? 0) + e.proDelta));
+  }
+  const positive = [...byPro.values()].filter((v) => v > 0);
+  const estimate = r2(positive.reduce((t, v) => t + v, 0));
+  return {
+    week: wk, collected, income, toPayNow, nextPayout: { date: nextMonday, estimate, pros: positive.length }, credits, vatDue,
+    net: r2(collected - toPayNow.amount - estimate),
+  };
+}
+
+/* ------------------------- Contabilidad NIIF (Supercias) ------------------------- */
+
+/**
+ * Plan de cuentas de la Superintendencia de Compañías (códigos y nombres oficiales)
+ * con el auxiliar que usa HULUL. Es una PROPUESTA para que la contadora valide;
+ * si cambia un código, se cambia solo aquí.
+ */
+export const SUPERCIAS_ACCOUNTS = {
+  bancos: { code: '10101', name: 'EFECTIVO Y EQUIVALENTES AL EFECTIVO', aux: 'Pasarela de pagos y banco' },
+  cxcClientes: { code: '1010205', name: 'DOCUMENTOS Y CUENTAS POR COBRAR CLIENTES NO RELACIONADOS', aux: 'Clientes de la app' },
+  otrasCxc: { code: '1010208', name: 'OTRAS CUENTAS POR COBRAR', aux: 'Profesionales que deben a HULUL (efectivo y multas)' },
+  terceros: { code: '2010301', name: 'CUENTAS Y DOCUMENTOS POR PAGAR - LOCALES', aux: 'Profesionales: valores recaudados por cuenta de terceros' },
+  sri: { code: '2010701', name: 'OTRAS OBLIGACIONES CORRIENTES - CON LA ADMINISTRACIÓN TRIBUTARIA', aux: 'IVA y retenciones por pagar' },
+  pasivoCliente: { code: '20113', name: 'OTROS PASIVOS CORRIENTES', aux: 'Créditos a favor de clientes' },
+  servicios: { code: '4102', name: 'PRESTACIÓN DE SERVICIOS', aux: 'Cargo de plataforma y comisión HULUL' },
+  otrosOrdinarios: { code: '4109', name: 'OTROS INGRESOS DE ACTIVIDADES ORDINARIAS', aux: 'Multas y cargos por cancelación' },
+  gasto: { code: '52', name: 'GASTOS (cuenta a definir por la contadora)', aux: 'Créditos entregados a clientes por faltas' },
+} as const;
+export type AccountKey = keyof typeof SUPERCIAS_ACCOUNTS;
+
+export interface JournalLine {
+  date: string; entry: string; account: AccountKey; code: string; accountName: string;
+  party: string; detail: string; debit: number; credit: number;
+}
+
+const INCOME_ACCOUNT: Record<string, AccountKey> = {
+  plataforma: 'servicios', comision: 'servicios', adicional_comision: 'servicios',
+  multa: 'otrosOrdinarios', cargo_cancelacion_hulul: 'otrosOrdinarios',
+};
+
+/**
+ * Libro diario por partida doble a partir del libro de movimientos y las liquidaciones pagadas.
+ * Regla: la cuenta del profesional (2010301) se acredita cuando HULUL le debe (proDelta > 0) y
+ * se debita cuando él paga algo (proDelta < 0); lo que paga el cliente pasa por 1010205 y se
+ * cancela con el cobro de la pasarela (10101). Un reverso (monto negativo) invierte los lados.
+ */
+export function journal(data: Pick<DashData, 'ledger' | 'payouts' | 'bookings' | 'providers'>, range: DateRange): JournalLine[] {
+  const A = SUPERCIAS_ACCOUNTS;
+  const code = new Map(data.bookings.map((b) => [b.id, b]));
+  const pro = new Map(data.providers.map((p) => [p.uid, p.name]));
+  const out: JournalLine[] = [];
+  const push = (date: string, entry: string, dr: AccountKey, cr: AccountKey, amount: number, party: string, detail: string) => {
+    let a = r2(amount); let d = dr; let c = cr;
+    if (!a) return;
+    if (a < 0) { a = -a; [d, c] = [c, d]; }
+    out.push({ date, entry, account: d, code: A[d].code, accountName: A[d].name, party, detail, debit: a, credit: 0 });
+    out.push({ date, entry, account: c, code: A[c].code, accountName: A[c].name, party, detail, debit: 0, credit: a });
+  };
+  for (const e of data.ledger) {
+    if (!msInRange(e.createdAt, range)) continue;
+    const date = ecDate(e.createdAt!);
+    const b = e.bookingId ? code.get(e.bookingId) : undefined;
+    const entry = b?.code ?? (e.bookingId ? e.bookingId.slice(-6).toUpperCase() : e.payoutId ?? e.id);
+    const proName = pro.get(e.proId) ?? b?.proName ?? e.proId;
+    const label = `${KIND_LABEL[e.kind] ?? e.kind}${e.reverses ? ' (reverso)' : ''}`;
+    // Lo paga el profesional (se descuenta de su cuenta) o el cliente.
+    const payer: AccountKey = e.proDelta < 0 ? 'terceros' : 'cxcClientes';
+    const payerName = e.proDelta < 0 ? proName : (b?.clientName || 'Cliente');
+    switch (e.bucket) {
+      case 'recaudo': push(date, entry, 'bancos', 'cxcClientes', e.amount, b?.clientName || 'Cliente', label); break;
+      case 'terceros':
+        // Si el profesional cobró en efectivo, HULUL no recibe ese dinero: no hay asiento.
+        if (e.proDelta) push(date, entry, 'cxcClientes', 'terceros', e.proDelta, proName, label);
+        break;
+      case 'ingreso_hulul': push(date, entry, payer, INCOME_ACCOUNT[e.kind] ?? 'servicios', e.amount, payerName, label); break;
+      case 'iva_por_pagar': push(date, entry, payer, 'sri', e.amount, payerName, label); break;
+      case 'retenciones_por_pagar': push(date, entry, 'terceros', 'sri', e.amount, proName, label); break;
+      case 'pasivo_cliente': push(date, entry, 'gasto', 'pasivoCliente', e.amount, b?.clientName || 'Cliente', label); break;
+      default: break;
+    }
+  }
+  for (const p of data.payouts) {
+    if (p.status !== 'pagado' || !p.paidAt || !msInRange(p.paidAt, range)) continue;
+    push(ecDate(p.paidAt), `LIQ ${p.week}`, 'terceros', 'bancos', p.net, pro.get(p.proId) ?? p.proId, `Pago semanal al profesional (${p.bank || 'transferencia'})`);
+  }
+  return out.sort((a, z) => a.date.localeCompare(z.date) || a.entry.localeCompare(z.entry));
+}
+
+/** Mayor: debe, haber y saldo por cuenta. La cuenta de profesionales con saldo deudor se muestra en 1010208. */
+export function ledgerByAccount(lines: JournalLine[]) {
+  const A = SUPERCIAS_ACCOUNTS;
+  const m = new Map<AccountKey, { debit: number; credit: number }>();
+  for (const l of lines) { const x = m.get(l.account) ?? { debit: 0, credit: 0 }; x.debit = r2(x.debit + l.debit); x.credit = r2(x.credit + l.credit); m.set(l.account, x); }
+  return (Object.keys(A) as AccountKey[]).filter((k) => m.has(k)).map((k) => {
+    const x = m.get(k)!;
+    return { account: k, code: A[k].code, name: A[k].name, aux: A[k].aux, debit: x.debit, credit: x.credit, balance: r2(x.debit - x.credit) };
+  });
+}
+
+/** Comprobantes que emite HULUL (para el SRI): cargo de plataforma al cliente y comisión al profesional. */
+export function hululSales(data: Pick<DashData, 'ledger' | 'bookings' | 'providers'>, range: DateRange) {
+  const bookings = new Map(data.bookings.map((b) => [b.id, b]));
+  const pros = new Map(data.providers.map((p) => [p.uid, p]));
+  const rows = new Map<string, { date: string; to: 'cliente' | 'profesional'; idType: string; id: string; name: string; concept: string; base: number; iva: number }>();
+  for (const e of data.ledger) {
+    if (!msInRange(e.createdAt, range) || !e.bookingId) continue;
+    const b = bookings.get(e.bookingId);
+    const isPlatform = e.kind === 'plataforma' || e.kind === 'plataforma_iva';
+    const isCommission = ['comision', 'comision_iva', 'adicional_comision', 'adicional_comision_iva'].includes(e.kind);
+    if (!isPlatform && !isCommission) continue;
+    const p = pros.get(e.proId);
+    const key = `${e.bookingId}|${isPlatform ? 'c' : 'p'}`;
+    const r = rows.get(key) ?? (isPlatform
+      ? { date: ecDate(e.createdAt!), to: 'cliente' as const, idType: 'Consumidor final', id: '9999999999999', name: b?.clientName || 'Consumidor final', concept: `Cargo de plataforma · reserva ${b?.code ?? ''}`, base: 0, iva: 0 }
+      : { date: ecDate(e.createdAt!), to: 'profesional' as const, idType: 'RUC', id: p?.ruc ?? '', name: p?.name ?? b?.proName ?? '', concept: `Comisión HULUL · reserva ${b?.code ?? ''}`, base: 0, iva: 0 });
+    if (e.kind.endsWith('_iva')) r.iva = r2(r.iva + e.amount); else r.base = r2(r.base + e.amount);
+    rows.set(key, r);
+  }
+  return [...rows.values()].filter((r) => r.base || r.iva).map((r) => ({ ...r, total: r2(r.base + r.iva) })).sort((a, z) => a.date.localeCompare(z.date));
 }

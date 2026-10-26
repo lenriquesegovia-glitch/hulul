@@ -113,7 +113,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem('hulul-admin-period', p); } catch { /* sin almacenamiento */ }
   }, []);
 
-  const range = useMemo(() => periodRange(period, now, custom), [period, now, custom]);
+  // «Todo» = lo cargado del servidor (para que los archivos digan fechas reales).
+  const range = useMemo(() => (period === 'todo' && data ? data.range : periodRange(period, now, custom)), [period, now, custom, data]);
 
   const load = useCallback(async (want?: DateRange) => {
     setLoading(true); setError('');
