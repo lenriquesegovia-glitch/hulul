@@ -33,6 +33,7 @@ import { MAX_FILE_BYTES, PRO_UID, REVIEW_LIST_STATUSES, maskBank, providerFiles,
 import { can, dashForRole, normEmail, roleFor, roleInput } from './roles-core.js';
 import { clientStatementPdf, statementData, statementPdf } from './statement-pdf.js';
 import { bankFile, BANK_FORMATS, DEFAULT_BANK_FORMAT, paymentLines } from './bank-files.js';
+import { employeeInput, expenseInput, PAYROLL_PARAMS_2026, payrollExpenses, payrollLine, payrollTotals } from './gastos-core.js';
 import { buildClaimPrompt, callClaude, IA_MODEL, parseAnalysis } from './ia-reclamos.js';
 import { appointmentAt, bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
@@ -2612,6 +2613,157 @@ async function sendStatementMail(st, subject) {
     attachments: [{ filename: `HULUL-estado-de-cuenta-${new Date().toISOString().slice(0, 10)}.pdf`, content: st.pdf, contentType: 'application/pdf' }],
   });
 }
+
+/* ------------------------------ Gastos de la empresa y nómina ------------------------------ */
+
+const ecToday = () => new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 10);
+const GASTO_ID = /^[A-Za-z0-9_-]{6,60}$/;
+const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
+const tsMs = (t) => t?.toMillis?.() ?? (typeof t === 'number' ? t : null);
+const logAdmin = (admin, action, extra = {}) => db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, role: admin.role, action, ...extra, at: FieldValue.serverTimestamp() });
+
+async function payrollParams() {
+  const d = (await db().doc('adminConfig/nomina').get()).data() ?? {};
+  const p = { ...PAYROLL_PARAMS_2026 };
+  for (const k of Object.keys(p)) if (Number(d[k]) > 0) p[k] = Number(d[k]);
+  return p;
+}
+
+/** Panel: gastos, empleados y roles de pago. Sin permiso de pagos (UAFE) no ve cédulas, cuentas ni el detalle por empleado. */
+export const adminGastos = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
+  const admin = await requireAdmin(req, 'contabilidad');
+  const full = can(admin.role, 'pagos');
+  const [g, e, r, params] = await Promise.all([db().collection('gastos').get(), full ? db().collection('empleados').get() : null, db().collection('rolPagos').get(), payrollParams()]);
+  const gastos = g.docs.map((d) => { const x = d.data(); return { id: d.id, ...x, createdAt: tsMs(x.createdAt), updatedAt: tsMs(x.updatedAt) }; });
+  const empleados = (e?.docs ?? []).map((d) => { const x = d.data(); return { id: d.id, ...x, createdAt: tsMs(x.createdAt), updatedAt: tsMs(x.updatedAt) }; });
+  const roles = r.docs.map((d) => { const x = d.data(); return { mes: d.id, status: x.status, totals: x.totals, lines: full ? x.lines ?? [] : [], aprobadoPor: x.aprobadoPor ?? null, aprobadoEl: tsMs(x.aprobadoEl) }; });
+  await logAdmin(admin, 'ver_gastos');
+  return { gastos, empleados, roles, params, canEdit: full, viewer: { role: admin.role, email: admin.email } };
+});
+
+/** Crea o actualiza un gasto manual. */
+export const guardarGasto = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const id = req.data?.id ? String(req.data.id) : null;
+  if (id && !GASTO_ID.test(id)) throw new HttpsError('invalid-argument', 'Gasto no válido.');
+  const g = expenseInput(req.data);
+  if (g.error) throw new HttpsError('invalid-argument', g.error);
+  const ref = id ? db().doc(`gastos/${id}`) : db().collection('gastos').doc();
+  const prev = id ? (await ref.get()).data() : null;
+  if (id && !prev) throw new HttpsError('not-found', 'Ese gasto ya no existe.');
+  if (prev?.origen === 'nomina') throw new HttpsError('failed-precondition', 'Los gastos de nómina se cambian desde el rol de pagos.');
+  const pagadoEl = g.estado === 'pagado' ? (/^\d{4}-\d{2}-\d{2}$/.test(String(req.data?.pagadoEl ?? '')) ? req.data.pagadoEl : prev?.pagadoEl ?? (g.fecha <= ecToday() ? g.fecha : ecToday())) : null;
+  await ref.set({ ...g, pagadoEl, origen: 'manual', ...(prev ? {} : { creadoPor: admin.email, createdAt: FieldValue.serverTimestamp() }), updatedAt: FieldValue.serverTimestamp(), actualizadoPor: admin.email }, { merge: true });
+  await logAdmin(admin, id ? 'gasto_editado' : 'gasto_creado', { gastoId: ref.id, total: g.total });
+  return { ok: true, id: ref.id };
+});
+
+/** Marca como pagado un gasto pendiente (fecha de pago = hoy si no se indica). */
+export const pagarGasto = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const ids = (Array.isArray(req.data?.ids) ? req.data.ids : [req.data?.id]).map(String).filter((x) => GASTO_ID.test(x)).slice(0, 100);
+  if (!ids.length) throw new HttpsError('invalid-argument', 'Elige qué gastos se pagaron.');
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(req.data?.fecha ?? '')) ? req.data.fecha : ecToday();
+  const batch = db().batch();
+  for (const id of ids) batch.update(db().doc(`gastos/${id}`), { estado: 'pagado', pagadoEl: fecha, updatedAt: FieldValue.serverTimestamp(), actualizadoPor: admin.email });
+  await batch.commit();
+  await logAdmin(admin, 'gasto_pagado', { ids, fecha });
+  return { ok: true, count: ids.length };
+});
+
+export const borrarGasto = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const id = String(req.data?.id ?? '');
+  if (!GASTO_ID.test(id)) throw new HttpsError('invalid-argument', 'Gasto no válido.');
+  const snap = await db().doc(`gastos/${id}`).get();
+  if (!snap.exists) return { ok: true };
+  if (snap.data().origen === 'nomina') throw new HttpsError('failed-precondition', 'Los gastos de nómina se quitan reabriendo el rol de pagos.');
+  await snap.ref.delete();
+  await logAdmin(admin, 'gasto_borrado', { gastoId: id, proveedor: snap.data().proveedor, total: snap.data().total });
+  return { ok: true };
+});
+
+/** Copia al mes indicado los gastos fijos (recurrentes) del mes anterior, como pendientes de pago. */
+export const copiarRecurrentes = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const mes = String(req.data?.mes ?? '');
+  if (!MES.test(mes)) throw new HttpsError('invalid-argument', 'Mes no válido.');
+  const [y, m] = mes.split('-').map(Number);
+  const prev = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+  const snap = await db().collection('gastos').where('recurrente', '==', true).get();
+  const src = snap.docs.filter((d) => String(d.data().fecha).startsWith(prev) && d.data().origen !== 'nomina');
+  const done = new Set(snap.docs.filter((d) => String(d.data().fecha).startsWith(mes)).map((d) => d.data().copiaDe).filter(Boolean));
+  const batch = db().batch(); let n = 0;
+  for (const d of src) {
+    if (done.has(d.id)) continue;
+    const x = d.data();
+    const fecha = `${mes}-${String(Math.min(28, Number(String(x.fecha).slice(8, 10)) || 1)).padStart(2, '0')}`;
+    batch.set(db().collection('gastos').doc(), { ...x, fecha, vence: fecha, estado: 'por_pagar', pagadoEl: null, factura: '', copiaDe: d.id, creadoPor: admin.email, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    n++;
+  }
+  if (n) await batch.commit();
+  await logAdmin(admin, 'gastos_recurrentes', { mes, count: n });
+  return { ok: true, count: n };
+});
+
+/** Crea o actualiza un empleado en relación de dependencia. */
+export const guardarEmpleado = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const id = req.data?.id ? String(req.data.id) : null;
+  if (id && !GASTO_ID.test(id)) throw new HttpsError('invalid-argument', 'Empleado no válido.');
+  const e = employeeInput(req.data);
+  if (e.error) throw new HttpsError('invalid-argument', e.error);
+  const ref = id ? db().doc(`empleados/${id}`) : db().collection('empleados').doc();
+  await ref.set({ ...e, ...(id ? {} : { createdAt: FieldValue.serverTimestamp() }), updatedAt: FieldValue.serverTimestamp(), actualizadoPor: admin.email }, { merge: true });
+  await logAdmin(admin, id ? 'empleado_editado' : 'empleado_creado', { empleadoId: ref.id });
+  return { ok: true, id: ref.id };
+});
+
+/**
+ * Rol de pagos del mes: calcula con los empleados activos y los ajustes (días, extras, bonos,
+ * anticipos, descuentos). accion: 'calcular' (borrador), 'aprobar' (genera los gastos de nómina)
+ * o 'reabrir' (los quita y vuelve a borrador).
+ */
+export const rolPagos = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const mes = String(req.data?.mes ?? '');
+  const accion = ['calcular', 'aprobar', 'reabrir'].includes(req.data?.accion) ? req.data.accion : 'calcular';
+  if (!MES.test(mes)) throw new HttpsError('invalid-argument', 'Mes no válido.');
+  const ref = db().doc(`rolPagos/${mes}`);
+  const cur = (await ref.get()).data();
+  const nominaIds = ['sueldos', 'aportes', 'beneficios'].map((k) => `nomina_${mes}_${k}`);
+  if (accion === 'reabrir') {
+    if (cur?.status !== 'aprobado') throw new HttpsError('failed-precondition', 'Ese rol no está aprobado.');
+    const batch = db().batch();
+    for (const id of nominaIds) batch.delete(db().doc(`gastos/${id}`));
+    batch.update(ref, { status: 'borrador', aprobadoPor: null, aprobadoEl: null, reabiertoPor: admin.email, updatedAt: FieldValue.serverTimestamp() });
+    await batch.commit();
+    await logAdmin(admin, 'rol_reabierto', { mes });
+    return { ok: true, status: 'borrador' };
+  }
+  if (cur?.status === 'aprobado') throw new HttpsError('failed-precondition', 'Este rol ya está aprobado. Reábrelo para cambiarlo.');
+  const params = await payrollParams();
+  const last = `${mes}-31`;
+  const emps = (await db().collection('empleados').get()).docs.map((d) => ({ id: d.id, ...d.data() })).filter((e) => e.activo !== false && String(e.ingreso) <= last);
+  if (!emps.length) throw new HttpsError('failed-precondition', 'No hay empleados activos para ese mes. Agrégalos en la pestaña Empleados.');
+  const adj = req.data?.ajustes && typeof req.data.ajustes === 'object' ? req.data.ajustes : (cur?.ajustes ?? {});
+  const clean = {};
+  for (const e of emps) {
+    const a = adj[e.id] ?? {};
+    const num = (v, max) => Math.max(0, Math.min(max, Math.round(Number(v || 0) * 100) / 100));
+    clean[e.id] = { dias: a.dias === undefined || a.dias === '' ? 30 : num(a.dias, 30), extras: num(a.extras, 10000), bonos: num(a.bonos, 10000), anticipos: num(a.anticipos, 10000), otrosDescuentos: num(a.otrosDescuentos, 10000) };
+  }
+  const lines = emps.map((e) => payrollLine(e, clean[e.id], mes, params));
+  const totals = payrollTotals(lines);
+  const doc = { mes, lines, totals, ajustes: clean, params, status: accion === 'aprobar' ? 'aprobado' : 'borrador', updatedAt: FieldValue.serverTimestamp(), actualizadoPor: admin.email,
+    ...(accion === 'aprobar' ? { aprobadoPor: admin.email, aprobadoEl: FieldValue.serverTimestamp() } : {}) };
+  const batch = db().batch();
+  batch.set(ref, doc, { merge: true });
+  if (accion === 'aprobar') for (const g of payrollExpenses(mes, totals)) batch.set(db().doc(`gastos/${g.id}`), { ...g, pagadoEl: `${mes}-28`, creadoPor: admin.email, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  await batch.commit();
+  await logAdmin(admin, accion === 'aprobar' ? 'rol_aprobado' : 'rol_calculado', { mes, neto: totals.neto, costo: totals.costo });
+  return { ok: true, status: doc.status, lines, totals };
+});
 
 /* ---------------------------- Equipo y roles (solo dueño) ---------------------------- */
 

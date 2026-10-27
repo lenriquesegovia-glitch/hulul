@@ -1053,3 +1053,214 @@ export function bookingInvoices(b: DashBooking, proRuc = ''): ClientInvoice[] {
   }
   return out;
 }
+
+/* --------------------------- Gastos de la empresa y nómina --------------------------- */
+
+/**
+ * Categorías de gasto con su cuenta Supercias. Deben coincidir con functions/gastos-core.js
+ * (check-dashboard lo comprueba). Propuesta para que la contadora valide.
+ */
+export type ExpenseGroup = 'administrativos' | 'nomina' | 'subcontratos' | 'marketing' | 'financieros';
+export const EXPENSE_GROUPS: { key: ExpenseGroup; label: string; color: string }[] = [
+  { key: 'administrativos', label: 'Administrativos', color: '#1B2A4A' },
+  { key: 'nomina', label: 'Nómina', color: '#4C6FA8' },
+  { key: 'subcontratos', label: 'Subcontratos', color: '#8A9BB8' },
+  { key: 'marketing', label: 'Marketing', color: '#C08A3E' },
+  { key: 'financieros', label: 'Financieros', color: '#6B6560' },
+];
+export const EXPENSE_CATEGORIES: Record<string, { label: string; code: string; group: ExpenseGroup; payroll?: boolean }> = {
+  honorarios: { label: 'Honorarios profesionales (contadora, abogado…)', code: '520205', group: 'administrativos' },
+  subcontratos: { label: 'Subcontratos y trabajadores autónomos', code: '520206', group: 'subcontratos' },
+  marketing: { label: 'Marketing y publicidad', code: '520111', group: 'marketing' },
+  tecnologia: { label: 'Tecnología, software y nube', code: '520228', group: 'administrativos' },
+  arriendo: { label: 'Arriendo de oficina', code: '520209', group: 'administrativos' },
+  servicios: { label: 'Luz, agua, internet y teléfono', code: '520218', group: 'administrativos' },
+  mantenimiento: { label: 'Mantenimiento y reparaciones', code: '520208', group: 'administrativos' },
+  transporte: { label: 'Transporte y movilización', code: '520215', group: 'administrativos' },
+  viajes: { label: 'Viajes', code: '520217', group: 'administrativos' },
+  combustible: { label: 'Combustible', code: '520212', group: 'administrativos' },
+  seguros: { label: 'Seguros', code: '520214', group: 'administrativos' },
+  notarios: { label: 'Notarías, registros y marcas (SENADI)', code: '520219', group: 'administrativos' },
+  impuestos: { label: 'Impuestos, contribuciones y patentes', code: '520220', group: 'administrativos' },
+  bancarios: { label: 'Comisiones bancarias y de la pasarela', code: '520302', group: 'financieros' },
+  gestion: { label: 'Gastos de gestión (agasajos, atenciones)', code: '520216', group: 'administrativos' },
+  otros: { label: 'Otros gastos', code: '520228', group: 'administrativos' },
+  nomina_sueldos: { label: 'Nómina: sueldos y horas extra', code: '520201', group: 'nomina', payroll: true },
+  nomina_aportes: { label: 'Nómina: aportes patronales y fondos de reserva', code: '520202', group: 'nomina', payroll: true },
+  nomina_beneficios: { label: 'Nómina: décimos y vacaciones', code: '520203', group: 'nomina', payroll: true },
+};
+export const MANUAL_EXPENSE_CATEGORIES = Object.keys(EXPENSE_CATEGORIES).filter((k) => !EXPENSE_CATEGORIES[k].payroll);
+export const EXPENSE_PAY_LABEL: Record<string, string> = { transferencia: 'Transferencia', tarjeta: 'Tarjeta de crédito', efectivo: 'Efectivo', debito: 'Débito bancario', cheque: 'Cheque' };
+
+export interface Expense {
+  id: string; fecha: string; categoria: string; proveedor: string; identificacion: string; factura: string; descripcion: string;
+  base: number; iva: number; total: number; retRenta: number; retIva: number; aPagar: number;
+  formaPago: string; estado: 'pagado' | 'por_pagar'; vence: string | null; pagadoEl: string | null; recurrente: boolean; origen?: 'manual' | 'nomina';
+  creadoPor?: string;
+}
+export interface PayrollLine {
+  empleadoId: string; nombre: string; cedula: string; cargo: string; dias: number; sueldo: number; proporcional: number; extras: number; bonos: number; ingresos: number;
+  aportePersonal: number; anticipos: number; otrosDescuentos: number; decimo13: number; decimo14: number; decimosEnRol: number; fondo: number; fondoEnRol: number; vacaciones: number;
+  patronal: number; iece: number; secap: number; neto: number; costo: number; alIess: number;
+}
+export type PayrollTotals = Pick<PayrollLine, 'ingresos' | 'aportePersonal' | 'anticipos' | 'otrosDescuentos' | 'decimo13' | 'decimo14' | 'decimosEnRol' | 'fondo' | 'fondoEnRol' | 'vacaciones' | 'patronal' | 'iece' | 'secap' | 'neto' | 'costo' | 'alIess'>;
+export interface Payroll { mes: string; status: 'borrador' | 'aprobado'; lines: PayrollLine[]; totals: PayrollTotals; aprobadoPor?: string | null; aprobadoEl?: number | null }
+export interface Employee {
+  id: string; nombre: string; cedula: string; cargo: string; correo: string; cuenta: string; sueldo: number; ingreso: string;
+  activo: boolean; decimosMensuales: boolean; fondoMensual: boolean; bajoSbu?: boolean;
+}
+
+export const expenseGroupOf = (g: Pick<Expense, 'categoria'>): ExpenseGroup => EXPENSE_CATEGORIES[g.categoria]?.group ?? 'administrativos';
+const isOverdue = (g: Expense, today: string) => g.estado === 'por_pagar' && !!g.vence && g.vence < today;
+
+export interface ExpenseSummary {
+  total: number; count: number; ivaCredito: number; retenciones: number;
+  porPagar: { total: number; ids: string[] }; vencidos: { total: number; ids: string[] }; proximos: { total: number; ids: string[] };
+  byGroup: (Bucket & { color: string })[]; byCategory: (Bucket & { code: string })[]; byProvider: Bucket[];
+}
+
+/** Resumen de gastos del periodo (por fecha del comprobante). Gasto = base sin IVA (el IVA es crédito tributario). */
+export function expenseSummary(gastos: Expense[], range: DateRange, now: number): ExpenseSummary {
+  const today = ecDate(now);
+  const soon = addDays(today, 7);
+  const rows = gastos.filter((g) => inRange(g.fecha, range));
+  const groups = new Map<string, Bucket>(); const cats = new Map<string, Bucket>(); const provs = new Map<string, Bucket>();
+  for (const g of rows) {
+    bucket(groups, expenseGroupOf(g), EXPENSE_GROUPS.find((x) => x.key === expenseGroupOf(g))!.label, g.id, g.base);
+    bucket(cats, g.categoria, EXPENSE_CATEGORIES[g.categoria]?.label ?? g.categoria, g.id, g.base);
+    bucket(provs, g.proveedor.toLowerCase(), g.proveedor, g.id, g.base);
+  }
+  // Las cuentas por pagar se miran sin importar el periodo: lo que se debe hoy.
+  const open = gastos.filter((g) => g.estado === 'por_pagar');
+  const sum = (l: Expense[], k: keyof Expense = 'aPagar') => r2(l.reduce((t, g) => t + Number(g[k] || 0), 0));
+  const overdue = open.filter((g) => isOverdue(g, today));
+  const next = open.filter((g) => !isOverdue(g, today) && !!g.vence && g.vence <= soon);
+  const sorted = (m: Map<string, Bucket>) => [...m.values()].sort((a, z) => (z.value ?? 0) - (a.value ?? 0));
+  return {
+    total: sum(rows, 'base'), count: rows.length, ivaCredito: sum(rows, 'iva'), retenciones: r2(sum(rows, 'retRenta') + sum(rows, 'retIva')),
+    porPagar: { total: sum(open), ids: open.map((g) => g.id) },
+    vencidos: { total: sum(overdue), ids: overdue.map((g) => g.id) },
+    proximos: { total: sum(next), ids: next.map((g) => g.id) },
+    byGroup: EXPENSE_GROUPS.filter((x) => groups.has(x.key)).map((x) => ({ ...groups.get(x.key)!, color: x.color })),
+    byCategory: sorted(cats).map((b) => ({ ...b, code: EXPENSE_CATEGORIES[b.key]?.code ?? '' })),
+    byProvider: sorted(provs).slice(0, 10),
+  };
+}
+
+/** Ingresos propios de HULUL en el periodo (sin IVA): servicios (4102) y otros ordinarios (4109). Créditos a clientes = gasto. */
+export function hululIncome(ledger: DashLedger[], range: DateRange) {
+  let servicios = 0; let otros = 0; let creditos = 0;
+  for (const e of ledger) {
+    if (!msInRange(e.createdAt, range)) continue;
+    if (e.bucket === 'ingreso_hulul') { if ((INCOME_ACCOUNT[e.kind] ?? 'servicios') === 'servicios') servicios += e.amount; else otros += e.amount; }
+    if (e.bucket === 'pasivo_cliente') creditos += e.amount;
+  }
+  return { servicios: r2(servicios), otros: r2(otros), total: r2(servicios + otros), creditos: r2(creditos) };
+}
+
+export interface IncomeStatement {
+  ingresos: { servicios: number; otros: number; total: number };
+  gastos: { key: string; label: string; value: number; ids: string[] }[];
+  totalGastos: number; utilidad: number; margen: number;
+}
+
+/** Estado de resultados del periodo: ingresos HULUL − gastos (por grupo) = utilidad antes de impuestos. */
+export function incomeStatement(ledger: DashLedger[], gastos: Expense[], range: DateRange, now: number): IncomeStatement {
+  const inc = hululIncome(ledger, range);
+  const s = expenseSummary(gastos, range, now);
+  const lines = s.byGroup.map((g) => ({ key: g.key, label: g.label, value: r2(g.value ?? 0), ids: g.ids }));
+  if (inc.creditos) lines.push({ key: 'creditos', label: 'Créditos entregados a clientes', value: inc.creditos, ids: [] });
+  const totalGastos = r2(lines.reduce((t, l) => t + l.value, 0));
+  const utilidad = r2(inc.total - totalGastos);
+  return { ingresos: { servicios: inc.servicios, otros: inc.otros, total: inc.total }, gastos: lines, totalGastos, utilidad, margen: pctOf(utilidad, inc.total) };
+}
+
+export interface ResultPoint { key: string; from: string; to: string; ingresos: number; gastos: number; utilidad: number; ids: string[] }
+
+/** Serie mensual (o semanal) de ingresos HULUL, gastos y utilidad. */
+export function resultSeries(ledger: DashLedger[], gastos: Expense[], range: DateRange, gran: Granularity): ResultPoint[] {
+  const keyOf = (d: string) => (gran === 'dia' ? d : gran === 'semana' ? mondayOf(d) : `${d.slice(0, 7)}-01`);
+  const next = (k: string) => (gran === 'dia' ? addDays(k, 1) : gran === 'semana' ? addDays(k, 7) : (() => { const [y, m] = k.split('-').map(Number); return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`; })());
+  const dates = [
+    ...gastos.filter((g) => inRange(g.fecha, range)).map((g) => g.fecha),
+    ...ledger.filter((e) => msInRange(e.createdAt, range) && (e.bucket === 'ingreso_hulul' || e.bucket === 'pasivo_cliente')).map((e) => ecDate(e.createdAt!)),
+  ].sort();
+  const first = range.from > '1900' ? range.from : dates[0];
+  const last = range.to < '9000' ? range.to : dates[dates.length - 1];
+  if (!first || !last) return [];
+  const pts = new Map<string, ResultPoint>();
+  for (let k = keyOf(first), i = 0; k <= last && i < 400; k = next(k), i++) pts.set(k, { key: k, from: k, to: addDays(next(k), -1), ingresos: 0, gastos: 0, utilidad: 0, ids: [] });
+  for (const e of ledger) {
+    if (!msInRange(e.createdAt, range)) continue;
+    const p = pts.get(keyOf(ecDate(e.createdAt!))); if (!p) continue;
+    if (e.bucket === 'ingreso_hulul') p.ingresos = r2(p.ingresos + e.amount);
+    if (e.bucket === 'pasivo_cliente') p.gastos = r2(p.gastos + e.amount);
+  }
+  for (const g of gastos) {
+    if (!inRange(g.fecha, range)) continue;
+    const p = pts.get(keyOf(g.fecha)); if (!p) continue;
+    p.gastos = r2(p.gastos + g.base); p.ids.push(g.id);
+  }
+  for (const p of pts.values()) p.utilidad = r2(p.ingresos - p.gastos);
+  return [...pts.values()];
+}
+
+/** Cuentas Supercias que usan los gastos y la nómina (además de SUPERCIAS_ACCOUNTS). */
+export const EXPENSE_ACCOUNTS = {
+  bancos: { code: '10101', name: 'EFECTIVO Y EQUIVALENTES AL EFECTIVO' },
+  anticipos: { code: '1010208', name: 'OTRAS CUENTAS POR COBRAR', aux: 'Anticipos a empleados' },
+  ivaCredito: { code: '1010501', name: 'CRÉDITO TRIBUTARIO A FAVOR DE LA EMPRESA (IVA)' },
+  proveedores: { code: '2010301', name: 'CUENTAS Y DOCUMENTOS POR PAGAR - LOCALES', aux: 'Proveedores de la empresa' },
+  sri: { code: '2010701', name: 'OTRAS OBLIGACIONES CORRIENTES - CON LA ADMINISTRACIÓN TRIBUTARIA' },
+  iess: { code: '2010703', name: 'OTRAS OBLIGACIONES CORRIENTES - CON EL IESS' },
+  beneficios: { code: '2010704', name: 'OTRAS OBLIGACIONES CORRIENTES - POR BENEFICIOS DE LEY A EMPLEADOS' },
+  otrosPasivos: { code: '20113', name: 'OTROS PASIVOS CORRIENTES', aux: 'Descuentos de nómina por pagar' },
+} as const;
+
+export interface ExpenseJournalLine { date: string; entry: string; code: string; accountName: string; party: string; detail: string; debit: number; credit: number }
+
+/**
+ * Asientos de gastos y nómina. Gasto: Dr gasto (base) + Dr IVA crédito / Cr proveedores (a pagar) + Cr SRI (retenciones);
+ * al pagar: Dr proveedores / Cr bancos. Nómina aprobada: Dr 520201/520202/520203 / Cr IESS, beneficios por pagar,
+ * anticipos, otros descuentos y bancos (neto).
+ */
+export function expenseJournal(gastos: Expense[], payrolls: Payroll[], range: DateRange): ExpenseJournalLine[] {
+  const A = EXPENSE_ACCOUNTS;
+  const out: ExpenseJournalLine[] = [];
+  const line = (date: string, entry: string, acc: { code: string; name: string }, party: string, detail: string, debit: number, credit: number) => {
+    if (r2(debit) || r2(credit)) out.push({ date, entry, code: acc.code, accountName: acc.name, party, detail, debit: r2(debit), credit: r2(credit) });
+  };
+  for (const g of gastos) {
+    if (g.origen === 'nomina') continue;
+    const cat = EXPENSE_CATEGORIES[g.categoria];
+    const entry = g.factura ? `FC ${g.factura}` : `G-${g.id.slice(-6).toUpperCase()}`;
+    if (inRange(g.fecha, range)) {
+      const detail = `${cat?.label ?? g.categoria}${g.descripcion ? ` · ${g.descripcion}` : ''}`;
+      line(g.fecha, entry, { code: cat?.code ?? '520228', name: cat?.label ?? 'OTROS GASTOS' }, g.proveedor, detail, g.base, 0);
+      line(g.fecha, entry, A.ivaCredito, g.proveedor, 'IVA en compras', g.iva, 0);
+      line(g.fecha, entry, A.proveedores, g.proveedor, detail, 0, g.aPagar);
+      line(g.fecha, entry, A.sri, g.proveedor, 'Retenciones en la fuente e IVA', 0, r2(g.retRenta + g.retIva));
+    }
+    const paid = g.estado === 'pagado' ? (g.pagadoEl ?? g.fecha) : null;
+    if (paid && inRange(paid, range)) {
+      line(paid, `${entry} PAGO`, A.proveedores, g.proveedor, `Pago (${EXPENSE_PAY_LABEL[g.formaPago] ?? g.formaPago})`, g.aPagar, 0);
+      line(paid, `${entry} PAGO`, A.bancos, g.proveedor, `Pago (${EXPENSE_PAY_LABEL[g.formaPago] ?? g.formaPago})`, 0, g.aPagar);
+    }
+  }
+  for (const p of payrolls) {
+    if (p.status !== 'aprobado') continue;
+    const date = `${p.mes}-28`;
+    if (!inRange(date, range)) continue;
+    const t = p.totals; const entry = `ROL ${p.mes}`; const party = 'Empleados';
+    const C = EXPENSE_CATEGORIES;
+    line(date, entry, { code: C.nomina_sueldos.code, name: 'SUELDOS, SALARIOS Y DEMÁS REMUNERACIONES' }, party, 'Sueldos, horas extra y bonos', t.ingresos, 0);
+    line(date, entry, { code: C.nomina_aportes.code, name: 'APORTES A LA SEGURIDAD SOCIAL (incluido fondo de reserva)' }, party, 'Aporte patronal, IECE, SECAP y fondos de reserva', r2(t.patronal + t.iece + t.secap + t.fondo), 0);
+    line(date, entry, { code: C.nomina_beneficios.code, name: 'BENEFICIOS SOCIALES E INDEMNIZACIONES' }, party, 'Décimo tercero, décimo cuarto y vacaciones', r2(t.decimo13 + t.decimo14 + t.vacaciones), 0);
+    line(date, entry, A.iess, 'IESS', 'Planilla de aportes y fondos de reserva', 0, t.alIess);
+    line(date, entry, A.beneficios, party, 'Décimos y vacaciones provisionados', 0, r2(t.decimo13 + t.decimo14 - t.decimosEnRol + t.vacaciones));
+    line(date, entry, A.anticipos, party, 'Anticipos descontados', 0, t.anticipos);
+    line(date, entry, A.otrosPasivos, party, 'Otros descuentos', 0, t.otrosDescuentos);
+    line(date, entry, A.bancos, party, 'Neto pagado a empleados', 0, t.neto);
+  }
+  return out.sort((a, z) => a.date.localeCompare(z.date) || a.entry.localeCompare(z.entry));
+}
