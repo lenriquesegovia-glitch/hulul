@@ -1458,6 +1458,7 @@ export interface InboxItem {
 export interface InboxExtras {
   gastos?: { gastos: Expense[]; roles: Payroll[]; pagosTarjeta: CardPayment[]; empleados?: Employee[]; laboral?: Record<string, Record<string, LaborDocState>> } | null;
   statements?: { week: string; status: string; count: number } | null;
+  casos?: { id: string; titulo: string; estado: string; proxima: string | null; proximaQue: string }[] | null;
 }
 
 /** Lo que hay que revisar hoy, ordenado por urgencia. Solo lo que el rol puede ver. */
@@ -1532,6 +1533,10 @@ export function inboxItems(data: DashData, can: (p: AdminPerm) => boolean, now: 
       }
       for (const so of cs.socios.filter((x) => x.total > 0)) add({ id: `socio-${so.nombre}`, sig: `${so.total}`, level: 'info', area: 'Socios', title: `La empresa le debe ${money(so.total)} a ${so.nombre}`, detail: 'Gastos pagados con su tarjeta o dinero personal (reembolso pendiente).', href: '/admin/gastos?vista=tarjeta' });
     }
+  }
+  if (can('reclamos') && extra.casos) {
+    const open = extra.casos.filter((c) => !c.estado.startsWith('cerrado') && c.proxima && c.proxima <= addDays(today, 7));
+    if (open.length) add({ id: 'casos-legales', sig: open.map((c) => `${c.id}:${c.proxima}`).join(','), level: open.some((c) => c.proxima! <= addDays(today, 2)) ? 'alta' : 'media', area: 'Legal', title: `${plural(open.length, 'diligencia legal', 'diligencias legales')} en los próximos 7 días`, detail: open.slice(0, 3).map((c) => `${c.proximaQue || c.titulo} · ${fmtShort(c.proxima!)}`).join(' · '), href: '/admin/legal' });
   }
   const rank: Record<InboxLevel, number> = { alta: 0, media: 1, info: 2 };
   return out.sort((a, z) => rank[a.level] - rank[z.level]);

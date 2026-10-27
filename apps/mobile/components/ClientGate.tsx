@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link } from 'expo-router';
 import type { User } from 'firebase/auth';
 import { e164Ecuador } from '@hulul/shared';
-import { createClientProfile, loadClientProfile, type ClientProfile } from '@hulul/shared/firebase';
+import { createClientProfile, loadClientProfile, needsLegalUpdate, recordAcceptance, type ClientProfile } from '@hulul/shared/firebase';
 import { Checkbox } from '@/components/Checkbox';
 import { BackButton, Body, Card, H1, PrimaryButton } from '@/components/ui';
 import { authErrorMessage, logout, resetPassword, signInEmail, startWebSignIn, useUser, type WebProvider } from '@/lib/auth';
@@ -23,11 +23,16 @@ export function ClientGate({ title, lead, children, screen = false }: {
 }) {
   const user = useUser();
   const [profile, setProfile] = useState<ClientProfile | null | undefined>(undefined);
+  const [outdated, setOutdated] = useState(false);
 
   useEffect(() => {
     if (!user) { setProfile(undefined); return; }
     let off = false;
-    loadClientProfile(user.uid).then((p) => { if (!off) setProfile(p); }).catch(() => { if (!off) setProfile(null); });
+    loadClientProfile(user.uid).then(async (p) => {
+      if (off) return;
+      setProfile(p);
+      if (p) { const o = await needsLegalUpdate(p.legal); if (!off) setOutdated(o); }
+    }).catch(() => { if (!off) setProfile(null); });
     return () => { off = true; };
   }, [user]);
 
@@ -45,6 +50,7 @@ export function ClientGate({ title, lead, children, screen = false }: {
   if (user === undefined || (user && profile === undefined)) return wrap(<ActivityIndicator color={c.primary} style={{ marginTop: 40 }} />);
   if (!user) return wrap(<SignIn title={title} lead={lead} />);
   if (!profile) return wrap(<ProfileForm user={user} onSaved={setProfile} />);
+  if (outdated) return wrap(<LegalUpdate onDone={() => setOutdated(false)} />);
   return <>{children({ user, profile })}</>;
 }
 
@@ -135,6 +141,8 @@ function ProfileForm({ user, onSaved }: { user: User; onSaved: (p: ClientProfile
     try {
       const p: ClientProfile = { name: name.trim(), phone: phone.replace(/\D/g, ''), email: email.trim(), consentMarketing: promos };
       await createClientProfile(user.uid, p);
+      // Prueba de la aceptación (versión, fecha, IP y dispositivo) y copia por correo.
+      try { await recordAcceptance('cliente', 'app', 'registro'); } catch { /* se pedirá de nuevo */ }
       onSaved(p);
     } catch {
       setMsg('No pudimos guardar tus datos. Revisa tu conexión.');
@@ -189,3 +197,30 @@ const s = StyleSheet.create({
   segOn: { backgroundColor: c.surface },
   segText: { fontFamily: font.bodyBold, fontSize: 14, color: c.textSecondary },
 });
+
+/** Cuando cambian los Términos o la Política de privacidad, se aceptan de nuevo antes de seguir. */
+function LegalUpdate({ onDone }: { onDone: () => void }) {
+  const [ok, setOk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const accept = async () => {
+    if (!ok) { setMsg('Marca la casilla para continuar.'); return; }
+    setBusy(true); setMsg('');
+    try { await recordAcceptance('cliente', 'app', 'cambio_version'); onDone(); }
+    catch { setMsg('No pudimos registrar tu aceptación. Revisa tu conexión.'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <View style={{ gap: 16 }}>
+      <View style={{ gap: 6 }}>
+        <H1 style={{ fontSize: 24 }}>Actualizamos nuestros términos</H1>
+        <Body muted>Para seguir usando HULUL, revisa y acepta la versión vigente. Te enviaremos una copia a tu correo.</Body>
+      </View>
+      <Checkbox checked={ok} onChange={setOk}>
+        <Body style={{ fontSize: 13.5 }}>Acepto los Términos y condiciones (hululec.com/legal/terminos) y la <Link href="/privacidad" style={s.link}>Política de privacidad</Link> vigentes.</Body>
+      </Checkbox>
+      {msg ? <Text style={s.error}>{msg}</Text> : null}
+      <PrimaryButton label={busy ? 'Guardando…' : 'Aceptar y continuar'} onPress={accept} disabled={busy} />
+    </View>
+  );
+}

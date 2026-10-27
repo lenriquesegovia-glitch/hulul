@@ -52,10 +52,13 @@ export function Novedades({ onOpen }: { onOpen: (title: string, ids: string[]) =
           next.statements = { week: b.week, status: b.status, count: b.items.length };
         }
       } catch { /* sin lote */ }
+      try {
+        if (can('reclamos') && !MUESTRA) next.casos = (await (await import('@hulul/shared/firebase')).adminLegalCases()).casos;
+      } catch { /* sin casos */ }
       if (!off) setExtra(next);
     })();
     return () => { off = true; };
-  }, [canGastos, canPagos]);
+  }, [canGastos, canPagos, can]);
 
   const items = useMemo(() => (view ? inboxItems(view, can, now, extra) : []), [view, can, now, extra]);
   const fresh = items.filter((i) => seen[i.id] !== i.sig);

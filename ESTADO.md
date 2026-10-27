@@ -1,5 +1,13 @@
 # HULUL — Estado y registro de entregas
 
+## En PR — Legal y blindaje, 27 de octubre de 2026 (Claude)
+
+- Prueba de aceptación: `registrarAceptacion` guarda en `aceptaciones/{id}` (solo servidor) quién aceptó, qué versión de términos, privacidad y mandato, fecha, IP, dispositivo y huella SHA-256; marca `legal` en el perfil (las reglas impiden cambiarlo desde la app) y envía copia por correo. Se registra al crear la cuenta de cliente (web y app) y al enviar el registro de profesional.
+- Si cambia TERMS_VERSION o PRIVACY_VERSION, el cliente debe aceptar la versión nueva antes de reservar (web y app). Los clientes actuales la aceptan una vez al volver a entrar.
+- Panel → Control → Legal y blindaje: aceptaciones con constancia en PDF y Excel; casos legales (demandas, denuncias, Defensoría, Ministerio del Trabajo, LOPDP, SRI) con diligencias, documentos e historial; lista de blindaje. Diligencias próximas en Novedades.
+- Pendiente: firma electrónica del contrato del profesional (.p12 en el navegador o proveedor de firma en la nube); revisión del abogado de términos, contrato y privacidad (incluir el uso de IA).
+- Necesita publicar con backend y con Android (cambió la app).
+
 ## En PR — Laboral: impuesto a la renta, utilidades, finiquito y documentos del Ministerio del Trabajo, 27 de octubre de 2026 (Claude)
 
 - Rol de pagos con retención mensual de impuesto a la renta (tabla 2026 Res. NAC-DGERCGC25-00000043; rebaja 18 % de gastos personales con tope por canastas, CFB enero 2026 $821,80).

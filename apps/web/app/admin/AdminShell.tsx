@@ -55,6 +55,7 @@ const I = {
   equipo: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1',
   sri: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6M9 9h2',
   gastos: 'M3 7h18v12H3zM3 11h18M7 15h3M16 4l-3 3M8 4l3 3',
+  legal: 'M12 3v18M5 21h14M6 7h12M6 7l-3 7a3 3 0 0 0 6 0L6 7Zm12 0-3 7a3 3 0 0 0 6 0l-3-7Z',
 };
 function Ico({ d }: { d: string }) {
   return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
@@ -76,6 +77,7 @@ const NAV: { group: string; items: { href: string; label: string; icon: keyof ty
   { group: 'Control', items: [
     { href: '/admin/cumplimiento', label: 'Cumplimiento UAFE', icon: 'cumplimiento', perm: 'cumplimiento', count: 'alerts' },
     { href: '/admin/sri', label: 'Cumplimiento SRI', icon: 'sri', perm: 'contabilidad' },
+    { href: '/admin/legal', label: 'Legal y blindaje', icon: 'legal', perm: 'cumplimiento' },
   ] },
   { group: 'Administración', items: [
     { href: '/admin/equipo', label: 'Equipo, roles y permisos', icon: 'equipo', perm: 'equipo' },

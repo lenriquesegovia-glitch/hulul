@@ -129,7 +129,9 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
       // El saldo pendiente (cargos por cancelar tarde) lo escribe solo el servidor.
       allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'consentMarketing', 'consentPrivacy', 'privacyVersion', 'createdAt', 'updatedAt', 'balance', 'credit', 'noShows'])
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'consentMarketing', 'consentPrivacy', 'privacyVersion', 'createdAt', 'updatedAt', 'balance', 'credit', 'noShows', 'legal'])
+        // La prueba de aceptación (versión de los términos) la escribe solo el servidor.
+        && request.resource.data.get('legal', null) == resource.data.get('legal', null)
         && request.resource.data.get('balance', 0) == resource.data.get('balance', 0)
         && request.resource.data.get('credit', 0) == resource.data.get('credit', 0)
         && request.resource.data.get('noShows', 0) == resource.data.get('noShows', 0)
@@ -166,7 +168,7 @@ service cloud.firestore {
         'cities', 'days', 'from', 'to', 'acceptsCash', 'docs', 'offHours', 'holidays', 'surcharges',
         'taxRegime', 'eSignature', 'mandateAccepted', 'payoutBalance',
         'reviewNote', 'reviewedAt', 'reviewedBy', 'verifyAlerts',
-        'consentPrivacy', 'privacyVersion', 'termsAccepted', 'submittedAt', 'createdAt', 'updatedAt']);
+        'consentPrivacy', 'privacyVersion', 'termsAccepted', 'submittedAt', 'createdAt', 'updatedAt', 'legal']);
     }
 
     function providerOk(uid, d) {
@@ -200,6 +202,7 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == uid
         && providerOk(uid, request.resource.data)
         && !('catStatus' in request.resource.data) && !('reviewNote' in request.resource.data) && !('strikes' in request.resource.data) && !('tester' in request.resource.data) && !('cashDebt' in request.resource.data) && !('fines' in request.resource.data) && !('payoutBalance' in request.resource.data)
+        && !('legal' in request.resource.data)
         && !('strikeLog' in request.resource.data) && !('suspendedUntil' in request.resource.data) && !('strikesResetAt' in request.resource.data) && !('ratingCheckAt' in request.resource.data)
         && request.resource.data.status == 'borrador'
         && request.resource.data.createdAt == request.time;
@@ -208,6 +211,7 @@ service cloud.firestore {
         && resource.data.status in ['borrador', 'en_revision', 'observado']
         && providerOk(uid, request.resource.data)
         && request.resource.data.get('catStatus', null) == resource.data.get('catStatus', null)
+        && request.resource.data.get('legal', null) == resource.data.get('legal', null)
         // La nota de revisión la escribe solo HULUL (panel o consola).
         && request.resource.data.get('reviewNote', null) == resource.data.get('reviewNote', null)
         && request.resource.data.get('reviewedAt', null) == resource.data.get('reviewedAt', null)
