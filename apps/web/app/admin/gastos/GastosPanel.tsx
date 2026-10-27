@@ -740,6 +740,10 @@ function PlatformsTab({ gastos, now, canEdit, onAdd, onList }: { gastos: Expense
 function CardTab({ data, now, canEdit, onList, onDone }: { data: ExpensesData; now: number; canEdit: boolean; onList: (title: string, ids: string[]) => void; onDone: () => Promise<void> }) {
   const pagos = data.pagosTarjeta ?? [];
   const cs = useMemo(() => cardStatus(data.gastos, pagos, now), [data.gastos, pagos, now]);
+  const invested = useMemo(() => {
+    const l = data.gastos.filter((g) => g.formaPago === 'tarjeta');
+    return { total: r2(l.reduce((t, g) => t + g.total, 0)), count: l.length, ids: l.map((g) => g.id), first: l.map((g) => g.fecha).sort()[0] ?? '' };
+  }, [data.gastos]);
   const today = ecDate(now);
   const [f, setF] = useState<{ fecha: string; monto: number | undefined; tarjeta: string; referencia: string; tipo: 'tarjeta' | 'reembolso'; socio: string }>({ fecha: today, monto: undefined, tarjeta: '', referencia: '', tipo: 'tarjeta', socio: '' });
   const [busy, setBusy] = useState(false);
@@ -760,6 +764,7 @@ function CardTab({ data, now, canEdit, onList, onDone }: { data: ExpensesData; n
     <div className="adm-grid" style={{ gap: 12 }}>
       <div className="adm-kpis">
         <Kpi accent label="Deuda de la tarjeta hoy" value={money(cs.saldo)} hint="Cargos registrados − pagos del estado de cuenta" />
+        <Kpi label="Total invertido con tarjeta" value={money(invested.total)} hint={invested.first ? `Desde ${fmtDay(invested.first)} · ${invested.count} cargos (empresa y socios)` : 'Aún sin cargos'} onClick={() => invested.ids.length && onList('Todo lo invertido con tarjeta', invested.ids)} />
         <Kpi label="Cargos a la tarjeta" value={money(cs.cargos)} hint="Todo lo cargado a tarjetas de la empresa" onClick={() => onList('Cargos a la tarjeta de la empresa', cs.cargosIds)} />
         <Kpi label="Pagos de la tarjeta" value={money(cs.pagos)} hint={`${pagos.filter((p) => p.tipo !== 'reembolso').length} pagos registrados`} />
         {cs.socios.map((s) => <Kpi key={s.nombre} label={`Se le debe a ${s.nombre}`} value={money(s.total)} hint={canEdit ? 'Toca para registrar el reembolso' : 'Pagado con su tarjeta o dinero personal'} onClick={() => (canEdit ? setF({ ...f, tipo: 'reembolso', socio: s.nombre, monto: s.total }) : onList(`Gastos pagados por ${s.nombre}`, s.ids))} />)}

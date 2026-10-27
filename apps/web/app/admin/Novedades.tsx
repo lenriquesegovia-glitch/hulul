@@ -11,6 +11,7 @@ import { MUESTRA, useAdmin } from './AdminShell';
  * este navegador y la novedad vuelve a aparecer si cambia (otro reclamo, otro monto…).
  */
 const KEY = 'hulul-novedades-vistas';
+const OPEN_KEY = 'hulul-novedades-abierta';
 const LEVEL: Record<InboxLevel, { color: string; label: string }> = {
   alta: { color: 'var(--bad)', label: 'Urgente' },
   media: { color: 'var(--warn)', label: 'Revisar' },
@@ -27,6 +28,10 @@ export function Novedades({ onOpen }: { onOpen: (title: string, ids: string[]) =
   const [seen, setSeen] = useState<Record<string, string>>({});
   const [showSeen, setShowSeen] = useState(false);
   const [all, setAll] = useState(false);
+  // Abierta u oculta: se recuerda en este navegador.
+  const [openBox, setOpenBox] = useState(true);
+  useEffect(() => { try { setOpenBox(localStorage.getItem(OPEN_KEY) !== '0'); } catch { /* sin almacenamiento */ } }, []);
+  const toggle = () => setOpenBox((v) => { try { localStorage.setItem(OPEN_KEY, v ? '0' : '1'); } catch { /* sin almacenamiento */ } return !v; });
   const canGastos = can('contabilidad');
   const canPagos = can('pagos');
 
@@ -68,14 +73,17 @@ export function Novedades({ onOpen }: { onOpen: (title: string, ids: string[]) =
   return (
     <section className="adm-card adm-inbox" aria-labelledby="novedades-t">
       <div className="adm-bar" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <h2 id="novedades-t" style={{ margin: 0 }}>Novedades por revisar {fresh.length > 0 && <span className="adm-count" style={{ marginLeft: 6 }}>{fresh.length}</span>}</h2>
-          <p className="sub" style={{ margin: 0 }}>{fresh.length ? `${urgent ? `${urgent} urgentes · ` : ''}Lo pendiente de todo el panel, sin tener que recorrerlo.` : 'Todo al día: no hay nada nuevo por revisar.'}</p>
-        </div>
-        {old.length > 0 && <button type="button" className="adm-chip" aria-pressed={showSeen} onClick={() => setShowSeen((v) => !v)}>{showSeen ? 'Ocultar las vistas' : `Ver también las vistas (${old.length})`}</button>}
+        <button type="button" className="adm-inbox-head" aria-expanded={openBox} aria-controls="novedades-lista" onClick={toggle}>
+          <span className="adm-inbox-caret" aria-hidden="true">{openBox ? '▾' : '▸'}</span>
+          <span>
+            <span id="novedades-t" className="adm-inbox-title">Novedades por revisar {fresh.length > 0 && <span className="adm-count" style={{ marginLeft: 6 }}>{fresh.length}</span>}{!openBox && urgent > 0 && <span className="adm-badge t-bad" style={{ marginLeft: 6 }}>{urgent} urgentes</span>}</span>
+            <span className="sub" style={{ margin: 0, display: 'block' }}>{!openBox ? 'Oculta · toca para verlas' : fresh.length ? `${urgent ? `${urgent} urgentes · ` : ''}Lo pendiente de todo el panel, sin tener que recorrerlo.` : 'Todo al día: no hay nada nuevo por revisar.'}</span>
+          </span>
+        </button>
+        {openBox && old.length > 0 && <button type="button" className="adm-chip" aria-pressed={showSeen} onClick={() => setShowSeen((v) => !v)}>{showSeen ? 'Ocultar las vistas' : `Ver también las vistas (${old.length})`}</button>}
       </div>
-      {list.length > 0 && (
-        <ul className="adm-inbox-list">
+      {openBox && list.length > 0 && (
+        <ul className="adm-inbox-list" id="novedades-lista">
           {list.map((i) => {
             const done = seen[i.id] === i.sig;
             const go = i.href
@@ -97,7 +105,7 @@ export function Novedades({ onOpen }: { onOpen: (title: string, ids: string[]) =
           })}
         </ul>
       )}
-      {full.length > 6 && <button type="button" className="adm-kpi-link" style={{ marginTop: 8 }} onClick={() => setAll((v) => !v)}>{all ? 'Mostrar menos' : `Ver las otras ${full.length - 6} →`}</button>}
+      {openBox && full.length > 6 && <button type="button" className="adm-kpi-link" style={{ marginTop: 8 }} onClick={() => setAll((v) => !v)}>{all ? 'Mostrar menos' : `Ver las otras ${full.length - 6} →`}</button>}
     </section>
   );
 }

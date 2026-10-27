@@ -286,3 +286,7 @@ body:has(.adm) .cookie-banner { display: none; }
   .adm-inbox-list li { grid-template-columns: 10px minmax(0, 1fr); }
   .adm-inbox-list li > .adm-bar { grid-column: 2; }
 }
+.adm-inbox-head { display: flex; gap: 10px; align-items: flex-start; background: none; border: 0; padding: 0; margin: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; }
+.adm-inbox-head:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 6px; }
+.adm-inbox-caret { font-size: 16px; line-height: 22px; color: var(--muted); width: 14px; }
+.adm-inbox-title { display: block; font-size: 16px; font-weight: 800; }
