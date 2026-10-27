@@ -144,6 +144,99 @@ assert.equal(complianceAlerts({ bookings, payouts: [], providers: [] }, { from: 
   assert.equal(typeof wm.nextPayout.estimate, 'number');
 }
 
+// Gastos y nómina (deben coincidir con functions/gastos-core.js)
+{
+  const core = await import('../functions/gastos-core.js');
+  const sh = await import('../packages/shared/src/dashboard.ts');
+  for (const [k, v] of Object.entries(core.EXPENSE_CATEGORIES)) assert.equal(sh.EXPENSE_CATEGORIES[k]?.code, v.code, `categoría ${k}`);
+  assert.deepEqual(Object.keys(sh.EXPENSE_CATEGORIES).sort(), Object.keys(core.EXPENSE_CATEGORIES).sort());
+  const g1 = { id: 'g1', ...core.expenseInput({ fecha: '2026-10-05', categoria: 'honorarios', proveedor: 'Contadora', base: 200, iva: 30, retRenta: 20, retIva: 21 }), pagadoEl: null };
+  const g2 = { id: 'g2', ...core.expenseInput({ fecha: '2026-10-10', categoria: 'marketing', proveedor: 'Meta', base: 100, iva: 15, estado: 'por_pagar', vence: '2026-10-20' }), pagadoEl: null };
+  const emp = { id: 'e1', nombre: 'Ana', sueldo: 482, ingreso: '2025-01-01', decimosMensuales: false, fondoMensual: false };
+  const lines = [core.payrollLine(emp, { anticipos: 40 }, '2026-10')];
+  const totals = core.payrollTotals(lines);
+  const nom = core.payrollExpenses('2026-10', totals).map((g) => ({ ...g, pagadoEl: null }));
+  const gastos = [g1, g2, ...nom];
+  const range = { from: '2026-10-01', to: '2026-10-31' };
+  const s = sh.expenseSummary(gastos, range, now);
+  assert.equal(s.vencidos.total, 115, 'factura de Meta vencida');
+  assert.equal(s.total, sh.r2(300 + nom.reduce((t, g) => t + g.base, 0)));
+  assert.deepEqual(s.byGroup.map((g) => g.key), ['administrativos', 'nomina', 'marketing']);
+  const lg = [{ id: 'l1', bucket: 'ingreso_hulul', kind: 'comision', amount: 1000, createdAt: Date.UTC(2026, 9, 12, 15) }, { id: 'l2', bucket: 'ingreso_hulul', kind: 'multa', amount: 10, createdAt: Date.UTC(2026, 9, 12, 15) }];
+  const is = sh.incomeStatement(lg, gastos, range, now);
+  assert.equal(is.ingresos.total, 1010);
+  assert.equal(is.utilidad, sh.r2(1010 - s.total));
+  const j = sh.expenseJournal(gastos, [{ mes: '2026-10', status: 'aprobado', lines, totals }], range);
+  const dr = sh.r2(j.reduce((t, l) => t + l.debit, 0)); const cr = sh.r2(j.reduce((t, l) => t + l.credit, 0));
+  assert.equal(dr, cr, 'asientos de gastos y nómina cuadran');
+  for (const e of new Set(j.map((l) => l.entry))) {
+    const x = j.filter((l) => l.entry === e);
+    assert.equal(sh.r2(x.reduce((t, l) => t + l.debit, 0)), sh.r2(x.reduce((t, l) => t + l.credit, 0)), `asiento ${e} cuadra`);
+  }
+  assert.ok(!j.some((l) => l.entry.startsWith('FC') && l.detail.startsWith('Pago') && l.party === 'Meta'), 'lo pendiente no se paga en el diario');
+  const serie = sh.resultSeries(lg, gastos, range, 'mes');
+  assert.equal(serie.length, 1); assert.equal(serie[0].utilidad, is.utilidad);
+
+  // Tarjeta, exterior y devengado.
+  const apple = { id: 'g3', ...core.expenseInput({ fecha: '2026-10-03', categoria: 'tecnologia', proveedor: 'Apple', base: 99, iva: 14.85, isd: 4.95, formaPago: 'tarjeta', exterior: true, cubreMeses: 12, plataforma: 'apple' }), pagadoEl: '2026-10-03' };
+  const gcp = { id: 'g4', ...core.expenseInput({ fecha: '2026-11-02', categoria: 'tecnologia', proveedor: 'Google Cloud', base: 40, iva: 6, formaPago: 'tarjeta', exterior: true, cubreDesde: '2026-10', plataforma: 'firebase', liquidacion: true }), pagadoEl: '2026-11-02' };
+  const socio = { id: 'g5', ...core.expenseInput({ fecha: '2026-10-08', categoria: 'tecnologia', proveedor: 'Claude', base: 100, formaPago: 'tarjeta', pagador: 'socio', socio: 'Luis', plataforma: 'claude' }), pagadoEl: '2026-10-08' };
+  const all = [apple, gcp, socio];
+  const oct = sh.expenseSummary(all, range, now);
+  assert.equal(oct.total, sh.r2(8.25 + 4.95 + 40 + 100), 'octubre: 1/12 de Apple + ISD + Google de octubre (cobrado en nov.) + Claude');
+  assert.equal(oct.prepaid.diferido, sh.r2(99 - 8.25), 'lo anual pagado en octubre que se devenga después');
+  const year = { from: '2026-01-01', to: '2027-12-31' };
+  const jj = sh.expenseJournal(all, [], year, [{ id: 'p1', fecha: '2026-11-20', monto: 50, tarjeta: 'Visa', referencia: '' }]);
+  for (const e of new Set(jj.map((l) => l.entry))) {
+    const x = jj.filter((l) => l.entry === e);
+    assert.equal(sh.r2(x.reduce((t, l) => t + l.debit, 0)), sh.r2(x.reduce((t, l) => t + l.credit, 0)), `asiento ${e} cuadra`);
+  }
+  const bal = (code) => sh.r2(jj.filter((l) => l.code === code).reduce((t, l) => t + l.credit - l.debit, 0));
+  assert.equal(bal('2010401'), sh.r2(apple.aPagar + gcp.aPagar - 50), 'deuda de la tarjeta = cargos − pagos');
+  assert.equal(bal('20108'), 100, 'se le debe al socio');
+  const reemb = sh.expenseJournal(all, [], year, [{ id: 'r1', fecha: '2026-11-25', monto: 100, tipo: 'reembolso', socio: 'Luis', tarjeta: '', referencia: '' }]);
+  assert.equal(sh.r2(reemb.filter((l) => l.code === '20108').reduce((t, l) => t + l.credit - l.debit, 0)), 0, 'reembolsado al socio');
+  assert.equal(sh.cardStatus(all, [{ id: 'r1', fecha: '2026-11-25', monto: 100, tipo: 'reembolso', socio: 'Luis', tarjeta: '', referencia: '' }], now).socios.length, 0);
+  assert.equal(bal('1010404'), 0, 'lo pagado por anticipado se devengó completo en el año');
+  assert.equal(bal('2010301'), 0, 'la provisión de octubre se cerró con el cargo de noviembre');
+  assert.equal(sh.r2(jj.filter((l) => l.code === '520228').reduce((t, l) => t + l.debit, 0)), 239, 'gasto total devengado de plataformas');
+  const cs = sh.cardStatus(all, [{ id: 'p1', fecha: '2026-11-20', monto: 50, tarjeta: '', referencia: '' }], now);
+  assert.equal(cs.saldo, sh.r2(apple.aPagar + gcp.aPagar - 50));
+  assert.deepEqual(cs.sinLiquidacion.ids, ['g3']);
+  const pc = sh.platformCosts(all, now);
+  assert.equal(pc.find((x) => x.key === 'apple').months.at(-1).monto, 13.2, 'la cuota del mes + el ISD del cargo');
+
+  // Carga del estado de cuenta
+  assert.equal(sh.matchPlatform('GOOGLE *CLOUD FTRVZ'), 'firebase');
+  assert.equal(sh.matchPlatform('GOOGLE *GSUITE_hulul'), 'workspace');
+  assert.equal(sh.matchPlatform('CLAUDE.AI SUBSCRIPTION'), 'claude');
+  assert.equal(sh.matchPlatform('ANTHROPIC, PBC'), 'claude_api');
+  assert.equal(sh.matchPlatform('SUPERMAXI'), '');
+  const drafts = sh.statementDrafts([
+    { n: 1, fecha: '2026-10-02', descripcion: 'GOOGLE *CLOUD', monto: 40, tipo: 'consumo', relacionado: null, exterior: true },
+    { n: 2, fecha: '2026-10-02', descripcion: 'IVA SERV DIGITALES', monto: 6, tipo: 'iva', relacionado: 1, exterior: false },
+    { n: 3, fecha: '2026-10-02', descripcion: 'ISD', monto: 2.3, tipo: 'isd', relacionado: null, exterior: false },
+    { n: 4, fecha: '2026-10-05', descripcion: 'APPLE.COM/BILL', monto: 99, tipo: 'consumo', relacionado: null, exterior: true },
+    { n: 5, fecha: '2026-10-08', descripcion: 'INTERES', monto: 3, tipo: 'interes', relacionado: null, exterior: false },
+    { n: 6, fecha: '2026-10-10', descripcion: 'PAGO', monto: -100, tipo: 'pago', relacionado: null, exterior: false },
+    { n: 7, fecha: '2026-11-02', descripcion: 'Google Cloud', monto: 40, tipo: 'consumo', relacionado: null, exterior: true },
+  ], [gcp]);
+  assert.equal(drafts.length, 4, 'sin pagos ni líneas de IVA/ISD');
+  assert.deepEqual([drafts[0].iva, drafts[0].isd, drafts[0].cubreDesde], [6, 2.3, '2026-09'], 'consumo de la nube se devenga en el mes anterior');
+  assert.equal(drafts[1].cubreMeses, 12);
+  assert.equal(drafts[2].include, false, 'intereses no se incluyen solos');
+  assert.equal(drafts[3].dup, true, 'ya registrado');
+
+  // Bandeja de novedades
+  const dash = { range, generatedAt: now, bookings, ledger: [], payouts: [], providers: [], clients: [], claims: [] };
+  const inbox = sh.inboxItems(dash, () => true, now, { gastos: { gastos: [g2, ...all], roles: [], pagosTarjeta: [] } });
+  assert.ok(inbox.some((i) => i.id === 'gastos-vencidos' && i.level === 'alta'));
+  assert.ok(inbox.some((i) => i.id === 'liquidaciones'));
+  assert.ok(inbox.some((i) => i.id === 'socio-Luis'));
+  assert.ok(!sh.inboxItems(dash, (p) => p === 'tablero', now, {}).some((i) => i.area === 'Gastos'), 'sin permiso no ve gastos');
+  for (let i = 1; i < inbox.length; i++) assert.ok({ alta: 0, media: 1, info: 2 }[inbox[i - 1].level] <= { alta: 0, media: 1, info: 2 }[inbox[i].level]);
+}
+
 // El ingreso del resumen y el de «Dinero del periodo» cuadran (incluye reservas en reclamo).
 {
   const R = { from: '2026-10-01', to: '2026-10-31' };

@@ -224,7 +224,7 @@ body:has(.adm) .cookie-banner { display: none; }
 
 .adm-role { justify-self: start; background: rgba(255,255,255,.12); color: #fff; font-weight: 700; border-radius: 999px; padding: 3px 10px; font-size: 11.5px; word-break: normal; }
 .adm-field { display: grid; gap: 5px; font-size: 13.5px; font-weight: 700; }
-.adm-field .adm-input { font-weight: 400; width: 100%; }
+.adm-field .adm-input, .adm-field .adm-select { font-weight: 400; width: 100%; min-width: 0; }
 .adm-roleopt { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; cursor: pointer; background: var(--surface); }
 .adm-roleopt[data-on="true"] { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
 .adm-roleopt input { margin-top: 3px; accent-color: var(--primary); }
@@ -274,3 +274,20 @@ body:has(.adm) .cookie-banner { display: none; }
 .adm-kpi.selected { box-shadow: 0 0 0 2px var(--primary); }
 .adm-kpi.accent.selected { box-shadow: 0 0 0 3px #7FB6A6; }
 .adm-kpi-link { background: none; border: none; padding: 0; font: inherit; font-size: 11.5px; font-weight: 800; color: inherit; text-decoration: underline; cursor: pointer; }
+
+/* Bandeja de novedades (resumen ejecutivo) */
+.adm-inbox-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+.adm-inbox-list li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 7px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.adm-inbox-list li > i { width: 10px; height: 10px; border-radius: 50%; }
+.adm-inbox-list li > div { display: grid; gap: 2px; min-width: 0; font-size: 14px; }
+.adm-inbox-list small { color: var(--text-2); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-inbox-area { margin-right: 6px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+@media (max-width: 720px) {
+  .adm-inbox-list li { grid-template-columns: 10px minmax(0, 1fr); }
+  .adm-inbox-list li > .adm-bar { grid-column: 2; }
+}
+.adm-inbox-head { display: flex; gap: 10px; align-items: flex-start; background: none; border: 0; padding: 0; margin: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; }
+.adm-inbox-head:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 6px; }
+.adm-inbox-caret { font-size: 16px; line-height: 22px; color: var(--muted); width: 14px; }
+.adm-inbox-title { display: block; font-size: 16px; font-weight: 800; }
+.adm-drawer.wide { width: min(1100px, 100vw); max-width: 100vw; }

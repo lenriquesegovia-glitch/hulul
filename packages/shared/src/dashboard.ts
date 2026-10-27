@@ -1059,3 +1059,533 @@ export function bookingInvoices(b: DashBooking, proRuc = ''): ClientInvoice[] {
   }
   return out;
 }
+
+/* --------------------------- Gastos de la empresa y nómina --------------------------- */
+
+/**
+ * Categorías de gasto con su cuenta Supercias. Deben coincidir con functions/gastos-core.js
+ * (check-dashboard lo comprueba). Propuesta para que la contadora valide.
+ * Todo se registra DEVENGADO: el gasto va al mes (o meses) que cubre, no al día en que se paga.
+ */
+export type ExpenseGroup = 'administrativos' | 'plataformas' | 'nomina' | 'subcontratos' | 'marketing' | 'financieros';
+export const EXPENSE_GROUPS: { key: ExpenseGroup; label: string; color: string }[] = [
+  { key: 'plataformas', label: 'Plataformas y tecnología', color: '#2E7D8C' },
+  { key: 'administrativos', label: 'Administrativos', color: '#1B2A4A' },
+  { key: 'nomina', label: 'Nómina', color: '#4C6FA8' },
+  { key: 'subcontratos', label: 'Subcontratos', color: '#8A9BB8' },
+  { key: 'marketing', label: 'Marketing', color: '#C08A3E' },
+  { key: 'financieros', label: 'Financieros e impuestos', color: '#6B6560' },
+];
+export const EXPENSE_CATEGORIES: Record<string, { label: string; code: string; group: ExpenseGroup; payroll?: boolean }> = {
+  tecnologia: { label: 'Plataformas y software (nube, tiendas de apps, IA, dominios)', code: '520228', group: 'plataformas' },
+  honorarios: { label: 'Honorarios profesionales (contadora, abogado…)', code: '520205', group: 'administrativos' },
+  subcontratos: { label: 'Subcontratos y trabajadores autónomos', code: '520206', group: 'subcontratos' },
+  marketing: { label: 'Marketing y publicidad', code: '520111', group: 'marketing' },
+  arriendo: { label: 'Arriendo de oficina', code: '520209', group: 'administrativos' },
+  servicios: { label: 'Luz, agua, internet y teléfono', code: '520218', group: 'administrativos' },
+  mantenimiento: { label: 'Mantenimiento y reparaciones', code: '520208', group: 'administrativos' },
+  transporte: { label: 'Transporte y movilización', code: '520215', group: 'administrativos' },
+  viajes: { label: 'Viajes', code: '520217', group: 'administrativos' },
+  combustible: { label: 'Combustible', code: '520212', group: 'administrativos' },
+  seguros: { label: 'Seguros', code: '520214', group: 'administrativos' },
+  notarios: { label: 'Notarías, registros y marcas (SENADI)', code: '520219', group: 'administrativos' },
+  impuestos: { label: 'Impuestos, contribuciones y patentes', code: '520220', group: 'financieros' },
+  bancarios: { label: 'Comisiones bancarias y de la pasarela', code: '520302', group: 'financieros' },
+  gestion: { label: 'Gastos de gestión (agasajos, atenciones)', code: '520216', group: 'administrativos' },
+  otros: { label: 'Otros gastos', code: '520228', group: 'administrativos' },
+  nomina_sueldos: { label: 'Nómina: sueldos y horas extra', code: '520201', group: 'nomina', payroll: true },
+  nomina_aportes: { label: 'Nómina: aportes patronales y fondos de reserva', code: '520202', group: 'nomina', payroll: true },
+  nomina_beneficios: { label: 'Nómina: décimos y vacaciones', code: '520203', group: 'nomina', payroll: true },
+};
+export const MANUAL_EXPENSE_CATEGORIES = Object.keys(EXPENSE_CATEGORIES).filter((k) => !EXPENSE_CATEGORIES[k].payroll);
+export const EXPENSE_PAY_LABEL: Record<string, string> = { tarjeta: 'Tarjeta de crédito', transferencia: 'Transferencia', efectivo: 'Efectivo', debito: 'Débito bancario', cheque: 'Cheque' };
+
+/** ISD sobre consumos en el exterior (2026) y monto anual exento por consumos con tarjeta. */
+export const ISD_RATE = 0.05;
+export const ISD_EXEMPT_2026 = 5188.26;
+
+/**
+ * Lo que hay detrás de HULUL (el «stack»): cada servicio con su categoría y cómo se cobra.
+ * El precio no se fija aquí: cada mes se registra lo que llegó en el estado de cuenta.
+ */
+export type Billing = 'mensual' | 'consumo' | 'anual' | 'unico';
+export const PLATFORMS: { key: string; name: string; what: string; billing: Billing; exterior: boolean; categoria: string }[] = [
+  { key: 'firebase', name: 'Google Cloud · Firebase', what: 'Base de datos, funciones, archivos, inicio de sesión y mapas', billing: 'consumo', exterior: true, categoria: 'tecnologia' },
+  { key: 'vercel', name: 'Vercel', what: 'Hosting de la web hululec.com', billing: 'mensual', exterior: true, categoria: 'tecnologia' },
+  { key: 'claude', name: 'Claude (Anthropic) · suscripción', what: 'Desarrollo de la plataforma con Claude', billing: 'mensual', exterior: true, categoria: 'tecnologia' },
+  { key: 'claude_api', name: 'Claude API (Anthropic)', what: 'Análisis de reclamos con IA en el panel', billing: 'consumo', exterior: true, categoria: 'tecnologia' },
+  { key: 'expo', name: 'Expo · EAS', what: 'Compilación y actualizaciones de la app', billing: 'mensual', exterior: true, categoria: 'tecnologia' },
+  { key: 'github', name: 'GitHub', what: 'Código fuente y publicación automática', billing: 'mensual', exterior: true, categoria: 'tecnologia' },
+  { key: 'resend', name: 'Resend / correo', what: 'Envío de correos (estados de cuenta, avisos)', billing: 'mensual', exterior: true, categoria: 'tecnologia' },
+  { key: 'workspace', name: 'Google Workspace / Gmail', what: 'Correo corporativo', billing: 'mensual', exterior: true, categoria: 'tecnologia' },
+  { key: 'google_play', name: 'Google Play Console', what: 'Cuenta de desarrollador Android (pago único)', billing: 'unico', exterior: true, categoria: 'tecnologia' },
+  { key: 'apple', name: 'Apple Developer Program', what: 'Cuenta de desarrollador iPhone (anual)', billing: 'anual', exterior: true, categoria: 'tecnologia' },
+  { key: 'dominios', name: 'Dominios (hululec.com, hulul.ec…)', what: 'Registro y renovación de dominios', billing: 'anual', exterior: true, categoria: 'tecnologia' },
+  { key: 'meta_ads', name: 'Meta Ads (Instagram/Facebook)', what: 'Publicidad pagada', billing: 'consumo', exterior: true, categoria: 'marketing' },
+];
+export const BILLING_LABEL: Record<Billing, string> = { mensual: 'Mensual', consumo: 'Por consumo (mensual)', anual: 'Anual: se reparte en 12 meses', unico: 'Pago único' };
+
+export interface Expense {
+  id: string; fecha: string; categoria: string; proveedor: string; identificacion: string; factura: string; descripcion: string;
+  base: number; iva: number; isd: number; total: number; retRenta: number; retIva: number; aPagar: number;
+  formaPago: string; estado: 'pagado' | 'por_pagar'; vence: string | null; pagadoEl: string | null; recurrente: boolean; origen?: 'manual' | 'nomina';
+  /** Tarjeta (texto libre, p. ej. «Visa Pacífico ••1234»). pagador: de quién es la tarjeta o el dinero. */
+  tarjeta: string; pagador: 'empresa' | 'socio'; socio: string;
+  exterior: boolean; liquidacion: boolean; plataforma: string;
+  /** Devengado: primer mes (AAAA-MM) y número de meses que cubre el gasto. */
+  cubreDesde: string; cubreMeses: number;
+  creadoPor?: string;
+}
+/** Pago del estado de cuenta de la tarjeta, o reembolso a un socio que pagó gastos de la empresa. */
+export interface CardPayment { id: string; fecha: string; monto: number; tipo?: 'tarjeta' | 'reembolso'; socio?: string; tarjeta: string; referencia: string; creadoPor?: string }
+export interface PayrollLine {
+  empleadoId: string; nombre: string; cedula: string; cargo: string; dias: number; sueldo: number; proporcional: number; extras: number; bonos: number; ingresos: number;
+  aportePersonal: number; anticipos: number; otrosDescuentos: number; decimo13: number; decimo14: number; decimosEnRol: number; fondo: number; fondoEnRol: number; vacaciones: number;
+  patronal: number; iece: number; secap: number; neto: number; costo: number; alIess: number;
+}
+export type PayrollTotals = Pick<PayrollLine, 'ingresos' | 'aportePersonal' | 'anticipos' | 'otrosDescuentos' | 'decimo13' | 'decimo14' | 'decimosEnRol' | 'fondo' | 'fondoEnRol' | 'vacaciones' | 'patronal' | 'iece' | 'secap' | 'neto' | 'costo' | 'alIess'>;
+export interface Payroll { mes: string; status: 'borrador' | 'aprobado'; lines: PayrollLine[]; totals: PayrollTotals; aprobadoPor?: string | null; aprobadoEl?: number | null }
+export interface Employee {
+  id: string; nombre: string; cedula: string; cargo: string; correo: string; cuenta: string; sueldo: number; ingreso: string;
+  activo: boolean; decimosMensuales: boolean; fondoMensual: boolean; bajoSbu?: boolean;
+}
+
+export const expenseGroupOf = (g: Pick<Expense, 'categoria'>): ExpenseGroup => EXPENSE_CATEGORIES[g.categoria]?.group ?? 'administrativos';
+const isOverdue = (g: Expense, today: string) => g.estado === 'por_pagar' && !!g.vence && g.vence < today;
+const ymOf = (iso: string) => iso.slice(0, 7);
+const addMonthsYm = (m: string, n: number) => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo - 1 + n, 1)).toISOString().slice(0, 7); };
+/** Último día del mes AAAA-MM. */
+export const monthEnd = (m: string) => addDays(`${addMonthsYm(m, 1)}-01`, -1);
+const isCard = (g: Pick<Expense, 'formaPago'>) => g.formaPago === 'tarjeta';
+
+export interface ExpenseSlice { id: string; fecha: string; mes: string; categoria: string; monto: number; isd?: boolean }
+
+/**
+ * Partes devengadas de un gasto: la base repartida en los meses que cubre (fecha = fin de cada mes,
+ * o la fecha del comprobante si cae en ese mes) y el ISD como impuesto en la fecha del cargo.
+ */
+export function expenseSlices(g: Expense): ExpenseSlice[] {
+  const n = Math.max(1, Number(g.cubreMeses) || 1);
+  const from = g.cubreDesde || ymOf(g.fecha);
+  const part = r2(g.base / n);
+  const out: ExpenseSlice[] = Array.from({ length: n }, (_, i) => {
+    const mes = addMonthsYm(from, i);
+    return { id: g.id, mes, fecha: mes === ymOf(g.fecha) ? g.fecha : monthEnd(mes), categoria: g.categoria, monto: i === n - 1 ? r2(g.base - part * (n - 1)) : part };
+  });
+  if (g.isd > 0) out.push({ id: g.id, mes: ymOf(g.fecha), fecha: g.fecha, categoria: 'impuestos', monto: r2(g.isd), isd: true });
+  return out;
+}
+const slicesIn = (gastos: Expense[], range: DateRange) => gastos.flatMap(expenseSlices).filter((s) => inRange(s.fecha, range));
+
+export interface ExpenseSummary {
+  total: number; count: number; ivaCredito: number; retenciones: number; isd: number;
+  porPagar: { total: number; ids: string[] }; vencidos: { total: number; ids: string[] }; proximos: { total: number; ids: string[] };
+  byGroup: (Bucket & { color: string })[]; byCategory: (Bucket & { code: string })[]; byProvider: Bucket[];
+  /** Parte de gastos anuales pagados antes y que se devenga en este periodo (o pagada ahora para meses futuros). */
+  prepaid: { devengadoAhora: number; diferido: number };
+}
+
+/** Resumen DEVENGADO del periodo. Gasto = base sin IVA (el IVA es crédito tributario) + ISD. */
+export function expenseSummary(gastos: Expense[], range: DateRange, now: number): ExpenseSummary {
+  const today = ecDate(now);
+  const soon = addDays(today, 7);
+  const slices = slicesIn(gastos, range);
+  const byId = new Map(gastos.map((g) => [g.id, g]));
+  const groups = new Map<string, Bucket>(); const cats = new Map<string, Bucket>(); const provs = new Map<string, Bucket>();
+  for (const s of slices) {
+    const g = byId.get(s.id)!;
+    const grp = EXPENSE_CATEGORIES[s.categoria]?.group ?? 'administrativos';
+    bucket(groups, grp, EXPENSE_GROUPS.find((x) => x.key === grp)!.label, s.id, s.monto);
+    bucket(cats, s.categoria, s.isd ? 'ISD (impuesto a la salida de divisas)' : EXPENSE_CATEGORIES[s.categoria]?.label ?? s.categoria, s.id, s.monto);
+    bucket(provs, g.proveedor.toLowerCase(), g.proveedor, s.id, s.monto);
+  }
+  for (const m of [groups, cats, provs]) for (const b of m.values()) b.ids = [...new Set(b.ids)];
+  const docs = gastos.filter((g) => inRange(g.fecha, range));
+  const open = gastos.filter((g) => g.estado === 'por_pagar');
+  const sum = (l: Expense[], k: keyof Expense = 'aPagar') => r2(l.reduce((t, g) => t + Number(g[k] || 0), 0));
+  const overdue = open.filter((g) => isOverdue(g, today));
+  const next = open.filter((g) => !isOverdue(g, today) && !!g.vence && g.vence <= soon);
+  const sorted = (m: Map<string, Bucket>) => [...m.values()].sort((a, z) => (z.value ?? 0) - (a.value ?? 0));
+  // Diferido: base de comprobantes del periodo que se devenga fuera de él; devengado ahora: lo inverso.
+  const docBase = sum(docs, 'base');
+  const ownSlices = r2(slices.filter((s) => !s.isd && docs.some((g) => g.id === s.id)).reduce((t, s) => t + s.monto, 0));
+  const fromOther = r2(slices.filter((s) => !s.isd && !docs.some((g) => g.id === s.id)).reduce((t, s) => t + s.monto, 0));
+  return {
+    total: r2(slices.reduce((t, s) => t + s.monto, 0)), count: new Set(slices.map((s) => s.id)).size,
+    ivaCredito: sum(docs, 'iva'), retenciones: r2(sum(docs, 'retRenta') + sum(docs, 'retIva')), isd: sum(docs, 'isd'),
+    porPagar: { total: sum(open), ids: open.map((g) => g.id) },
+    vencidos: { total: sum(overdue), ids: overdue.map((g) => g.id) },
+    proximos: { total: sum(next), ids: next.map((g) => g.id) },
+    byGroup: EXPENSE_GROUPS.filter((x) => groups.has(x.key)).map((x) => ({ ...groups.get(x.key)!, color: x.color })),
+    byCategory: sorted(cats).map((b) => ({ ...b, code: EXPENSE_CATEGORIES[b.key]?.code ?? '' })),
+    byProvider: sorted(provs).slice(0, 10),
+    prepaid: { devengadoAhora: fromOther, diferido: r2(docBase - ownSlices) },
+  };
+}
+
+/** Ingresos propios de HULUL en el periodo (sin IVA): servicios (4102) y otros ordinarios (4109). Créditos a clientes = gasto. */
+export function hululIncome(ledger: DashLedger[], range: DateRange) {
+  let servicios = 0; let otros = 0; let creditos = 0;
+  for (const e of ledger) {
+    if (!msInRange(e.createdAt, range)) continue;
+    if (e.bucket === 'ingreso_hulul') { if ((INCOME_ACCOUNT[e.kind] ?? 'servicios') === 'servicios') servicios += e.amount; else otros += e.amount; }
+    if (e.bucket === 'pasivo_cliente') creditos += e.amount;
+  }
+  return { servicios: r2(servicios), otros: r2(otros), total: r2(servicios + otros), creditos: r2(creditos) };
+}
+
+export interface IncomeStatement {
+  ingresos: { servicios: number; otros: number; total: number };
+  gastos: { key: string; label: string; value: number; ids: string[] }[];
+  totalGastos: number; utilidad: number; margen: number;
+}
+
+/** Estado de resultados devengado: ingresos HULUL − gastos (por grupo) = utilidad antes de impuestos. */
+export function incomeStatement(ledger: DashLedger[], gastos: Expense[], range: DateRange, now: number): IncomeStatement {
+  const inc = hululIncome(ledger, range);
+  const s = expenseSummary(gastos, range, now);
+  const lines = s.byGroup.map((g) => ({ key: g.key, label: g.label, value: r2(g.value ?? 0), ids: g.ids }));
+  if (inc.creditos) lines.push({ key: 'creditos', label: 'Créditos entregados a clientes', value: inc.creditos, ids: [] });
+  const totalGastos = r2(lines.reduce((t, l) => t + l.value, 0));
+  const utilidad = r2(inc.total - totalGastos);
+  return { ingresos: { servicios: inc.servicios, otros: inc.otros, total: inc.total }, gastos: lines, totalGastos, utilidad, margen: pctOf(utilidad, inc.total) };
+}
+
+export interface ResultPoint { key: string; from: string; to: string; ingresos: number; gastos: number; utilidad: number; ids: string[] }
+
+/** Serie (por semana o mes) de ingresos HULUL, gastos devengados y utilidad. */
+export function resultSeries(ledger: DashLedger[], gastos: Expense[], range: DateRange, gran: Granularity): ResultPoint[] {
+  const keyOf = (d: string) => (gran === 'dia' ? d : gran === 'semana' ? mondayOf(d) : `${d.slice(0, 7)}-01`);
+  const next = (k: string) => (gran === 'dia' ? addDays(k, 1) : gran === 'semana' ? addDays(k, 7) : `${addMonthsYm(k.slice(0, 7), 1)}-01`);
+  const slices = slicesIn(gastos, range);
+  const dates = [
+    ...slices.map((s) => s.fecha),
+    ...ledger.filter((e) => msInRange(e.createdAt, range) && (e.bucket === 'ingreso_hulul' || e.bucket === 'pasivo_cliente')).map((e) => ecDate(e.createdAt!)),
+  ].sort();
+  const first = range.from > '1900' ? range.from : dates[0];
+  const last = range.to < '9000' ? range.to : dates[dates.length - 1];
+  if (!first || !last) return [];
+  const pts = new Map<string, ResultPoint>();
+  for (let k = keyOf(first), i = 0; k <= last && i < 400; k = next(k), i++) pts.set(k, { key: k, from: k, to: addDays(next(k), -1), ingresos: 0, gastos: 0, utilidad: 0, ids: [] });
+  for (const e of ledger) {
+    if (!msInRange(e.createdAt, range)) continue;
+    const p = pts.get(keyOf(ecDate(e.createdAt!))); if (!p) continue;
+    if (e.bucket === 'ingreso_hulul') p.ingresos = r2(p.ingresos + e.amount);
+    if (e.bucket === 'pasivo_cliente') p.gastos = r2(p.gastos + e.amount);
+  }
+  for (const s of slices) {
+    const p = pts.get(keyOf(s.fecha)); if (!p) continue;
+    p.gastos = r2(p.gastos + s.monto); if (!p.ids.includes(s.id)) p.ids.push(s.id);
+  }
+  for (const p of pts.values()) p.utilidad = r2(p.ingresos - p.gastos);
+  return [...pts.values()];
+}
+
+/* ------------------------------ Tarjeta de crédito y plataformas ------------------------------ */
+
+export interface CardStatus {
+  /** Lo que se debe hoy en tarjetas de la empresa (cargos − pagos). */
+  saldo: number; cargos: number; pagos: number; cargosIds: string[];
+  /** Cargos pagados con tarjeta o dinero personal de un socio: la empresa se los debe reembolsar. */
+  socios: { nombre: string; total: number; ids: string[] }[];
+  /** Consumos en el exterior del año (para el umbral exento de ISD) y los que no tienen liquidación de compra. */
+  exteriorAnio: number; sinLiquidacion: { total: number; ids: string[] };
+}
+
+export function cardStatus(gastos: Expense[], pagos: CardPayment[], now: number): CardStatus {
+  const year = ecDate(now).slice(0, 4);
+  const card = gastos.filter((g) => isCard(g) && g.pagador !== 'socio');
+  const cargos = r2(card.reduce((t, g) => t + g.aPagar, 0));
+  const pagado = r2(pagos.filter((p) => p.tipo !== 'reembolso').reduce((t, p) => t + p.monto, 0));
+  const soc = new Map<string, { nombre: string; total: number; ids: string[] }>();
+  for (const g of gastos.filter((x) => x.pagador === 'socio' && x.estado === 'pagado')) {
+    const k = (g.socio || 'Socio').trim();
+    const s = soc.get(k) ?? { nombre: k, total: 0, ids: [] }; s.total = r2(s.total + g.aPagar); s.ids.push(g.id); soc.set(k, s);
+  }
+  for (const p of pagos.filter((x) => x.tipo === 'reembolso')) {
+    const k = (p.socio || 'Socio').trim();
+    const so = soc.get(k) ?? { nombre: k, total: 0, ids: [] }; so.total = r2(so.total - p.monto); soc.set(k, so);
+  }
+  const ext = gastos.filter((g) => g.exterior && g.fecha.startsWith(year));
+  const noLiq = gastos.filter((g) => g.exterior && !g.liquidacion && g.origen !== 'nomina');
+  return {
+    saldo: r2(cargos - pagado), cargos, pagos: pagado, cargosIds: card.map((g) => g.id),
+    socios: [...soc.values()].filter((x) => Math.abs(x.total) >= 0.01).sort((a, z) => z.total - a.total),
+    exteriorAnio: r2(ext.reduce((t, g) => t + g.base + g.iva, 0)),
+    sinLiquidacion: { total: r2(noLiq.reduce((t, g) => t + g.total, 0)), ids: noLiq.map((g) => g.id) },
+  };
+}
+
+export interface PlatformRow {
+  key: string; name: string; what: string; billing: Billing;
+  months: { mes: string; monto: number; ids: string[] }[];
+  /** Mensual o por consumo con cargos antes pero sin registrar en el último mes cerrado o en el actual. */
+  missing: string[]; total: number;
+}
+
+/** Costo devengado de cada servicio del stack en los últimos meses, y qué meses faltan por registrar. */
+export function platformCosts(gastos: Expense[], now: number, months = 6): PlatformRow[] {
+  const cur = ecDate(now).slice(0, 7);
+  const list = Array.from({ length: months }, (_, i) => addMonthsYm(cur, i - months + 1));
+  const keys = new Set([...PLATFORMS.map((p) => p.key), ...gastos.map((g) => g.plataforma).filter(Boolean)]);
+  return [...keys].map((key) => {
+    const p = PLATFORMS.find((x) => x.key === key) ?? { key, name: key, what: '', billing: 'mensual' as Billing };
+    const own = gastos.filter((g) => g.plataforma === key);
+    const sl = own.flatMap(expenseSlices);
+    const ms = list.map((mes) => { const x = sl.filter((s) => s.mes === mes); return { mes, monto: r2(x.reduce((t, s) => t + s.monto, 0)), ids: [...new Set(x.map((s) => s.id))] }; });
+    const firstMonth = sl.map((s) => s.mes).sort()[0];
+    const prev = addMonthsYm(cur, -1);
+    const missing = (p.billing === 'mensual' || p.billing === 'consumo') && firstMonth
+      ? list.filter((mes) => mes >= firstMonth && mes <= prev && !sl.some((s) => s.mes === mes)) : [];
+    return { key, name: p.name, what: p.what, billing: p.billing, months: ms, missing, total: r2(ms.reduce((t, m) => t + m.monto, 0)) };
+  });
+}
+
+/* ------------------------------ Libro diario de gastos y nómina ------------------------------ */
+
+/** Cuentas Supercias que usan los gastos y la nómina (propuesta para validar con la contadora). */
+export const EXPENSE_ACCOUNTS = {
+  bancos: { code: '10101', name: 'EFECTIVO Y EQUIVALENTES AL EFECTIVO' },
+  anticipos: { code: '1010208', name: 'OTRAS CUENTAS POR COBRAR', aux: 'Anticipos a empleados' },
+  prepagados: { code: '1010404', name: 'OTROS ANTICIPOS ENTREGADOS', aux: 'Suscripciones y servicios pagados por anticipado' },
+  ivaCredito: { code: '1010501', name: 'CRÉDITO TRIBUTARIO A FAVOR DE LA EMPRESA (IVA)' },
+  proveedores: { code: '2010301', name: 'CUENTAS Y DOCUMENTOS POR PAGAR - LOCALES', aux: 'Proveedores y gastos devengados por pagar' },
+  tarjeta: { code: '2010401', name: 'OBLIGACIONES CON INSTITUCIONES FINANCIERAS - LOCALES', aux: 'Tarjeta de crédito de la empresa' },
+  sri: { code: '2010701', name: 'OTRAS OBLIGACIONES CORRIENTES - CON LA ADMINISTRACIÓN TRIBUTARIA' },
+  iess: { code: '2010703', name: 'OTRAS OBLIGACIONES CORRIENTES - CON EL IESS' },
+  beneficios: { code: '2010704', name: 'OTRAS OBLIGACIONES CORRIENTES - POR BENEFICIOS DE LEY A EMPLEADOS' },
+  socios: { code: '20108', name: 'CUENTAS POR PAGAR DIVERSAS - RELACIONADAS', aux: 'Gastos pagados por socios (reembolso)' },
+  otrosPasivos: { code: '20113', name: 'OTROS PASIVOS CORRIENTES', aux: 'Descuentos de nómina por pagar' },
+} as const;
+
+export interface ExpenseJournalLine { date: string; entry: string; code: string; accountName: string; party: string; detail: string; debit: number; credit: number }
+
+/**
+ * Asientos devengados de gastos, tarjeta y nómina.
+ * Comprobante (fecha): Dr gasto del mes / Dr pagados por anticipado (meses siguientes) / Dr provisión (meses
+ * anteriores ya devengados) + Dr IVA crédito + Dr ISD; Cr tarjeta, socio o proveedor (a pagar) + Cr SRI (retenciones).
+ * Cada mes que cubre fuera del mes del comprobante: Dr gasto / Cr pagados por anticipado o provisión.
+ * Pago a proveedor: Dr proveedores / Cr bancos. Pago de la tarjeta: Dr tarjeta / Cr bancos.
+ * Nómina aprobada: Dr 520201/520202/520203 / Cr IESS, beneficios, anticipos, descuentos y bancos (neto).
+ */
+export function expenseJournal(gastos: Expense[], payrolls: Payroll[], range: DateRange, pagos: CardPayment[] = []): ExpenseJournalLine[] {
+  const A = EXPENSE_ACCOUNTS;
+  const out: ExpenseJournalLine[] = [];
+  const line = (date: string, entry: string, acc: { code: string; name: string }, party: string, detail: string, debit: number, credit: number) => {
+    if (inRange(date, range) && (r2(debit) || r2(credit))) out.push({ date, entry, code: acc.code, accountName: acc.name, party, detail, debit: r2(debit), credit: r2(credit) });
+  };
+  for (const g of gastos) {
+    if (g.origen === 'nomina') continue;
+    const cat = EXPENSE_CATEGORIES[g.categoria];
+    const gasto = { code: cat?.code ?? '520228', name: cat?.label ?? 'OTROS GASTOS' };
+    const entry = g.factura ? `FC ${g.factura}` : `G-${g.id.slice(-6).toUpperCase()}`;
+    const detail = `${cat?.label ?? g.categoria}${g.descripcion ? ` · ${g.descripcion}` : ''}`;
+    const docMonth = ymOf(g.fecha);
+    const card = isCard(g);
+    const payable = g.pagador === 'socio' ? A.socios : card ? A.tarjeta : A.proveedores;
+    const slices = expenseSlices(g).filter((s) => !s.isd);
+    for (const s of slices) {
+      const acc = s.mes === docMonth ? gasto : s.mes > docMonth ? A.prepagados : A.proveedores;
+      line(g.fecha, entry, acc, g.proveedor, s.mes === docMonth ? detail : `${detail} · corresponde a ${s.mes}`, s.monto, 0);
+      if (s.mes !== docMonth) {
+        line(s.fecha, `${entry} DEV ${s.mes}`, gasto, g.proveedor, `Devengo de ${s.mes}`, s.monto, 0);
+        line(s.fecha, `${entry} DEV ${s.mes}`, s.mes > docMonth ? A.prepagados : A.proveedores, g.proveedor, `Devengo de ${s.mes}`, 0, s.monto);
+      }
+    }
+    line(g.fecha, entry, A.ivaCredito, g.proveedor, g.exterior ? 'IVA de servicios digitales (percibido por la tarjeta)' : 'IVA en compras', g.iva, 0);
+    line(g.fecha, entry, { code: EXPENSE_CATEGORIES.impuestos.code, name: 'IMPUESTOS, CONTRIBUCIONES Y OTROS' }, g.proveedor, 'ISD 5 % del consumo en el exterior', g.isd, 0);
+    line(g.fecha, entry, payable, g.pagador === 'socio' ? (g.socio || 'Socio') : card ? (g.tarjeta || 'Tarjeta de crédito') : g.proveedor, detail, 0, g.aPagar);
+    line(g.fecha, entry, A.sri, g.proveedor, 'Retenciones en la fuente e IVA', 0, r2(g.retRenta + g.retIva));
+    if (!card && g.pagador !== 'socio' && g.estado === 'pagado') {
+      const paid = g.pagadoEl ?? g.fecha;
+      line(paid, `${entry} PAGO`, A.proveedores, g.proveedor, `Pago (${EXPENSE_PAY_LABEL[g.formaPago] ?? g.formaPago})`, g.aPagar, 0);
+      line(paid, `${entry} PAGO`, A.bancos, g.proveedor, `Pago (${EXPENSE_PAY_LABEL[g.formaPago] ?? g.formaPago})`, 0, g.aPagar);
+    }
+  }
+  for (const p of pagos) {
+    if (p.tipo === 'reembolso') {
+      const entry = `REEMB ${p.fecha}${p.referencia ? ` ${p.referencia}` : ''}`;
+      line(p.fecha, entry, A.socios, p.socio || 'Socio', 'Reembolso de gastos pagados por el socio', p.monto, 0);
+      line(p.fecha, entry, A.bancos, p.socio || 'Socio', 'Reembolso de gastos pagados por el socio', 0, p.monto);
+      continue;
+    }
+    const entry = `TC ${p.fecha}${p.referencia ? ` ${p.referencia}` : ''}`;
+    line(p.fecha, entry, A.tarjeta, p.tarjeta || 'Tarjeta de crédito', 'Pago del estado de cuenta de la tarjeta', p.monto, 0);
+    line(p.fecha, entry, A.bancos, p.tarjeta || 'Tarjeta de crédito', 'Pago del estado de cuenta de la tarjeta', 0, p.monto);
+  }
+  for (const p of payrolls) {
+    if (p.status !== 'aprobado') continue;
+    const date = monthEnd(p.mes);
+    const t = p.totals; const entry = `ROL ${p.mes}`; const party = 'Empleados';
+    const C = EXPENSE_CATEGORIES;
+    line(date, entry, { code: C.nomina_sueldos.code, name: 'SUELDOS, SALARIOS Y DEMÁS REMUNERACIONES' }, party, 'Sueldos, horas extra y bonos', t.ingresos, 0);
+    line(date, entry, { code: C.nomina_aportes.code, name: 'APORTES A LA SEGURIDAD SOCIAL (incluido fondo de reserva)' }, party, 'Aporte patronal, IECE, SECAP y fondos de reserva', r2(t.patronal + t.iece + t.secap + t.fondo), 0);
+    line(date, entry, { code: C.nomina_beneficios.code, name: 'BENEFICIOS SOCIALES E INDEMNIZACIONES' }, party, 'Décimo tercero, décimo cuarto y vacaciones', r2(t.decimo13 + t.decimo14 + t.vacaciones), 0);
+    line(date, entry, A.iess, 'IESS', 'Planilla de aportes y fondos de reserva', 0, t.alIess);
+    line(date, entry, A.beneficios, party, 'Décimos y vacaciones provisionados', 0, r2(t.decimo13 + t.decimo14 - t.decimosEnRol + t.vacaciones));
+    line(date, entry, A.anticipos, party, 'Anticipos descontados', 0, t.anticipos);
+    line(date, entry, A.otrosPasivos, party, 'Otros descuentos', 0, t.otrosDescuentos);
+    line(date, entry, A.bancos, party, 'Neto pagado a empleados', 0, t.neto);
+  }
+  return out.sort((a, z) => a.date.localeCompare(z.date) || a.entry.localeCompare(z.entry));
+}
+
+/* ------------------------------ Bandeja de novedades (resumen ejecutivo) ------------------------------ */
+
+/** RUC de la empresa; su noveno dígito fija el día de vencimiento de las declaraciones mensuales del SRI. */
+export const COMPANY_RUC = '0993265160001';
+const SRI_DUE_DAY: Record<string, number> = { '1': 10, '2': 12, '3': 14, '4': 16, '5': 18, '6': 20, '7': 22, '8': 24, '9': 26, '0': 28 };
+export function sriNextDue(now: number, ruc = COMPANY_RUC) {
+  const day = SRI_DUE_DAY[ruc[8]] ?? 28;
+  const today = ecDate(now);
+  const thisDue = `${today.slice(0, 7)}-${String(day).padStart(2, '0')}`;
+  const date = today <= thisDue ? thisDue : `${addMonthsYm(today.slice(0, 7), 1)}-${String(day).padStart(2, '0')}`;
+  return { date, day, daysLeft: Math.round((Date.parse(date) - Date.parse(today)) / DAY) };
+}
+
+export type InboxLevel = 'alta' | 'media' | 'info';
+export interface InboxItem {
+  /** Estable por tipo de novedad; sig cambia cuando cambia el contenido (para volver a mostrarla). */
+  id: string; sig: string; level: InboxLevel; area: string; title: string; detail: string;
+  href?: string; ids?: string[];
+}
+export interface InboxExtras {
+  gastos?: { gastos: Expense[]; roles: Payroll[]; pagosTarjeta: CardPayment[] } | null;
+  statements?: { week: string; status: string; count: number } | null;
+}
+
+/** Lo que hay que revisar hoy, ordenado por urgencia. Solo lo que el rol puede ver. */
+export function inboxItems(data: DashData, can: (p: AdminPerm) => boolean, now: number, extra: InboxExtras = {}): InboxItem[] {
+  const out: InboxItem[] = [];
+  const today = ecDate(now);
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const add = (x: InboxItem) => out.push(x);
+
+  if (can('reclamos')) {
+    const open = data.claims.filter((c) => c.status !== 'resuelto');
+    const late = open.filter((c) => c.resolveDueAt !== null && c.resolveDueAt < now);
+    const soon = open.filter((c) => c.resolveDueAt !== null && c.resolveDueAt >= now && c.resolveDueAt - now < DAY);
+    if (late.length) add({ id: 'reclamos-vencidos', sig: late.map((c) => c.id).join(','), level: 'alta', area: 'Reclamos', title: `${plural(late.length, 'reclamo pasó', 'reclamos pasaron')} el plazo para decidir`, detail: late.map((c) => c.code || c.kindLabel).slice(0, 4).join(' · '), href: '/admin/reclamos' });
+    if (soon.length) add({ id: 'reclamos-24h', sig: soon.map((c) => c.id).join(','), level: 'alta', area: 'Reclamos', title: `${plural(soon.length, 'reclamo vence', 'reclamos vencen')} en menos de 24 horas`, detail: 'Decide antes de que venza el plazo.', href: '/admin/reclamos' });
+    const rest = open.length - late.length - soon.length;
+    if (rest > 0) add({ id: 'reclamos', sig: String(open.map((c) => c.id).join(',')), level: 'media', area: 'Reclamos', title: `${plural(rest, 'reclamo abierto', 'reclamos abiertos')}`, detail: 'En respuesta o en revisión.', href: '/admin/reclamos' });
+  }
+  if (can('profesionales')) {
+    const pend = data.providers.filter((p) => p.status === 'en_revision');
+    if (pend.length) add({ id: 'pros', sig: pend.map((p) => p.uid).join(','), level: 'media', area: 'Profesionales', title: `${plural(pend.length, 'profesional espera', 'profesionales esperan')} aprobación`, detail: pend.slice(0, 3).map((p) => p.name).join(', '), href: '/admin/profesionales' });
+  }
+  if (can('reservas')) {
+    const nowLocal = new Date(now - 5 * 3_600_000).toISOString().slice(11, 16);
+    const lateToday = data.bookings.filter((b) => b.date === today && ['pendiente', 'confirmada'].includes(b.status) && !b.arrivedAt && b.slot < nowLocal && b.at !== null && now - b.at > 15 * 60_000);
+    if (lateToday.length) add({ id: 'atrasos-hoy', sig: lateToday.map((b) => b.id).join(','), level: 'alta', area: 'Reservas', title: `${plural(lateToday.length, 'visita de hoy no ha empezado', 'visitas de hoy no han empezado')} a su hora`, detail: lateToday.slice(0, 3).map((b) => `${b.slot} ${b.proName}`).join(' · '), ids: lateToday.map((b) => b.id) });
+    const unaccepted = data.bookings.filter((b) => b.status === 'pendiente' && b.at !== null && b.at > now && b.at - now < DAY);
+    if (unaccepted.length) add({ id: 'sin-aceptar', sig: unaccepted.map((b) => b.id).join(','), level: 'media', area: 'Reservas', title: `${plural(unaccepted.length, 'reserva de las próximas 24 h', 'reservas de las próximas 24 h')} sin aceptar por el profesional`, detail: unaccepted.slice(0, 3).map((b) => `${fmtShort(b.date)} ${b.slot} ${b.proName}`).join(' · '), ids: unaccepted.map((b) => b.id) });
+    const bad = data.bookings.filter((b) => b.rating !== null && b.rating <= 2 && b.date >= addDays(today, -7));
+    if (bad.length) add({ id: 'malas-notas', sig: bad.map((b) => b.id).join(','), level: 'media', area: 'Calidad', title: `${plural(bad.length, 'calificación baja', 'calificaciones bajas')} (1–2 estrellas) en los últimos 7 días`, detail: bad.slice(0, 3).map((b) => `${b.proName}${b.ratingText ? `: «${b.ratingText.slice(0, 50)}»` : ''}`).join(' · '), ids: bad.map((b) => b.id) });
+  }
+  if (can('cumplimiento')) {
+    const al = complianceAlerts(data, periodRange('ultimos_30', now)).filter((a) => a.level === 'alta');
+    if (al.length) add({ id: 'uafe', sig: al.map((a) => a.key).join(','), level: 'alta', area: 'UAFE', title: `${plural(al.length, 'alerta alta', 'alertas altas')} de cumplimiento`, detail: al.slice(0, 2).map((a) => a.title).join(' · '), href: '/admin/cumplimiento' });
+  }
+  if (can('pagos')) {
+    const wm = weekMoney(data, now);
+    if (wm.toPayNow.count) add({ id: 'pagos-pros', sig: `${wm.toPayNow.count}-${wm.toPayNow.amount}`, level: 'alta', area: 'Pagos', title: `Transferir ${money(wm.toPayNow.amount)} a ${plural(wm.toPayNow.count, 'profesional', 'profesionales')}`, detail: 'Liquidaciones listas: descarga el archivo para el banco.', href: '/admin/contabilidad?vista=pagar' });
+    const st = extra.statements;
+    if (st && st.status === 'borrador' && st.count > 0) add({ id: `estados-${st.week}`, sig: st.week, level: 'media', area: 'Pagos', title: `Estados de cuenta de la semana listos para revisar y aprobar`, detail: `${plural(st.count, 'profesional', 'profesionales')} · nadie los recibe hasta que los apruebes.`, href: '/admin/proveedores?estados=1' });
+  }
+  if (can('contabilidad')) {
+    const debt = data.providers.filter((p) => p.cashDebt > 30);
+    if (debt.length) add({ id: 'deudas', sig: debt.map((p) => `${p.uid}:${p.cashDebt}`).join(','), level: 'media', area: 'Cobros', title: `${plural(debt.length, 'profesional debe', 'profesionales deben')} más de $30 a HULUL`, detail: debt.slice(0, 3).map((p) => `${p.name} ${money(p.cashDebt)}`).join(' · '), href: '/admin/contabilidad?vista=cobrar' });
+    const sri = sriNextDue(now);
+    if (sri.daysLeft <= 7) add({ id: `sri-${sri.date}`, sig: sri.date, level: sri.daysLeft <= 2 ? 'alta' : 'media', area: 'SRI', title: sri.daysLeft === 0 ? 'Hoy vence la declaración mensual del SRI' : `La declaración mensual del SRI vence en ${plural(sri.daysLeft, 'día', 'días')}`, detail: `${fmtShort(sri.date)} · IVA y retenciones del mes anterior.`, href: '/admin/sri' });
+    const g = extra.gastos;
+    if (g) {
+      const s = expenseSummary(g.gastos, { from: today, to: today }, now);
+      if (s.vencidos.ids.length) add({ id: 'gastos-vencidos', sig: s.vencidos.ids.join(','), level: 'alta', area: 'Gastos', title: `${money(s.vencidos.total)} en facturas de proveedores vencidas`, detail: plural(s.vencidos.ids.length, 'factura', 'facturas'), href: '/admin/gastos?vista=pagar' });
+      if (s.proximos.ids.length) add({ id: 'gastos-proximos', sig: s.proximos.ids.join(','), level: 'media', area: 'Gastos', title: `${money(s.proximos.total)} por pagar a proveedores esta semana`, detail: plural(s.proximos.ids.length, 'factura vence', 'facturas vencen') + ' en 7 días.', href: '/admin/gastos?vista=pagar' });
+      const prev = addMonthsYm(today.slice(0, 7), -1);
+      const cur = today.slice(0, 7);
+      for (const mes of [prev, cur]) {
+        const r = g.roles.find((x) => x.mes === mes);
+        const due = mes === prev || Number(today.slice(8, 10)) >= 25;
+        if (due && (!r || r.status !== 'aprobado') && (r || g.roles.length)) add({ id: `rol-${mes}`, sig: r?.status ?? 'none', level: mes === prev ? 'alta' : 'media', area: 'Nómina', title: `Rol de pagos de ${monthNameLong(mes)} ${r ? 'en borrador' : 'sin hacer'}`, detail: 'Apruébalo para pagar sueldos y que entre a la contabilidad.', href: '/admin/gastos?vista=nomina' });
+      }
+      const pr = g.roles.find((x) => x.mes === prev && x.status === 'aprobado');
+      const iessDay = Number(today.slice(8, 10));
+      if (pr && iessDay <= 15) add({ id: `iess-${prev}`, sig: prev, level: iessDay >= 10 ? 'alta' : 'media', area: 'Nómina', title: `Pagar la planilla del IESS de ${monthNameLong(prev)}: ${money(pr.totals.alIess)}`, detail: `Vence el 15 de ${monthNameLong(cur).split(' ')[0]}.`, href: '/admin/gastos?vista=nomina' });
+      const missing = platformCosts(g.gastos, now).filter((p) => p.missing.length);
+      if (missing.length) add({ id: 'plataformas', sig: missing.map((p) => `${p.key}:${p.missing.join('|')}`).join(','), level: 'media', area: 'Plataformas', title: `Falta registrar el cargo de ${missing.slice(0, 3).map((p) => p.name.split(' ·')[0]).join(', ')}${missing.length > 3 ? ' y más' : ''}`, detail: `Meses sin cargo: ${[...new Set(missing.flatMap((p) => p.missing))].map(monthNameLong).join(', ')}. Para el devengado, cada mes debe tener su gasto.`, href: '/admin/gastos?vista=plataformas' });
+      const cs = cardStatus(g.gastos, g.pagosTarjeta, now);
+      if (cs.sinLiquidacion.ids.length) add({ id: 'liquidaciones', sig: cs.sinLiquidacion.ids.join(','), level: 'media', area: 'SRI', title: `${plural(cs.sinLiquidacion.ids.length, 'cargo del exterior sin liquidación de compra', 'cargos del exterior sin liquidación de compra')}`, detail: `${money(cs.sinLiquidacion.total)}: sin ella no se sustenta el gasto ni el crédito de IVA.`, href: '/admin/gastos?vista=plataformas' });
+      if (cs.exteriorAnio > ISD_EXEMPT_2026 * 0.8) add({ id: `isd-${today.slice(0, 4)}`, sig: String(Math.floor(cs.exteriorAnio / 500)), level: 'info', area: 'SRI', title: `Consumos en el exterior del año: ${money(cs.exteriorAnio)}`, detail: `Sobre ${money(ISD_EXEMPT_2026)} al año se paga ISD del 5 %. Revisa el estado de cuenta de la tarjeta.`, href: '/admin/gastos?vista=plataformas' });
+      for (const so of cs.socios.filter((x) => x.total > 0)) add({ id: `socio-${so.nombre}`, sig: `${so.total}`, level: 'info', area: 'Socios', title: `La empresa le debe ${money(so.total)} a ${so.nombre}`, detail: 'Gastos pagados con su tarjeta o dinero personal (reembolso pendiente).', href: '/admin/gastos?vista=tarjeta' });
+    }
+  }
+  const rank: Record<InboxLevel, number> = { alta: 0, media: 1, info: 2 };
+  return out.sort((a, z) => rank[a.level] - rank[z.level]);
+}
+const fmtShort = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-EC', { timeZone: 'UTC', day: 'numeric', month: 'short' });
+const monthNameLong = (m: string) => `${MONTHS[Number(m.slice(5, 7)) - 1] ?? m} ${m.slice(0, 4)}`;
+
+/* ------------------------------ Carga del estado de cuenta de la tarjeta ------------------------------ */
+
+const PLATFORM_PATTERNS: [string, RegExp][] = [
+  ['google_play', /GOOGLE\s*\*?\s*PLAY|PLAY\s*CONSOLE/i],
+  ['workspace', /G\s*SUITE|WORKSPACE|GOOGLE\s*\*?\s*GSUITE/i],
+  ['dominios', /NAMECHEAP|GODADDY|NIC\.?\s*EC|PORKBUN|SQUARESPACE\s*DOM|GOOGLE\s*\*?\s*DOMAINS|HOSTINGER/i],
+  ['firebase', /GOOGLE\s*\*?\s*CLOUD|FIREBASE|CLOUD\s*PLATFORM|GOOGLE\s*\*?\s*GCP|GOOGLE\s*\*?\s*MAPS/i],
+  ['vercel', /VERCEL/i],
+  ['claude', /CLAUDE/i],
+  ['claude_api', /ANTHROPIC/i],
+  ['expo', /\bEXPO\b|EXPO\.DEV|\bEAS\b/i],
+  ['github', /GITHUB/i],
+  ['resend', /RESEND/i],
+  ['apple', /APPLE\.COM|APPLE\s*DEVELOPER|APPLE\s*DEV/i],
+  ['meta_ads', /FACEBK|FACEBOOK|META\s*ADS|META\s*PLATFORMS/i],
+];
+/** Reconoce la plataforma del stack por el texto del comercio en el estado de cuenta. */
+export const matchPlatform = (desc: string) => PLATFORM_PATTERNS.find(([, re]) => re.test(desc))?.[0] ?? '';
+
+export interface StatementMove { n: number; fecha: string; descripcion: string; monto: number; tipo: string; relacionado: number | null; exterior: boolean }
+export interface StatementDraft {
+  key: string; include: boolean; dup: boolean; nota: string; fecha: string; descripcion: string;
+  plataforma: string; categoria: string; proveedor: string; base: number; iva: number; isd: number; exterior: boolean; cubreDesde: string; cubreMeses: number;
+}
+
+/**
+ * Convierte los movimientos leídos en borradores de gasto: junta a cada consumo su IVA de servicios
+ * digitales y su ISD, reconoce la plataforma y su devengado, y marca lo ya registrado.
+ */
+export function statementDrafts(moves: StatementMove[], existing: Expense[]): StatementDraft[] {
+  const consumos = moves.filter((m) => m.tipo === 'consumo');
+  const extra = new Map<number, { iva: number; isd: number }>();
+  for (const m of moves.filter((x) => x.tipo === 'iva' || x.tipo === 'isd')) {
+    // Si la IA no lo relacionó, se asigna al consumo del exterior del mismo día (o el más cercano antes).
+    const target = m.relacionado ?? consumos.filter((c) => c.exterior && c.fecha <= m.fecha).sort((a, z) => z.fecha.localeCompare(a.fecha))[0]?.n;
+    if (target === undefined) continue;
+    const e = extra.get(target) ?? { iva: 0, isd: 0 };
+    if (m.tipo === 'iva') e.iva = r2(e.iva + m.monto); else e.isd = r2(e.isd + m.monto);
+    extra.set(target, e);
+  }
+  return moves.filter((m) => ['consumo', 'interes', 'comision', 'otro'].includes(m.tipo) && m.monto > 0).map((m) => {
+    const plat = m.tipo === 'consumo' ? matchPlatform(m.descripcion) : '';
+    const p = PLATFORMS.find((x) => x.key === plat);
+    const e = extra.get(m.n) ?? { iva: 0, isd: 0 };
+    const mes = m.fecha.slice(0, 7);
+    const consumo = p?.billing === 'consumo';
+    const base = r2(m.monto);
+    const dup = existing.some((g) => g.fecha === m.fecha && Math.abs(g.base - base) < 0.01);
+    const categoria = p?.categoria ?? (m.tipo === 'interes' || m.tipo === 'comision' ? 'bancarios' : 'otros');
+    let nota = '';
+    if (dup) nota = 'Ya está registrado';
+    else if (m.tipo === 'interes' || m.tipo === 'comision') nota = 'Cargo del banco: inclúyelo solo si lo asume la empresa';
+    else if (!p) nota = 'Elige la categoría';
+    // IVA de servicios digitales no puede pasar del 15 % de la base.
+    const iva = Math.min(e.iva, r2(base * 0.15));
+    return {
+      key: `${m.n}`, include: !dup && m.tipo === 'consumo', dup, nota, fecha: m.fecha, descripcion: m.descripcion,
+      plataforma: plat, categoria, proveedor: p?.name ?? m.descripcion, base, iva, isd: Math.min(e.isd, r2((base + iva) * 0.05)),
+      exterior: m.exterior || !!p?.exterior, cubreDesde: consumo ? addMonthsYm(mes, -1) : mes, cubreMeses: p?.billing === 'anual' ? 12 : 1,
+    };
+  });
+}

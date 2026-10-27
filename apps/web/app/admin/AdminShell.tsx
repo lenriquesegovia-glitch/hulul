@@ -54,6 +54,7 @@ const I = {
   cumplimiento: 'M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3ZM9 12h6M12 9v6',
   equipo: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1',
   sri: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6M9 9h2',
+  gastos: 'M3 7h18v12H3zM3 11h18M7 15h3M16 4l-3 3M8 4l3 3',
 };
 function Ico({ d }: { d: string }) {
   return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
@@ -70,6 +71,7 @@ const NAV: { group: string; items: { href: string; label: string; icon: keyof ty
     { href: '/admin/contabilidad', label: 'Contabilidad', icon: 'contabilidad', perm: 'contabilidad' },
     { href: '/admin/proveedores', label: 'Proveedores', icon: 'proveedores', perm: 'proveedores' },
     { href: '/admin/clientes', label: 'Clientes', icon: 'clientes', perm: 'clientes' },
+    { href: '/admin/gastos', label: 'Gastos y nómina', icon: 'gastos', perm: 'contabilidad' },
   ] },
   { group: 'Control', items: [
     { href: '/admin/cumplimiento', label: 'Cumplimiento UAFE', icon: 'cumplimiento', perm: 'cumplimiento', count: 'alerts' },
@@ -87,7 +89,7 @@ const permOfPath = (path: string): AdminPerm => {
 };
 
 /** Solo en `next dev` con NEXT_PUBLIC_ADMIN_MUESTRA=1: datos de muestra sin iniciar sesión (no existe en producción). */
-const MUESTRA = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_ADMIN_MUESTRA === '1';
+export const MUESTRA = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_ADMIN_MUESTRA === '1';
 
 const MUESTRA_USER = { email: 'muestra@hululec.com' };
 const MUESTRA_ROL = (process.env.NEXT_PUBLIC_ADMIN_ROL || 'dueno') as AdminRole;

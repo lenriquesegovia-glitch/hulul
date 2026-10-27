@@ -13,6 +13,6 @@
     "pdfkit": "^0.17.2"
   },
   "scripts": {
-    "test": "node --test money.test.js mail-safety.test.js profanity.test.js reclamos-core.test.js pro-review.test.js doc-verify.test.js tablero-core.test.js roles-core.test.js bank-files.test.js statement-pdf.test.js ia-reclamos.test.js"
+    "test": "node --test money.test.js mail-safety.test.js profanity.test.js reclamos-core.test.js pro-review.test.js doc-verify.test.js tablero-core.test.js roles-core.test.js bank-files.test.js statement-pdf.test.js ia-reclamos.test.js gastos-core.test.js estado-tarjeta.test.js"
   }
 }

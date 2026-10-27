@@ -18,6 +18,7 @@ import { sortPros, toProfessional, type PublicPro } from './demo-data';
 import type { JobOutcome } from './policy';
 import type { CategoryEvidence } from './provider';
 import type { TaxRegime } from './tax';
+import type { CardPayment, Employee, Expense, Payroll, PayrollLine, PayrollTotals, StatementMove } from './dashboard';
 import { featuredHomeServices, validateHomeDiscovery } from './home-discovery';
 
 /** Read-only aggregate; unavailable or stale recommendations never block booking. */
@@ -68,8 +69,8 @@ export function friendlyError(e: unknown): Error {
   return e instanceof Error ? e : new Error(msg || 'Algo salió mal. Inténtalo de nuevo.');
 }
 
-function callable<I, O>(name: string) {
-  const fn = httpsCallable<I, O>(getFunctions(firebaseApp(), 'southamerica-east1'), name);
+function callable<I, O>(name: string, timeout?: number) {
+  const fn = httpsCallable<I, O>(getFunctions(firebaseApp(), 'southamerica-east1'), name, timeout ? { timeout } : undefined);
   return async (data: I) => {
     try {
       return await fn(data);
@@ -931,11 +932,15 @@ export async function adminRegisterProPayment(proId: string, amount: number, ref
 /* ------------------------- Estados de cuenta semanales (aprobación) ------------------------- */
 
 export interface StatementBatchItem { proId: string; name: string; email: string; hasEmail: boolean; earned: number; fees: number; fines: number; paid: number; toPay: number; pending: number; include: boolean; sentOk?: boolean }
-export interface StatementBatch { week: string; status: 'borrador' | 'enviado'; items: StatementBatchItem[]; preparedAt: number | null; approvedBy: string; approvedAt: number | null; sent: number }
+export interface StatementBatch { week: string; status: 'borrador' | 'enviado' | 'sin_preparar'; items: StatementBatchItem[]; preparedAt: number | null; approvedBy: string; approvedAt: number | null; sent: number }
 
 /** Lote de la semana (se prepara el lunes; si no existe, se prepara ahora). rebuild = volver a calcularlo. */
 export async function adminStatementBatch(week?: string, rebuild = false): Promise<StatementBatch> {
   return (await callable<{ week?: string; rebuild?: boolean }, StatementBatch>('adminEstadosSemana')({ week, rebuild })).data;
+}
+/** Solo consulta el lote de la semana (no lo prepara si no existe). */
+export async function adminStatementPeek(): Promise<StatementBatch> {
+  return (await callable<{ peek: boolean }, StatementBatch>('adminEstadosSemana')({ peek: true })).data;
 }
 /** Aprueba y envía los estados de cuenta a los profesionales marcados. */
 export async function adminApproveStatements(week: string, include: string[]): Promise<{ sent: number; failed: string[] }> {
@@ -972,4 +977,51 @@ export async function adminIAStatus(): Promise<{ connected: boolean; last4: stri
 }
 export async function adminSaveIAKey(key: string, remove = false): Promise<{ connected: boolean; last4?: string }> {
   return (await callable<{ key: string; remove: boolean }, { ok: boolean; connected: boolean; last4?: string }>('guardarClaveIA')({ key, remove })).data;
+}
+
+/* ------------------------------ Gastos de la empresa y nómina ------------------------------ */
+
+
+export interface ExpensesData {
+  gastos: Expense[]; empleados: Employee[]; roles: Payroll[]; pagosTarjeta: CardPayment[];
+  params: { sbu: number; aportePersonal: number; aportePatronal: number; iece: number; secap: number; fondoReserva: number };
+  canEdit: boolean; viewer: { role: string; email: string };
+}
+export type ExpenseInput = Omit<Expense, 'id' | 'total' | 'aPagar' | 'pagadoEl' | 'origen' | 'creadoPor'> & { id?: string; pagadoEl?: string | null };
+export type EmployeeInput = Omit<Employee, 'id' | 'bajoSbu'> & { id?: string };
+export interface PayrollAdjust { dias?: number; extras?: number; bonos?: number; anticipos?: number; otrosDescuentos?: number }
+
+export async function adminExpenses(): Promise<ExpensesData> {
+  return (await callable<Record<string, never>, ExpensesData>('adminGastos')({})).data;
+}
+export async function adminSaveExpense(input: ExpenseInput): Promise<string> {
+  return (await callable<ExpenseInput, { ok: boolean; id: string }>('guardarGasto')(input)).data.id;
+}
+export async function adminPayExpenses(ids: string[], fecha?: string): Promise<number> {
+  return (await callable<{ ids: string[]; fecha?: string }, { ok: boolean; count: number }>('pagarGasto')({ ids, fecha })).data.count;
+}
+export async function adminDeleteExpense(id: string): Promise<void> {
+  await callable<{ id: string }, { ok: boolean }>('borrarGasto')({ id });
+}
+export async function adminCopyRecurring(mes: string): Promise<number> {
+  return (await callable<{ mes: string }, { ok: boolean; count: number }>('copiarRecurrentes')({ mes })).data.count;
+}
+export async function adminCardPayment(input: Omit<CardPayment, 'id' | 'creadoPor'>): Promise<string> {
+  return (await callable<typeof input, { ok: boolean; id: string }>('registrarPagoTarjeta')(input)).data.id;
+}
+export async function adminDeleteCardPayment(id: string): Promise<void> {
+  await callable<{ id: string }, { ok: boolean }>('borrarPagoTarjeta')({ id });
+}
+/** Lee el estado de cuenta de la tarjeta con Claude: PDF (base64) o texto de un Excel/CSV. */
+export async function adminReadCardStatement(input: { pdf?: string; text?: string }): Promise<{ periodo: { desde: string; hasta: string }; banco: string; movimientos: StatementMove[] }> {
+  return (await callable<typeof input, { periodo: { desde: string; hasta: string }; banco: string; movimientos: StatementMove[] }>('leerEstadoTarjeta', 300_000)(input)).data;
+}
+export async function adminSaveExpenses(gastos: ExpenseInput[]): Promise<number> {
+  return (await callable<{ gastos: ExpenseInput[] }, { ok: boolean; count: number }>('guardarGastosLote')({ gastos })).data.count;
+}
+export async function adminSaveEmployee(input: EmployeeInput): Promise<string> {
+  return (await callable<EmployeeInput, { ok: boolean; id: string }>('guardarEmpleado')(input)).data.id;
+}
+export async function adminPayroll(mes: string, accion: 'calcular' | 'aprobar' | 'reabrir', ajustes?: Record<string, PayrollAdjust>) {
+  return (await callable<{ mes: string; accion: string; ajustes?: Record<string, PayrollAdjust> }, { ok: boolean; status: Payroll['status']; lines?: PayrollLine[]; totals?: PayrollTotals }>('rolPagos')({ mes, accion, ajustes })).data;
 }

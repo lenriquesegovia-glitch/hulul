@@ -1,5 +1,22 @@
 # HULUL — Estado y registro de entregas
 
+## En PR — Gastos de la empresa y nómina (/admin/gastos), 26 de octubre de 2026 (Claude)
+
+- Nueva página en Finanzas: «Gastos y nómina». La ven socios, contadora y UAFE; registran y aprueban socios y contadora (permiso pagos). La UAFE no ve cédulas, cuentas ni el detalle por empleado.
+- Gastos con categoría → cuenta Supercias (52xx), base, IVA (crédito tributario 1010501), retenciones, forma de pago, por pagar con vencimiento, gastos fijos que se copian al mes siguiente con un clic.
+- Rol de pagos mensual: SBU 2026 $482, aporte personal 9,45 %, patronal 11,15 % + IECE y SECAP 0,5 %, décimos, vacaciones y fondos de reserva desde el mes 13. Borrador → aprobar (registra los gastos de nómina) → reabrir.
+- Estado de resultados (ingresos HULUL − gastos = utilidad), curva ingresos vs. gastos, gastos por grupo, categoría y proveedor; todo tocable.
+- Excel para la contadora (estado de resultados, gastos, diario de gastos y nómina, compras para el ATS, roles) y botón «Enviar a la contadora».
+- Datos en `gastos`, `empleados`, `rolPagos` y `adminConfig/nomina` (solo servidor). Lógica en `functions/gastos-core.js` y `packages/shared/src/dashboard.ts`, con pruebas.
+- Pendiente: la contadora valida cuentas y parámetros; adjuntar foto/PDF del comprobante; archivo de pago masivo de sueldos al banco.
+- Devengado en todo (27-oct): cada gasto se reconoce en el mes que cubre; lo anual se reparte en 12 meses (pagados por anticipado 1010404) y el consumo de la nube que se cobra al mes siguiente va al mes en que se usó.
+- Tarjeta de crédito: los cargos son deuda con la tarjeta (2010401) hasta registrar el pago del estado de cuenta; gastos pagados con tarjeta personal de un socio quedan como deuda con él (20108) hasta el reembolso.
+- Plataformas (el stack: Firebase/Google Cloud, Vercel, Claude, Claude API, Expo, GitHub, Resend, Workspace, Google Play, Apple, dominios, Meta Ads): costo mensual, meses que faltan por registrar, IVA de servicios digitales, ISD 5 % y aviso de liquidación de compra faltante.
+- Bandeja «Novedades por revisar» arriba del resumen ejecutivo: reclamos por vencer, pagos, aprobaciones, atrasos de hoy, calificaciones bajas, UAFE, SRI, gastos vencidos, rol e IESS, plataformas, socios. «Visto» por navegador; vuelve si cambia.
+- Novedades desplegable (se recuerda oculta o abierta en el navegador).
+- Subir estado de cuenta de la tarjeta (PDF, Excel o CSV): Claude lo lee (`leerEstadoTarjeta`, no se guarda el archivo), une IVA de servicios digitales e ISD a cada consumo, reconoce la plataforma y su devengado, marca duplicados; se revisa y se crean los gastos de una vez (`guardarGastosLote`). Por defecto la tarjeta es personal de Socio 1 (decisión de Luis): queda como deuda de la empresa con él hasta el reembolso.
+- Necesita publicar con backend (funciones nuevas).
+
 ## En PR — Asistente de reclamos y decisión prellenada, 26 de octubre de 2026 (Claude)
 - Misma rama, además: **menú** Gestión (Resumen, Reservas, Reclamos, Aprobar profesionales) · Finanzas (Contabilidad, Proveedores, Clientes) · Control (Cumplimiento UAFE, **Cumplimiento SRI** nuevo) · Administración (Equipo, roles y permisos).
 - **Estados de cuenta semanales con aprobación**: el lunes `liquidacionSemanal` ya no envía PDFs; prepara `estadosCuenta/{semana}` en borrador (`prepareStatementsBatch`) y avisa a HULUL. En Proveedores → «Estados de cuenta de la semana» se revisan, se desmarcan y se aprueban (`adminEstadosSemana`, `aprobarEstadosSemana`). El correo de liquidación sigue saliendo sin adjunto.

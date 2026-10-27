@@ -125,3 +125,44 @@ const out = {
 };
 writeFileSync(new URL('../apps/web/public/muestra-tablero.json', import.meta.url), JSON.stringify(out));
 console.log(`Muestra: ${out.bookings.length} reservas, ${out.ledger.length} movimientos, ${out.payouts.length} liquidaciones, ${out.claims.length} reclamos.`);
+
+// Gastos y nómina de muestra (apps/web/public/muestra-gastos.json).
+{
+  const { expenseInput, payrollExpenses, payrollLine, payrollTotals, PAYROLL_PARAMS_2026, employeeInput } = await import('../functions/gastos-core.js');
+  const empleados = [
+    { id: 'EMP000000001', ...employeeInput({ nombre: 'Karla Jiménez', cedula: '0923456781', cargo: 'Soporte y operaciones', sueldo: 650, ingreso: '2025-03-01', correo: 'karla@hululec.com', cuenta: 'Pacífico ahorros ••••4521' }) },
+    { id: 'EMP000000002', ...employeeInput({ nombre: 'Bryan Macías', cedula: '0934567812', cargo: 'Atención al cliente', sueldo: 482, ingreso: '2026-06-01', decimosMensuales: true, cuenta: 'Pichincha ahorros ••••8810' }) },
+  ];
+  const months = ['2026-08', '2026-09', '2026-10'];
+  const gastos = []; const roles = []; let n = 0;
+  const r2s = (x) => Math.round(x * 100) / 100;
+  const add = (d, extra = {}) => { const g = expenseInput(d); if (g.error) throw new Error(`${g.error} ${JSON.stringify(d)}`); gastos.push({ id: `GASTO${String(++n).padStart(7, '0')}`, ...g, pagadoEl: g.estado === 'pagado' ? g.fecha : null, origen: 'manual', ...extra }); };
+  for (const m of months) {
+    const last = m === '2026-10';
+    add({ fecha: `${m}-01`, categoria: 'arriendo', proveedor: 'Inmobiliaria Kennedy S.A.', identificacion: '0991234567001', factura: `001-001-0000${m.slice(5)}12`, base: 450, iva: 67.5, retRenta: 36, retIva: 67.5, recurrente: true });
+    add({ fecha: `${m}-05`, categoria: 'servicios', proveedor: 'CNT EP', identificacion: '1768152560001', base: 39.9, iva: 5.99, recurrente: true, formaPago: 'debito' });
+    const prevM = m === '2026-08' ? '2026-07' : m === '2026-09' ? '2026-08' : '2026-09';
+    const tc = { formaPago: 'tarjeta', tarjeta: 'Visa Pacífico ••4410', exterior: true, recurrente: true };
+    add({ fecha: `${m}-03`, categoria: 'tecnologia', proveedor: 'Google Cloud · Firebase', plataforma: 'firebase', base: 38 + n, iva: r2s((38 + n) * 0.15), cubreDesde: prevM, liquidacion: m !== '2026-10', ...tc });
+    if (m !== '2026-09') add({ fecha: `${m}-05`, categoria: 'tecnologia', proveedor: 'Vercel', plataforma: 'vercel', base: 20, iva: 3, liquidacion: true, ...tc });
+    add({ fecha: `${m}-08`, categoria: 'tecnologia', proveedor: 'Claude (Anthropic) · suscripción', plataforma: 'claude', base: 100, iva: 15, liquidacion: m !== '2026-10', ...(m === '2026-08' ? { formaPago: 'tarjeta', pagador: 'socio', socio: 'Socio 1', exterior: true } : tc) });
+    add({ fecha: `${m}-02`, categoria: 'tecnologia', proveedor: 'Claude API (Anthropic)', plataforma: 'claude_api', base: 6 + (n % 5), iva: r2s((6 + (n % 5)) * 0.15), cubreDesde: prevM, liquidacion: true, ...tc });
+    add({ fecha: `${m}-09`, categoria: 'tecnologia', proveedor: 'Expo · EAS', plataforma: 'expo', base: 19, iva: 2.85, liquidacion: true, ...tc });
+    add({ fecha: `${m}-10`, categoria: 'honorarios', proveedor: 'María Fernanda Salazar (contadora)', identificacion: '0912345678', factura: `001-002-00000${m.slice(5)}4`, base: 300, iva: 45, retRenta: 30, retIva: 45, recurrente: true,
+      ...(last ? { estado: 'por_pagar', vence: '2026-10-20' } : {}) });
+    add({ fecha: `${m}-12`, categoria: 'marketing', proveedor: 'Meta Platforms (Instagram/Facebook)', base: 180 + (last ? 120 : 0), iva: 27 + (last ? 18 : 0), formaPago: 'tarjeta' });
+    add({ fecha: `${m}-15`, categoria: 'subcontratos', proveedor: 'Diseñador freelance', identificacion: '0956781234', base: 220, iva: 0, retRenta: 17.6 });
+    add({ fecha: `${m}-27`, categoria: 'bancarios', proveedor: 'Pasarela de pagos', base: 18 + n / 2, iva: 2.7, formaPago: 'debito' });
+    const lines = empleados.filter((e) => e.ingreso <= `${m}-31`).map((e) => payrollLine(e, m === '2026-09' ? { extras: e.id.endsWith('1') ? 40 : 0 } : {}, m, PAYROLL_PARAMS_2026));
+    const totals = payrollTotals(lines);
+    roles.push({ mes: m, status: last ? 'borrador' : 'aprobado', lines, totals, aprobadoPor: last ? null : 'muestra@hululec.com', aprobadoEl: last ? null : now });
+    if (!last) for (const g of payrollExpenses(m, totals)) gastos.push({ ...g, pagadoEl: g.fecha });
+  }
+  add({ fecha: '2026-08-14', categoria: 'tecnologia', proveedor: 'Apple Developer Program', plataforma: 'apple', base: 99, iva: 14.85, cubreMeses: 12, formaPago: 'tarjeta', tarjeta: 'Visa Pacífico ••4410', exterior: true, liquidacion: true });
+  add({ fecha: '2026-08-14', categoria: 'tecnologia', proveedor: 'Google Play Console', plataforma: 'google_play', base: 25, iva: 3.75, formaPago: 'tarjeta', tarjeta: 'Visa Pacífico ••4410', exterior: true, liquidacion: true });
+  add({ fecha: '2026-09-20', categoria: 'tecnologia', proveedor: 'Dominios (hululec.com, hulul.ec…)', plataforma: 'dominios', base: 64, iva: 9.6, cubreMeses: 12, formaPago: 'tarjeta', tarjeta: 'Visa Pacífico ••4410', exterior: true, liquidacion: true });
+  add({ fecha: '2026-09-02', categoria: 'notarios', proveedor: 'SENADI', base: 208, iva: 0, descripcion: 'Registro de la marca HULUL' });
+  add({ fecha: '2026-10-24', categoria: 'mantenimiento', proveedor: 'TecnoFix', identificacion: '0990011223001', factura: '001-001-000000231', base: 85, iva: 12.75, estado: 'por_pagar', vence: '2026-10-30' });
+  writeFileSync(new URL('../apps/web/public/muestra-gastos.json', import.meta.url), JSON.stringify({ gastos, empleados, roles, pagosTarjeta: [{ id: 'TC1', fecha: '2026-09-15', monto: 300, tarjeta: 'Visa Pacífico ••4410', referencia: 'Pago agosto' }, { id: 'TC2', fecha: '2026-10-15', monto: 250, tarjeta: 'Visa Pacífico ••4410', referencia: 'Pago septiembre' }], params: PAYROLL_PARAMS_2026, canEdit: true, viewer: { role: 'dueno', email: 'muestra@hululec.com' } }));
+  console.log(`Muestra de gastos: ${gastos.length} gastos, ${empleados.length} empleados, ${roles.length} roles.`);
+}

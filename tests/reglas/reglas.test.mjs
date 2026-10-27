@@ -73,6 +73,11 @@ await no('nadie lee los roles desde la app', getDoc(doc(intruso, 'adminRoles/con
 await no('nadie lee el registro de accesos del panel', getDoc(doc(intruso, 'adminAccesos/a1')));
 await no('nadie lee los estados de cuenta preparados', getDoc(doc(intruso, 'estadosCuenta/2026-10-26')));
 await no('nadie lee la clave de la IA', getDoc(doc(intruso, 'adminConfig/ia')));
+await no('nadie lee los gastos de la empresa', getDoc(doc(intruso, 'gastos/g1')));
+await no('nadie crea gastos desde la app', setDoc(doc(intruso, 'gastos/g2'), { base: 10 }));
+await no('nadie lee los empleados', getDoc(doc(intruso, 'empleados/e1')));
+await no('nadie lee los pagos de la tarjeta', getDoc(doc(intruso, 'pagosTarjeta/p1')));
+await no('nadie lee el rol de pagos', getDoc(doc(intruso, 'rolPagos/2026-10')));
 await no('nadie lee el análisis de IA de un reclamo', getDoc(doc(cli1, 'reclamos/b1/privado/ia')));
 
 await env.cleanup();
