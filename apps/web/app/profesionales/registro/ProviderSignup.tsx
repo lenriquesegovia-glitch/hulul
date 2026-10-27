@@ -417,10 +417,22 @@ function StepData({ d, set }: { d: Draft; set: SetField }) {
           {TAX_REGIMES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
       </Field>
-      <label className="check">
-        <input type="checkbox" checked={d.eSignature} onChange={(e) => set('eSignature', e.target.checked)} />
-        <span>Tengo firma electrónica. HULUL emitirá con ella la factura de cada visita a tu nombre, sin que hagas nada. Si no la tienes, puedes registrarte igual y sacarla después.</span>
-      </label>
+      <fieldset className="card stack gap-8" style={{ padding: 16 }}>
+        <legend style={{ fontWeight: 800, padding: '0 6px' }}>Firma electrónica (obligatoria)</legend>
+        <p className="muted" style={{ margin: 0, fontSize: 14 }}>Para trabajar en HULUL necesitas firma electrónica: con ella HULUL emite a tu nombre la factura o nota de venta de cada visita, sin que hagas nada, y firmas tu contrato con HULUL.</p>
+        <label className="check"><input type="radio" name="firma" checked={d.eSignature} onChange={() => set('eSignature', true)} /><span>Ya tengo firma electrónica (archivo .p12 vigente).</span></label>
+        <label className="check"><input type="radio" name="firma" checked={!d.eSignature} onChange={() => set('eSignature', false)} /><span>Aún no la tengo: me comprometo a sacarla en los próximos <b>30 días</b>. Mientras tanto puedo trabajar.</span></label>
+        {!d.eSignature && (
+          <details open className="muted" style={{ fontSize: 13.5 }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Cómo sacar tu firma electrónica</summary>
+            <ol style={{ margin: '8px 0 0', paddingLeft: 20, display: 'grid', gap: 4 }}>
+              <li>Elige una entidad acreditada por ARCOTEL (por ejemplo Security Data o Uanataca). Se hace en línea, con tu cédula y una validación por video.</li>
+              <li>Pide la firma <b>en archivo</b> (.p12), por 1 o 2 años. Cuesta desde unos $11 y suele estar lista en horas.</li>
+              <li>Guarda el archivo y su clave. Cuando la tengas, avísanos desde tu agenda («Ya tengo mi firma»).</li>
+            </ol>
+          </details>
+        )}
+      </fieldset>
     </section>
   );
 }
@@ -589,6 +601,7 @@ function StepReview({ d, bank, onSubmit, saving }: { d: Draft; bank: Bank; onSub
         <ul className="stack gap-4" style={{ margin: 0, paddingLeft: 20, color: 'var(--text-2)', fontSize: 14 }}>
           <li>Cobras por visita: tu tarifa cubre ir, diagnosticar y arreglar lo que se resuelva en esa visita. Lo que haga falta después lo acuerdas con el cliente.</li>
           <li>HULUL retiene una comisión del 15 % de tu tarifa por visita (más IVA) y te entrega la factura de esa comisión cada semana.</li>
+          <li>Firma electrónica obligatoria: si no la tienes, la sacas en los 30 días siguientes a tu registro. Autorizas a HULUL a usarla, guardada de forma segura, solo para emitir a tu nombre los comprobantes de tus visitas y firmar tu contrato con HULUL. Sin firma vigente después de ese plazo, HULUL puede pausar tu cuenta hasta que la tengas.</li>
           <li>Autorizas a HULUL a cobrar en tu nombre lo que pagan los clientes con tarjeta y a emitir a tu nombre la factura de cada visita. Ese dinero es tuyo: HULUL lo retiene hasta que pasen las 48 horas para reclamos y te lo deposita cada semana, menos comisión, retenciones de ley, multas y lo que debas por cobros en efectivo.</li>
           <li>Acepta solo trabajos que sabes hacer. Al terminar dejas un resumen con fotos.</li>
           <li>Tolerancia de llegada: 15 minutos. Entre 15 y 30 minutos tarde, el cliente recibe un 10 % de descuento que se te descuenta.</li>

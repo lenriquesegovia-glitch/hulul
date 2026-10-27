@@ -168,7 +168,8 @@ service cloud.firestore {
         'cities', 'days', 'from', 'to', 'acceptsCash', 'docs', 'offHours', 'holidays', 'surcharges',
         'taxRegime', 'eSignature', 'mandateAccepted', 'payoutBalance',
         'reviewNote', 'reviewedAt', 'reviewedBy', 'verifyAlerts',
-        'consentPrivacy', 'privacyVersion', 'termsAccepted', 'submittedAt', 'createdAt', 'updatedAt', 'legal']);
+        'consentPrivacy', 'privacyVersion', 'termsAccepted', 'submittedAt', 'createdAt', 'updatedAt', 'legal',
+        'eSignatureAt', 'eSignatureVerified', 'eSignatureBy']);
     }
 
     function providerOk(uid, d) {
@@ -202,7 +203,7 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == uid
         && providerOk(uid, request.resource.data)
         && !('catStatus' in request.resource.data) && !('reviewNote' in request.resource.data) && !('strikes' in request.resource.data) && !('tester' in request.resource.data) && !('cashDebt' in request.resource.data) && !('fines' in request.resource.data) && !('payoutBalance' in request.resource.data)
-        && !('legal' in request.resource.data)
+        && !('legal' in request.resource.data) && !('eSignatureVerified' in request.resource.data) && !('eSignatureAt' in request.resource.data) && !('eSignatureBy' in request.resource.data)
         && !('strikeLog' in request.resource.data) && !('suspendedUntil' in request.resource.data) && !('strikesResetAt' in request.resource.data) && !('ratingCheckAt' in request.resource.data)
         && request.resource.data.status == 'borrador'
         && request.resource.data.createdAt == request.time;
@@ -212,6 +213,9 @@ service cloud.firestore {
         && providerOk(uid, request.resource.data)
         && request.resource.data.get('catStatus', null) == resource.data.get('catStatus', null)
         && request.resource.data.get('legal', null) == resource.data.get('legal', null)
+        && request.resource.data.get('eSignatureVerified', null) == resource.data.get('eSignatureVerified', null)
+        && request.resource.data.get('eSignatureAt', null) == resource.data.get('eSignatureAt', null)
+        && request.resource.data.get('eSignatureBy', null) == resource.data.get('eSignatureBy', null)
         // La nota de revisión la escribe solo HULUL (panel o consola).
         && request.resource.data.get('reviewNote', null) == resource.data.get('reviewNote', null)
         && request.resource.data.get('reviewedAt', null) == resource.data.get('reviewedAt', null)

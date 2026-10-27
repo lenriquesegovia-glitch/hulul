@@ -50,7 +50,7 @@ export interface DashPayout {
 export interface DashProvider {
   uid: string; name: string; kind: string; status: string; categories: string[]; catStatus: Record<string, string>; cities: string[];
   rating: number | null; reviewCount: number; jobsDone: number; strikes30: number; suspendedUntil: number | null; suspendedReason: string;
-  payoutBalance: number; cashDebt: number; fines: number; taxRegime: string; eSignature: boolean; acceptsCash: boolean; tester: boolean;
+  payoutBalance: number; cashDebt: number; fines: number; taxRegime: string; eSignature: boolean; eSignatureVerified?: boolean; acceptsCash: boolean; tester: boolean;
   ruc: string; email: string; phone: string; submittedAt: number | null; reviewedAt: number | null;
 }
 
@@ -1480,6 +1480,16 @@ export function inboxItems(data: DashData, can: (p: AdminPerm) => boolean, now: 
   if (can('profesionales')) {
     const pend = data.providers.filter((p) => p.status === 'en_revision');
     if (pend.length) add({ id: 'pros', sig: pend.map((p) => p.uid).join(','), level: 'media', area: 'Profesionales', title: `${plural(pend.length, 'profesional espera', 'profesionales esperan')} aprobación`, detail: pend.slice(0, 3).map((p) => p.name).join(', '), href: '/admin/profesionales' });
+  }
+  if (can('profesionales')) {
+    const SIGN_DAYS = 30;
+    const noSign = data.providers.filter((p) => !p.eSignature && p.submittedAt && ['aprobado', 'en_revision', 'observado'].includes(p.status));
+    const late = noSign.filter((p) => p.submittedAt! + SIGN_DAYS * DAY < now);
+    const soon = noSign.filter((p) => p.submittedAt! + SIGN_DAYS * DAY >= now && p.submittedAt! + (SIGN_DAYS - 7) * DAY < now);
+    if (late.length) add({ id: 'firma-vencida', sig: late.map((p) => p.uid).join(','), level: 'alta', area: 'Profesionales', title: `${plural(late.length, 'profesional pasó', 'profesionales pasaron')} los 30 días sin firma electrónica`, detail: late.slice(0, 3).map((p) => p.name).join(', '), href: '/admin/profesionales' });
+    if (soon.length) add({ id: 'firma-proxima', sig: soon.map((p) => p.uid).join(','), level: 'media', area: 'Profesionales', title: `${plural(soon.length, 'profesional debe', 'profesionales deben')} tener su firma electrónica esta semana`, detail: soon.slice(0, 3).map((p) => p.name).join(', '), href: '/admin/profesionales' });
+    const unverified = data.providers.filter((p) => p.eSignature && p.eSignatureVerified === false);
+    if (unverified.length) add({ id: 'firma-verificar', sig: unverified.map((p) => p.uid).join(','), level: 'info', area: 'Profesionales', title: `${plural(unverified.length, 'profesional dice', 'profesionales dicen')} que ya tiene firma electrónica`, detail: 'Verifícala y márcala en Aprobar profesionales.', href: '/admin/profesionales' });
   }
   if (can('reservas')) {
     const nowLocal = new Date(now - 5 * 3_600_000).toISOString().slice(11, 16);
