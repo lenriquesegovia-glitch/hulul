@@ -14,6 +14,8 @@ export function AccountingPanel() {
   const { view, range, now, reload, can } = useAdmin();
   const [tab, setTab] = useState<Tab>('resumen');
   const [bucket, setBucket] = useState('');
+  const [kind, setKind] = useState('');
+  const goMoves = (b: string, k = '') => { setBucket(b); setKind(k); setTab('movimientos'); };
   const [payStatus, setPayStatus] = useState<'por_pagar' | 'pagado' | 'todas'>('por_pagar');
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState('');
@@ -29,9 +31,9 @@ export function AccountingPanel() {
   const proName = useMemo(() => new Map((view?.providers ?? []).map((p) => [p.uid, p.name])), [view]);
   const bookingCode = useMemo(() => new Map((view?.bookings ?? []).map((b) => [b.id, b.code])), [view]);
 
-  const moves = useMemo(() => (view?.ledger ?? []).filter((e) => msInRange(e.createdAt, range) && (!bucket || e.bucket === bucket)
+  const moves = useMemo(() => (view?.ledger ?? []).filter((e) => msInRange(e.createdAt, range) && (!bucket || e.bucket === bucket) && (!kind || e.kind === kind)
     && (!q || `${proName.get(e.proId) ?? ''} ${bookingCode.get(e.bookingId ?? '') ?? ''} ${e.bookingId ?? ''}`.toLowerCase().includes(q.toLowerCase())))
-    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)), [view, range, bucket, q, proName, bookingCode]);
+    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)), [view, range, bucket, kind, q, proName, bookingCode]);
 
   const payouts = useMemo(() => (view?.payouts ?? []).filter((p) => payStatus === 'todas' || p.status === payStatus)
     .filter((p) => p.status === 'por_pagar' || payStatus === 'por_pagar' || (p.week >= range.from && p.week <= range.to))
@@ -142,6 +144,21 @@ export function AccountingPanel() {
         rows: sales, totals: ['base', 'iva', 'total'],
       }]);
     } finally { setExporting(''); }
+  };
+
+  /** El profesional pagó su deuda por transferencia o DeUna: se registra y deja de descontarse el lunes. */
+  const registerPayment = async (proId: string, name: string, debt: number) => {
+    const amount = window.prompt(`${name} debe ${money(debt)}.\n¿Cuánto pagó? (usa punto para decimales)`, debt.toFixed(2));
+    if (!amount) return;
+    const ref = window.prompt('Referencia de la transferencia o DeUna:');
+    if (!ref) return;
+    setBusy(proId); setMsg('');
+    try {
+      const { adminRegisterProPayment } = await import('@hulul/shared/firebase');
+      const left = await adminRegisterProPayment(proId, Number(amount.replace(',', '.')), ref);
+      setMsg(`Pago registrado. ${left > 0 ? `Aún debe ${money(left)}.` : 'Ya no debe nada.'} Entró al banco y queda en el libro de movimientos.`);
+      reload();
+    } catch (e) { setMsg((e as { message?: string }).message || 'No se pudo registrar.'); } finally { setBusy(''); }
   };
 
   const markPaid = async (p: DashPayout) => {
@@ -280,14 +297,15 @@ export function AccountingPanel() {
             <>
               <section className="adm-card">
                 <h2>Profesionales que le deben a HULUL</h2>
-                <p className="sub">Comisión y cargo de plataforma de trabajos cobrados en efectivo, y multas. Se descuenta solo de su próxima liquidación; si no alcanza, queda la deuda.</p>
+                <p className="sub">Cuando el cliente paga en efectivo, DeUna o transferencia, el profesional recibe todo y queda debiendo a HULUL el cargo de plataforma y la comisión (con IVA); también las multas. Se descuenta solo de su próximo depósito con tarjeta; si no alcanza, sigue la deuda y, pasando $30, no puede aceptar efectivo hasta pagar. Si te paga por transferencia o DeUna, regístralo aquí.</p>
                 <div className="adm-table-wrap" style={{ border: 'none' }}>
                   <table className="adm-table">
-                    <thead><tr><th>Profesional</th><th className="num">Movimientos</th><th className="num">Debe</th></tr></thead>
+                    <thead><tr><th>Profesional</th><th className="num">Movimientos</th><th className="num">Debe</th><th /></tr></thead>
                     <tbody>
                       {debtors.length ? debtors.map((p) => (
-                        <tr key={p.proId}><td><Link href={`/admin/proveedores?id=${p.proId}`}>{p.name}</Link></td><td className="num">{p.entries}</td><td className="num" style={{ color: 'var(--bad)' }}><b>{money(-p.total)}</b></td></tr>
-                      )) : <tr><td colSpan={3} className="adm-empty">Nadie debe.</td></tr>}
+                        <tr key={p.proId}><td><Link href={`/admin/proveedores?id=${p.proId}`}>{p.name}</Link></td><td className="num">{p.entries}</td><td className="num" style={{ color: 'var(--bad)' }}><b>{money(-p.total)}</b></td>
+                          <td>{can('pagos') && <button type="button" className="adm-btn" disabled={busy === p.proId} onClick={() => registerPayment(p.proId, p.name, -p.total)}>{busy === p.proId ? 'Guardando…' : 'Registrar pago recibido'}</button>}</td></tr>
+                      )) : <tr><td colSpan={4} className="adm-empty">Nadie debe.</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -302,17 +320,17 @@ export function AccountingPanel() {
           {tab === 'resumen' && (
             <>
               <div className="adm-kpis">
-                <Kpi accent label="Ingreso de HULUL" value={money(acc.incomeTotal)} hint="Lo único que HULUL declara como venta" />
-                <Kpi label="IVA por pagar" value={money(acc.vatDue)} hint="De las facturas de HULUL" />
-                <Kpi label="Recaudo con tarjeta" value={money(acc.collected)} hint="Para cuadrar con la pasarela" />
-                <Kpi label="Dinero de terceros" value={money(acc.thirdParty)} hint="Facturas de los profesionales" />
-                <Kpi label="Créditos a clientes" value={money(acc.clientCredits)} hint="Pasivo por faltas del profesional" />
+                <Kpi accent label="Ingreso de HULUL" value={money(acc.incomeTotal)} hint="Lo único que HULUL declara como venta" onClick={() => goMoves('ingreso_hulul')} />
+                <Kpi label="IVA por pagar" value={money(acc.vatDue)} hint="De las facturas de HULUL" onClick={() => goMoves('iva_por_pagar')} />
+                <Kpi label="Entró al banco" value={money(acc.collected)} hint="Tarjeta y pagos de profesionales: debe cuadrar con el estado de cuenta" onClick={() => goMoves('recaudo')} />
+                <Kpi label="Dinero de terceros" value={money(acc.thirdParty)} hint="Facturas de los profesionales" onClick={() => goMoves('terceros')} />
+                <Kpi label="Créditos a clientes" value={money(acc.clientCredits)} hint="Pasivo por faltas del profesional" onClick={() => goMoves('pasivo_cliente')} />
               </div>
               <div className="adm-grid g-2">
                 <section className="adm-card">
                   <h2>Ingreso de HULUL por concepto</h2>
                   <p className="sub">Movimientos registrados en el periodo.</p>
-                  <HBars items={acc.income.map((i) => ({ label: i.label, value: i.amount, display: money(i.amount) }))} />
+                  <HBars items={acc.income.map((i) => ({ label: i.label, value: i.amount, display: money(i.amount), onClick: () => goMoves('ingreso_hulul', i.kind) }))} />
                 </section>
                 <section className="adm-card">
                   <h2>Por semana</h2>
@@ -326,7 +344,7 @@ export function AccountingPanel() {
                 <div className="adm-table-wrap" style={{ border: 'none' }}>
                   <table className="adm-table">
                     <thead><tr><th>Bolsa</th><th className="num">Monto del periodo</th></tr></thead>
-                    <tbody>{acc.buckets.map((b) => <tr key={b.bucket}><td>{b.label}</td><td className="num">{money(b.amount)}</td></tr>)}</tbody>
+                    <tbody>{acc.buckets.map((b) => <tr key={b.bucket} className="click" onClick={() => goMoves(b.bucket)}><td>{b.label}</td><td className="num">{money(b.amount)}</td></tr>)}</tbody>
                   </table>
                 </div>
               </section>
@@ -367,6 +385,7 @@ export function AccountingPanel() {
             <>
               <div className="adm-bar">
                 <input className="adm-input adm-search" type="search" placeholder="Buscar profesional o código de reserva" value={q} onChange={(e) => setQ(e.target.value)} />
+                {kind && <button type="button" className="adm-chip" aria-pressed onClick={() => setKind('')}>{KIND_LABEL[kind] ?? kind} ×</button>}
                 <select className="adm-select" value={bucket} onChange={(e) => setBucket(e.target.value)} aria-label="Bolsa">
                   <option value="">Todas las bolsas</option>
                   {Object.entries(BUCKET_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -378,7 +397,7 @@ export function AccountingPanel() {
                   <thead><tr><th>Fecha</th><th>Reserva</th><th>Profesional</th><th>Concepto</th><th>Bolsa</th><th className="num">Monto</th><th className="num">Al profesional</th><th>Estado</th></tr></thead>
                   <tbody>
                     {moves.length ? moves.slice(0, 800).map((e) => (
-                      <tr key={e.id} style={e.reverses || e.reversedBy ? { opacity: .6 } : undefined}>
+                      <tr key={e.id} className={e.bookingId ? 'click' : undefined} onClick={() => e.bookingId && setDrill({ title: `Reserva ${bookingCode.get(e.bookingId) ?? ''}`, ids: [e.bookingId] })} style={e.reverses || e.reversedBy ? { opacity: .6 } : undefined}>
                         <td style={{ whiteSpace: 'nowrap' }}>{fmtWhen(e.createdAt)}</td>
                         <td>{bookingCode.get(e.bookingId ?? '') ?? (e.bookingId ? e.bookingId.slice(-6).toUpperCase() : '—')}</td>
                         <td>{proName.get(e.proId) ?? '—'}</td>

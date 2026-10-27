@@ -7,6 +7,11 @@
 - **Proveedor**: KPI tocables; calificación calculada de las reservas («Sin calificar» y cuántos trabajos calificados); pastel de desempeño; actividad como mini CRM (filtro por etapa; vistas por fecha, tablero y línea de tiempo tipo Gantt). Facturas estimadas para reservas sin movimientos (prueba o anteriores al libro). Mismo mini CRM en Clientes.
 - **Fotos** del pedido y del trabajo en el detalle de la reserva, solo dueño y socio, se cargan al tocar «Ver fotos».
 - Los reclamos del cliente se abren con el botón «Ayuda con este servicio» (texto neutro decidido por Luis); el del profesional dice «Reportar un problema con el cliente».
+- Segunda ronda (misma rama): roles «Socio 1» (antes Dueño) y «Socio 2»; tarjetas de dinero = Ingreso (todos los medios), Ingreso por tarjeta (cuadra con el banco), Por cobrar, Salida y Queda para HULUL; al tocar una tarjeta la curva muestra solo esa línea («Ver reservas» abre la lista). Contabilidad: tarjetas y filas llevan al libro filtrado.
+- **Reclamos antiguos** (solo en `bookings.dispute`, antes de V5.5): `adminReclamos` los pasa a `reclamos/{id}` (plazos desde hoy, `legacy: true`) para verlos y decidirlos; el detalle de la reserva muestra el reclamo (motivo, textos, estado, decisión) y enlaza al expediente.
+- **Deuda de efectivo**: `registrarAbono` (Contabilidad → Por cobrar → «Registrar pago recibido»), movimiento `abono_profesional` en `recaudo` con `proDelta` positivo; en el diario va a 10101 / 2010301.
+- **Estado de cuenta PDF** (`functions/statement-pdf.js`, pdfkit): descarga y «Enviar por correo» en la ficha del proveedor (`estadoCuentaPdf`, `enviarEstadoCuenta`); los lunes la liquidación lleva el PDF adjunto y los demás profesionales con movimientos en 7 días reciben su estado de cuenta.
+- Curva de proveedores (general y por profesional): cobrado, comisión HULUL, para el profesional y programado.
 
 ## Publicado — Resumen cualitativo, pagos al banco y Excel contable, 26 de octubre de 2026 (Claude)
 - Rama `claude/resumen-cualitativo-pagos`. Pedido de Luis tras ver el panel publicado (main 79d0ea8, run con backend ✅).

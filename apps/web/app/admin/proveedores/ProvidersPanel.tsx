@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { TAX_REGIME_LABEL, type TaxRegime } from '@hulul/shared';
-import { caseFlags, caseOutcome, inRange, OUTCOMES, percent, providerStats, toCsv, type ProviderStats } from '@hulul/shared/dashboard';
+import { caseFlags, caseOutcome, inRange, OUTCOMES, percent, providerSeries, providerStats, toCsv, type DashBooking, type Granularity, type ProviderStats } from '@hulul/shared/dashboard';
 import { useAdmin } from '../AdminShell';
-import { Badge, BookingListDrawer, BookingsCrm, catName, Donut, downloadCsv, fmtDay, fmtWeek, fmtWhen, HBars, initials, Kpi, Loading, money, PageHead, PeriodBar } from '../ui';
+import { Badge, BookingListDrawer, BookingsCrm, catName, Donut, downloadCsv, FlowChart, fmtDay, fmtWeek, fmtWhen, HBars, initials, Kpi, Loading, money, PageHead, PeriodBar } from '../ui';
 
 type Sort = 'facturado' | 'trabajos' | 'calificacion' | 'problemas' | 'saldo' | 'nombre';
 const STATUS: Record<string, [string, string]> = {
@@ -13,6 +13,30 @@ const STATUS: Record<string, [string, string]> = {
 };
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const regime = (r: string) => TAX_REGIME_LABEL[r as TaxRegime] ?? r;
+
+const PRO_LABELS = { inflow: 'Cobrado por sus servicios', outflow: 'Comisión y cargos HULUL', net: 'Para el profesional', projected: 'Programado' };
+
+/** Curva de los proveedores (todos o uno): cobrado, parte de HULUL, parte del profesional y lo programado. */
+function ProviderTrend({ bookings, title }: { bookings: DashBooking[]; title: string }) {
+  const { range } = useAdmin();
+  const span = (Date.parse(range.to) - Date.parse(range.from)) / 86_400_000;
+  const [gran, setGran] = useState<Granularity | null>(null);
+  const g: Granularity = gran ?? (span > 120 ? 'mes' : span > 35 ? 'semana' : 'dia');
+  const [drill, setDrill] = useState<{ title: string; ids: string[] } | null>(null);
+  const points = useMemo(() => providerSeries(bookings, range, g), [bookings, range, g]);
+  return (
+    <section className="adm-card">
+      <div className="adm-bar" style={{ justifyContent: 'space-between' }}>
+        <div><h2 style={{ margin: 0 }}>{title}</h2><p className="sub" style={{ margin: 0 }}>Toca un punto para ver las reservas de ese día, semana o mes.</p></div>
+        <div className="adm-bar" role="group" aria-label="Agrupar por">
+          {(['dia', 'semana', 'mes'] as Granularity[]).map((k) => <button key={k} type="button" className="adm-chip" aria-pressed={g === k} onClick={() => setGran(k)}>{{ dia: 'Por día', semana: 'Por semana', mes: 'Por mes' }[k]}</button>)}
+        </div>
+      </div>
+      <div style={{ marginTop: 12 }}><FlowChart points={points} gran={g} labels={PRO_LABELS} onPick={(t, ids) => setDrill({ title: t, ids })} /></div>
+      {drill && <BookingListDrawer title={drill.title} ids={drill.ids} onClose={() => setDrill(null)} />}
+    </section>
+  );
+}
 
 export function ProvidersPanel() {
   const { view, range, now } = useAdmin();
@@ -61,6 +85,7 @@ export function ProvidersPanel() {
             <Kpi label="Comisión de HULUL" value={money(totals.commission)} />
             <Kpi label="Por transferirles" value={money(totals.toPay)} hint="Liquidaciones por pagar" />
           </div>
+          <ProviderTrend title="Cómo van los proveedores" bookings={(view.bookings ?? []).filter((b) => rows.some((p) => p.provider.uid === b.proId))} />
           <div className="adm-bar">
             <input className="adm-input adm-search" type="search" placeholder="Buscar por nombre, RUC o categoría" value={q} onChange={(e) => setQ(e.target.value)} />
             <select className="adm-select" value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Estado">
@@ -127,6 +152,26 @@ function ProviderDetail({ p, onBack }: { p: ProviderStats; onBack: () => void })
   const success = recent.filter((b) => caseFlags(b).success).length;
   const ids = (pred: (f: ReturnType<typeof caseFlags>, b: (typeof recent)[number]) => boolean) => recent.filter((b) => pred(caseFlags(b), b)).map((b) => b.id);
   const estimated = p.invoices.some((i) => i.estimated);
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState('');
+  const downloadPdf = async () => {
+    setBusy('pdf'); setMsg('');
+    try {
+      const { adminStatementPdf } = await import('@hulul/shared/firebase');
+      const f = await adminStatementPdf(v.uid, { desde: range.from, hasta: range.to });
+      const bin = atob(f.content); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const a = document.createElement('a'); a.href = url; a.download = f.fileName; a.click(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e) { setMsg((e as { message?: string }).message || 'No se pudo generar el PDF.'); } finally { setBusy(''); }
+  };
+  const sendMail = async () => {
+    if (!window.confirm(`¿Enviar ahora a ${v.name} su estado de cuenta de los últimos 30 días en PDF?`)) return;
+    setBusy('mail'); setMsg('');
+    try {
+      const { adminSendStatement } = await import('@hulul/shared/firebase');
+      setMsg(`Estado de cuenta enviado a ${await adminSendStatement(v.uid)}. Además le llega solo cada lunes.`);
+    } catch (e) { setMsg((e as { message?: string }).message || 'No se pudo enviar.'); } finally { setBusy(''); }
+  };
 
   const exportInvoices = () => downloadCsv(`hulul-facturas-${v.name.replace(/\s+/g, '-')}-${range.from}_${range.to}.csv`, toCsv(p.invoices.map((i) => ({
     fecha: i.date, reserva: i.code, servicio: catName(i.category), cliente: i.clientName, base: i.base, iva: i.iva, total: i.total, comision_hulul: i.commission, iva_comision: i.commissionIva, estado: i.reversed ? 'anulada' : i.estimated ? 'estimada (sin movimiento)' : 'por emitir',
@@ -149,8 +194,13 @@ function ProviderDetail({ p, onBack }: { p: ProviderStats; onBack: () => void })
           {v.suspendedUntil && <Badge tone="t-bad">Suspendido hasta {fmtWhen(v.suspendedUntil)}</Badge>}
           {v.tester && <Badge tone="t-mute">Prueba</Badge>}
         </div>
-        <Link className="adm-btn" href={`/admin/profesionales`}>Ver registro y documentos</Link>
+        <div className="adm-grid" style={{ gap: 8, justifyItems: 'stretch' }}>
+          <button type="button" className="adm-btn solid" disabled={!!busy} onClick={downloadPdf}>{busy === 'pdf' ? 'Generando…' : 'Estado de cuenta (PDF)'}</button>
+          <button type="button" className="adm-btn" disabled={!!busy} onClick={sendMail}>{busy === 'mail' ? 'Enviando…' : 'Enviar por correo'}</button>
+          <Link className="adm-btn" href={`/admin/profesionales`}>Ver registro y documentos</Link>
+        </div>
       </div>
+      {msg && <div className="adm-note" role="status">{msg}</div>}
       {v.suspendedReason && v.suspendedUntil && <div className="adm-err">Suspensión: {v.suspendedReason}</div>}
 
       <div className="adm-kpis">
@@ -172,6 +222,7 @@ function ProviderDetail({ p, onBack }: { p: ProviderStats; onBack: () => void })
 
       {tab === 'actividad' && (
         <>
+          <ProviderTrend title={`Cómo va ${v.name.split(' ')[0]}`} bookings={recent} />
           <div className="adm-grid g-2">
             <section className="adm-card">
               <h2>Desempeño</h2>

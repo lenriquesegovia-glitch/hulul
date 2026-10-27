@@ -61,7 +61,7 @@ export function roleInput(data, ownerEmails) {
 export function dashForRole(data, role) {
   if (role === 'dueno' || role === 'socio') return data;
   // Sin motivo del reclamo ni fotos de la casa del cliente para quien no los necesita.
-  const strip = (b) => ({ ...b, claim: b.claim ? { ...b.claim, kindLabel: '' } : null, photoUrls: { request: [], work: [] } });
+  const strip = (b) => ({ ...b, claim: b.claim ? { ...b.claim, kindLabel: '', text: '', response: '', decisionNote: '' } : null, photoUrls: { request: [], work: [] } });
   if (role === 'contabilidad') return { ...data, bookings: data.bookings.map(strip), claims: [], clients: [] };
   if (role === 'cumplimiento') return { ...data, bookings: data.bookings.map(strip), claims: [] };
   return { ...data, bookings: [], ledger: [], payouts: [], providers: [], clients: [], claims: [] };

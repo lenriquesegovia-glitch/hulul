@@ -115,7 +115,19 @@ export function Loading() {
 
 /* -------------------------------- Indicadores -------------------------------- */
 
-export function Kpi({ label, value, hint, accent, onClick, href }: { label: string; value: React.ReactNode; hint?: React.ReactNode; accent?: boolean; onClick?: () => void; href?: string }) {
+export function Kpi({ label, value, hint, accent, onClick, href, detail, selected }: { label: string; value: React.ReactNode; hint?: React.ReactNode; accent?: boolean; onClick?: () => void; href?: string; detail?: () => void; selected?: boolean }) {
+  if (detail) {
+    // Tarjeta que filtra la curva al tocarla; «Ver reservas» abre la lista.
+    return (
+      <div role="button" tabIndex={0} aria-pressed={!!selected} onClick={onClick} onKeyDown={(e) => { if (e.key === 'Enter') onClick?.(); }} className={`adm-kpi click${accent ? ' accent' : ''}${selected ? ' selected' : ''}`}>
+        <span>{label}</span><b>{value}</b>{hint && <small>{hint}</small>}
+        <span className="row gap-8" style={{ justifyContent: 'space-between' }}>
+          <i className="adm-kpi-go">{selected ? 'En la curva ✓' : 'Ver en la curva'}</i>
+          <button type="button" className="adm-kpi-link" onClick={(e) => { e.stopPropagation(); detail(); }}>Ver reservas →</button>
+        </span>
+      </div>
+    );
+  }
   const body = <><span>{label}</span><b>{value}</b>{hint && <small>{hint}</small>}{(onClick || href) && <i className="adm-kpi-go" aria-hidden="true">Ver detalle →</i>}</>;
   if (href) return <Link href={href} className={`adm-kpi click${accent ? ' accent' : ''}`}>{body}</Link>;
   if (onClick) return <button type="button" onClick={onClick} className={`adm-kpi click${accent ? ' accent' : ''}`}>{body}</button>;
@@ -324,8 +336,25 @@ export function BookingDetail({ b, onClose }: { b: DashBooking; onClose: () => v
           <dt>Forma de pago</dt><dd>{b.paymentMethod || '—'}</dd>
         </dl>
       </div>
+      {b.claim && (
+        <div className="adm-card" style={{ borderLeft: '5px solid #6A3A8C' }}>
+          <h3 style={{ marginBottom: 10 }}>Reclamo</h3>
+          <dl className="adm-kv">
+            <dt>Lo abrió</dt><dd>{b.claim.openedBy === 'profesional' ? 'El profesional' : 'El cliente'}</dd>
+            {b.claim.kindLabel && <><dt>Motivo</dt><dd>{b.claim.kindLabel}</dd></>}
+            <dt>Estado</dt><dd>{b.claim.status === 'resuelto' ? 'Resuelto' : b.claim.status === 'esperando_respuesta' ? 'Esperando la respuesta de la otra parte' : 'En revisión de HULUL'}</dd>
+            {b.claim.openedAt && <><dt>Abierto</dt><dd>{fmtWhen(b.claim.openedAt)}</dd></>}
+            {b.claim.resolveDueAt && b.claim.status !== 'resuelto' && <><dt>HULUL decide hasta</dt><dd>{fmtWhen(b.claim.resolveDueAt)}</dd></>}
+            {b.claim.outcome && <><dt>Decisión</dt><dd>A favor del {b.claim.outcome === 'cliente' ? 'cliente' : 'profesional'}</dd></>}
+          </dl>
+          {b.claim.text && <div className="adm-quote" style={{ borderColor: '#6A3A8C', marginTop: 10 }}><p>«{b.claim.text}»</p><small>Lo que escribió {b.claim.openedBy === 'profesional' ? 'el profesional' : 'el cliente'}</small></div>}
+          {b.claim.response && <div className="adm-quote" style={{ borderColor: '#9AA8A5', marginTop: 8 }}><p>«{b.claim.response}»</p><small>Respuesta de la otra parte</small></div>}
+          {b.claim.decisionNote && <p className="muted" style={{ fontSize: 13, margin: '8px 0 0' }}>Motivo de la decisión: {b.claim.decisionNote}</p>}
+          {b.claim.formal === false && <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 0' }}>Reclamo anterior al expediente: se resuelve en la consola o pidiendo que lo vuelvan a abrir.</p>}
+          {can('reclamos') && b.claim.formal !== false && <Link className="adm-btn solid" style={{ marginTop: 12, justifySelf: 'start' }} href={`/admin/reclamos?caso=${encodeURIComponent(b.id)}`}>Abrir el expediente completo (chat, evidencia, decidir)</Link>}
+        </div>
+      )}
       {can('reclamos') && <BookingPhotos b={b} />}
-      {b.claim && can('reclamos') && <Link className="adm-btn solid" href={`/admin/reclamos?caso=${encodeURIComponent(b.id)}`}>Abrir el expediente del reclamo</Link>}
     </Drawer>
   );
 }
@@ -474,20 +503,26 @@ export function BookingPhotos({ b }: { b: DashBooking }) {
 
 /* ------------------------------ Curva de dinero (tipo trading) ------------------------------ */
 
+export type FlowKey = 'inflow' | 'card' | 'outflow' | 'net' | 'projected';
 const FLOW_SERIES = [
-  { key: 'inflow', label: 'Entra', color: '#206344' },
-  { key: 'outflow', label: 'Sale', color: '#B42318' },
+  { key: 'inflow', label: 'Ingreso (todos los medios)', color: '#206344' },
+  { key: 'card', label: 'Ingreso por tarjeta', color: '#3E8E6A', dash: true },
+  { key: 'outflow', label: 'Salida', color: '#B42318' },
   { key: 'net', label: 'Queda para HULUL', color: '#123F43' },
   { key: 'projected', label: 'Por cobrar (proyección)', color: '#1F4E79', dash: true },
 ] as const;
 
 /** Entradas, salidas, neto y proyección en el tiempo. Toca un punto para ver sus reservas. */
-export function FlowChart({ points, gran, onPick }: { points: { key: string; from: string; to: string; inflow: number; outflow: number; net: number; projected: number; ids: string[] }[]; gran: 'dia' | 'semana' | 'mes'; onPick: (title: string, ids: string[]) => void }) {
+export function FlowChart({ points, gran, onPick, labels, only, onOnly }: { labels?: Partial<Record<FlowKey, string>>; only?: FlowKey[] | null; onOnly?: (k: FlowKey[] | null) => void; points: { key: string; from: string; to: string; inflow: number; card: number; outflow: number; net: number; projected: number; ids: string[] }[]; gran: 'dia' | 'semana' | 'mes'; onPick: (title: string, ids: string[]) => void }) {
+  const SERIES = FLOW_SERIES.map((x) => ({ ...x, label: labels?.[x.key] ?? x.label }));
   const [hover, setHover] = useState<number | null>(null);
-  const [hidden, setHidden] = useState<string[]>([]);
+  const [ownHidden, setOwnHidden] = useState<string[]>([]);
+  const hidden = only ? SERIES.map((x) => x.key as string).filter((k) => !only.includes(k as FlowKey)) : ownHidden;
+  const setHidden = (f: (h: string[]) => string[]) => { if (only && onOnly) onOnly(null); setOwnHidden(f(hidden)); };
+  const series = SERIES.filter((x) => !labels || x.key !== 'card' || labels.card);
   if (!points.length) return <div className="adm-empty">Sin movimientos en este periodo.</div>;
-  const W = 1000, H = 260, L = 56, R = 12, T = 12, B = 34;
-  const vals = points.flatMap((p) => FLOW_SERIES.filter((s) => !hidden.includes(s.key)).map((s) => p[s.key]));
+  const W = 1000, H = 260, L = 74, R = 12, T = 12, B = 34;
+  const vals = points.flatMap((p) => series.filter((s) => !hidden.includes(s.key)).map((s) => p[s.key]));
   const max = Math.max(1, ...vals); const min = Math.min(0, ...vals);
   const x = (i: number) => L + (points.length === 1 ? (W - L - R) / 2 : (i / (points.length - 1)) * (W - L - R));
   const y = (v: number) => T + (1 - (v - min) / (max - min)) * (H - T - B);
@@ -498,7 +533,7 @@ export function FlowChart({ points, gran, onPick }: { points: { key: string; fro
   return (
     <div className="adm-flowchart">
       <div className="adm-bar" style={{ fontSize: 12.5 }}>
-        {FLOW_SERIES.map((s) => (
+        {series.map((s) => (
           <button key={s.key} type="button" className="adm-legend-btn" aria-pressed={!hidden.includes(s.key)} onClick={() => setHidden((h) => (h.includes(s.key) ? h.filter((k) => k !== s.key) : [...h, s.key]))}>
             <i style={{ background: s.color, opacity: hidden.includes(s.key) ? .3 : 1 }} />{s.label}
           </button>
@@ -509,7 +544,7 @@ export function FlowChart({ points, gran, onPick }: { points: { key: string; fro
           {ticks.map((t) => <g key={t}><line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="#E4E9E7" /><text x={L - 6} y={y(t) + 4} textAnchor="end" fontSize="11" fill="var(--muted)">{money(t).replace(',00', '')}</text></g>)}
           {min < 0 && <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} stroke="#9AA8A5" />}
           {!hidden.includes('inflow') && <path d={`M${x(0)},${y(0)} ${points.map((p, i) => `L${x(i)},${y(p.inflow)}`).join(' ')} L${x(points.length - 1)},${y(0)} Z`} fill="#206344" opacity=".08" />}
-          {FLOW_SERIES.filter((s) => !hidden.includes(s.key)).map((s) => (
+          {series.filter((s) => !hidden.includes(s.key)).map((s) => (
             <path key={s.key} d={points.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(p[s.key])}`).join(' ')} fill="none" stroke={s.color} strokeWidth={s.key === 'net' ? 2.6 : 2} strokeDasharray={'dash' in s ? '6 5' : undefined} strokeLinejoin="round" />
           ))}
           {points.map((p, i) => (
@@ -520,12 +555,12 @@ export function FlowChart({ points, gran, onPick }: { points: { key: string; fro
             </g>
           ))}
           {h && <line x1={x(hover!)} x2={x(hover!)} y1={T} y2={H - B} stroke="#9AA8A5" strokeDasharray="3 3" />}
-          {h && FLOW_SERIES.filter((s) => !hidden.includes(s.key)).map((s) => <circle key={s.key} cx={x(hover!)} cy={y(h[s.key])} r="4" fill={s.color} />)}
+          {h && series.filter((s) => !hidden.includes(s.key)).map((s) => <circle key={s.key} cx={x(hover!)} cy={y(h[s.key])} r="4" fill={s.color} />)}
         </svg>
         {h && (
           <div className="adm-flowtip" style={{ left: `${(x(hover!) / W) * 100}%` }}>
             <b>{gran === 'dia' ? fmtDay(h.from) : `${fmtWeek(h.from)} – ${fmtWeek(h.to)}`}</b>
-            {FLOW_SERIES.map((s) => <span key={s.key}><i style={{ background: s.color }} />{s.label}: {money(h[s.key])}</span>)}
+            {series.map((s) => <span key={s.key}><i style={{ background: s.color }} />{s.label}: {money(h[s.key])}</span>)}
             {h.ids.length > 0 && <small>Toca para ver {h.ids.length} reservas</small>}
           </div>
         )}

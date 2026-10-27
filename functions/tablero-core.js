@@ -95,6 +95,12 @@ export function bookingRow(id, b, claim = null, review = null) {
     claim: claim ? {
       status: str(claim.status, 30), openedBy: str(claim.openedBy, 20), kind: str(claim.kind, 30), kindLabel: str(claim.kindLabel, 80),
       outcome: str(claim.decision?.outcome, 20), openedAt: ms(claim.openedAt), resolveDueAt: ms(claim.resolveDueAt),
+      text: str(claim.text, 400), response: str(claim.response?.text, 400), decisionNote: str(claim.decision?.note, 300), formal: true,
+    } : b.dispute && typeof b.dispute === 'object' ? {
+      // Reclamo anterior al protocolo V5.5: solo vive en la reserva (bookings.dispute).
+      status: b.status === 'en_disputa' && b.dispute.status !== 'resuelto' ? 'en_revision' : 'resuelto', openedBy: str(b.dispute.by, 20) || 'cliente',
+      kind: str(b.dispute.kind, 30), kindLabel: str(b.dispute.kind, 80).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()), outcome: str(b.dispute.outcome, 20),
+      openedAt: ms(b.dispute.at ?? b.disputedAt), resolveDueAt: null, text: str(b.dispute.text, 400), response: '', decisionNote: '', formal: false,
     } : null,
   };
 }

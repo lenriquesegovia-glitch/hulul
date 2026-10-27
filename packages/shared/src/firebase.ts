@@ -900,3 +900,18 @@ export async function adminBankFile(week: string): Promise<BankFileResult> {
 export async function adminMarkBatchPaid(week: string, reference: string): Promise<number> {
   return (await callable<{ week: string; reference: string }, { ok: boolean; count: number }>('marcarLotePagado')({ week, reference })).data.count;
 }
+
+/* ------------------------ Estado de cuenta y deudas de profesionales ------------------------ */
+
+/** PDF del estado de cuenta de un profesional (base64). Fechas AAAA-MM-DD; por defecto últimos 30 días. */
+export async function adminStatementPdf(proId: string, range?: { desde?: string; hasta?: string }): Promise<{ fileName: string; content: string }> {
+  return (await callable<{ proId: string; desde?: string; hasta?: string }, { fileName: string; content: string }>('estadoCuentaPdf')({ proId, ...range })).data;
+}
+/** Envía ahora el estado de cuenta (PDF) al correo del profesional. */
+export async function adminSendStatement(proId: string): Promise<string> {
+  return (await callable<{ proId: string }, { ok: boolean; email: string }>('enviarEstadoCuenta')({ proId })).data.email;
+}
+/** Registra que el profesional pagó a HULUL su deuda (transferencia o DeUna). Devuelve lo que aún debe. */
+export async function adminRegisterProPayment(proId: string, amount: number, reference: string): Promise<number> {
+  return (await callable<{ proId: string; amount: number; reference: string }, { ok: boolean; debt: number }>('registrarAbono')({ proId, amount, reference })).data.debt;
+}

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { cashSeries, caseFlags, caseOutcome, executive, inRange, moneyFlow, quality, weekMoney, type CaseFlags, type DashBooking, type Granularity } from '@hulul/shared/dashboard';
 import { useAdmin } from './AdminShell';
-import { BookingListDrawer, catName, Donut, FlowChart, fmtDay, HBars, Kpi, Loading, money, PageHead, percent, PeriodBar } from './ui';
+import { BookingListDrawer, catName, Donut, FlowChart, type FlowKey, fmtDay, HBars, Kpi, Loading, money, PageHead, percent, PeriodBar } from './ui';
 
 const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
 const stars = (x: number | null) => (x === null ? '—' : `★ ${x.toFixed(2).replace('.', ',')}`);
@@ -25,6 +25,8 @@ export function ExecutivePanel() {
   const span = (Date.parse(range.to) - Date.parse(range.from)) / 86_400_000;
   const [gran, setGran] = useState<Granularity | null>(null);
   const g: Granularity = gran ?? (span > 120 ? 'mes' : span > 35 ? 'semana' : 'dia');
+  const [only, setOnly] = useState<FlowKey[] | null>(null);
+  const pickLine = (k: FlowKey) => setOnly((cur) => (cur && cur.length === 1 && cur[0] === k ? null : [k]));
   const flow = useMemo(() => (view ? moneyFlow(view.bookings, range) : null), [view, range]);
   const series = useMemo(() => (view ? cashSeries(view.bookings, range, g) : []), [view, range, g]);
   const rows = useMemo(() => (view?.bookings ?? []).filter((b) => inRange(b.date, range)), [view, range]);
@@ -45,14 +47,15 @@ export function ExecutivePanel() {
                 </div>
               </div>
               <div className="adm-kpis" style={{ marginTop: 12 }}>
-                <Kpi accent label="Entra (todos los medios)" value={money(flow.inflow.total)} hint={flow.inflow.byMethod.length ? flow.inflow.byMethod.map((m) => `${m.label} ${money(m.amount)}`).join(' · ') : 'Sin cobros en el periodo'} onClick={() => open('Lo que entró', flow.inflow.ids)} />
-                <Kpi label="Por cobrar (proyección)" value={money(flow.receivable.total)} hint={`${n(flow.receivable.count, 'reserva programada', 'reservas programadas')}`} onClick={() => open('Por cobrar: reservas programadas', flow.receivable.ids)} />
-                <Kpi label="Sale" value={money(flow.outflow.total)} hint={`Profesionales ${money(flow.outflow.toPros)} · créditos a clientes ${money(flow.outflow.credits)}`} onClick={() => open('Lo que sale', flow.outflow.ids)} />
-                <Kpi label="Queda para HULUL" value={money(flow.net.total)} hint={`+ ${money(flow.net.projected)} cuando se cobre lo programado`} onClick={() => open('Ingreso de HULUL', flow.inflow.ids)} />
+                <Kpi accent label="Ingreso (todos los medios)" value={money(flow.inflow.total)} hint="Lo cobrado a clientes; incluye la parte de los profesionales" selected={only?.includes('inflow')} onClick={() => pickLine('inflow')} detail={() => open('Ingreso (todos los medios)', flow.inflow.ids)} />
+                <Kpi label="Ingreso por tarjeta" value={money(flow.bank.total)} hint={`Entra al banco: debe cuadrar con el estado de cuenta. Efectivo, DeUna y transferencia ${money(flow.direct.total)} (los cobra el profesional)`} selected={only?.includes('card')} onClick={() => pickLine('card')} detail={() => open('Ingreso por tarjeta', flow.bank.ids)} />
+                <Kpi label="Por cobrar (proyección)" value={money(flow.receivable.total)} hint={n(flow.receivable.count, 'reserva programada', 'reservas programadas')} selected={only?.includes('projected')} onClick={() => pickLine('projected')} detail={() => open('Por cobrar: reservas programadas', flow.receivable.ids)} />
+                <Kpi label="Salida" value={money(flow.outflow.total)} hint={`Para profesionales ${money(flow.outflow.toPros)} · créditos a clientes ${money(flow.outflow.credits)}`} selected={only?.includes('outflow')} onClick={() => pickLine('outflow')} detail={() => open('Salida', flow.outflow.ids)} />
+                <Kpi label="Queda para HULUL" value={money(flow.net.total)} hint={`${flow.inflow.total ? percent(flow.net.total / flow.inflow.total) : '—'} del ingreso (cargo $1,99 + comisión 15 %) · + ${money(flow.net.projected)} programado`} selected={only?.includes('net')} onClick={() => pickLine('net')} detail={() => open('Queda para HULUL', flow.inflow.ids)} />
               </div>
-              <div style={{ marginTop: 14 }}><FlowChart points={series} gran={g} onPick={open} /></div>
+              <div style={{ marginTop: 14 }}><FlowChart points={series} gran={g} onPick={open} only={only} onOnly={setOnly} /></div>
               {wm && <p className="muted" style={{ fontSize: 12.5, margin: '10px 0 0' }}>
-                Pagos a profesionales: <Link href="/admin/contabilidad?vista=pagar">{money(wm.toPayNow.amount)} por transferir hoy</Link> · <Link href="/admin/contabilidad?vista=pagar">{money(wm.nextPayout.estimate)} el lunes {fmtDay(wm.nextPayout.date)}</Link>. «Entra» cuenta lo cobrado al cliente por cualquier medio; en efectivo, DeUna o transferencia lo recibe el profesional y él debe a HULUL su parte.
+                Pagos a profesionales: <Link href="/admin/contabilidad?vista=pagar">{money(wm.toPayNow.amount)} por transferir hoy</Link> · <Link href="/admin/contabilidad?vista=pagar">{money(wm.nextPayout.estimate)} el lunes {fmtDay(wm.nextPayout.date)}</Link>. El ingreso incluye el dinero de los profesionales (por cuenta de terceros); a HULUL le queda el cargo de plataforma y la comisión. Con tarjeta el dinero entra al banco de HULUL; en efectivo, DeUna o transferencia lo recibe el profesional y su deuda con HULUL se descuenta del pago del lunes o se registra en Contabilidad → Por cobrar.
               </p>}
             </section>
           )}

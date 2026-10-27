@@ -75,7 +75,7 @@ for (let d = -45; d <= 40; d++) {
     if (b.status === 'completada' && rnd() < 0.15) b.extra = { amount: pick([10, 15, 30]), status: 'pagado', method: b.paymentMethod };
     if (b.rating && b.rating <= 2 && rnd() < 0.6 || b.status === 'en_disputa') {
       const open = d > -3;
-      claims[bid] = { code: `R-${bid.slice(2, 6)}`, bookingId: bid, openedBy: 'cliente', kind: pick(['incompleto', 'trato', 'cobro']), kindLabel: 'El trabajo quedó incompleto', status: open ? 'en_revision' : 'resuelto',
+      claims[bid] = { code: `R-${bid.slice(2, 6)}`, bookingId: bid, openedBy: 'cliente', kind: pick(['incompleto', 'trato', 'cobro']), kindLabel: 'El trabajo quedó incompleto', text: 'El profesional se fue antes de terminar y no volvió a contestar.', status: open ? 'en_revision' : 'resuelto',
         clientId: b.clientId, proId: b.professionalId, category: b.category, openedAt: T(t + DAY), resolveDueAt: T(t + 4 * DAY), decision: open ? null : { outcome: pick(['cliente', 'profesional']), at: T(t + 3 * DAY), multaPro: 0, creditoCliente: 0 } };
     }
     if (b.clientRating && rnd() < 0.5) claims[bid] = { code: `R-${bid.slice(2, 6)}`, bookingId: bid, openedBy: 'profesional', kind: 'trato', kindLabel: 'Trato del cliente', status: 'resuelto', clientId: b.clientId, proId: b.professionalId, category: b.category, openedAt: T(t + DAY), decision: { outcome: 'profesional', at: T(t + 2 * DAY) } };
