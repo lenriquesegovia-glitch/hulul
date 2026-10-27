@@ -18,7 +18,7 @@ import { sortPros, toProfessional, type PublicPro } from './demo-data';
 import type { JobOutcome } from './policy';
 import type { CategoryEvidence } from './provider';
 import type { TaxRegime } from './tax';
-import type { CardPayment, Employee, Expense, Payroll, PayrollLine, PayrollTotals } from './dashboard';
+import type { CardPayment, Employee, Expense, Payroll, PayrollLine, PayrollTotals, StatementMove } from './dashboard';
 import { featuredHomeServices, validateHomeDiscovery } from './home-discovery';
 
 /** Read-only aggregate; unavailable or stale recommendations never block booking. */
@@ -69,8 +69,8 @@ export function friendlyError(e: unknown): Error {
   return e instanceof Error ? e : new Error(msg || 'Algo salió mal. Inténtalo de nuevo.');
 }
 
-function callable<I, O>(name: string) {
-  const fn = httpsCallable<I, O>(getFunctions(firebaseApp(), 'southamerica-east1'), name);
+function callable<I, O>(name: string, timeout?: number) {
+  const fn = httpsCallable<I, O>(getFunctions(firebaseApp(), 'southamerica-east1'), name, timeout ? { timeout } : undefined);
   return async (data: I) => {
     try {
       return await fn(data);
@@ -1011,6 +1011,13 @@ export async function adminCardPayment(input: Omit<CardPayment, 'id' | 'creadoPo
 }
 export async function adminDeleteCardPayment(id: string): Promise<void> {
   await callable<{ id: string }, { ok: boolean }>('borrarPagoTarjeta')({ id });
+}
+/** Lee el estado de cuenta de la tarjeta con Claude: PDF (base64) o texto de un Excel/CSV. */
+export async function adminReadCardStatement(input: { pdf?: string; text?: string }): Promise<{ periodo: { desde: string; hasta: string }; banco: string; movimientos: StatementMove[] }> {
+  return (await callable<typeof input, { periodo: { desde: string; hasta: string }; banco: string; movimientos: StatementMove[] }>('leerEstadoTarjeta', 300_000)(input)).data;
+}
+export async function adminSaveExpenses(gastos: ExpenseInput[]): Promise<number> {
+  return (await callable<{ gastos: ExpenseInput[] }, { ok: boolean; count: number }>('guardarGastosLote')({ gastos })).data.count;
 }
 export async function adminSaveEmployee(input: EmployeeInput): Promise<string> {
   return (await callable<EmployeeInput, { ok: boolean; id: string }>('guardarEmpleado')(input)).data.id;

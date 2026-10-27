@@ -7,6 +7,7 @@ import {
 } from '@hulul/shared/dashboard';
 import type { EmployeeInput, ExpenseInput, ExpensesData, PayrollAdjust } from '@hulul/shared/firebase';
 import { MUESTRA, useAdmin } from '../AdminShell';
+import { cardDefaults, ImportStatement } from './ImportStatement';
 import { Badge, Donut, Drawer, fmtDay, FlowChart, HBars, Kpi, Loading, money, PageHead, PeriodBar } from '../ui';
 
 /**
@@ -35,6 +36,7 @@ export function GastosPanel() {
   const [gran, setGran] = useState<Granularity>('mes');
   const [open, setOpen] = useState<Expense | 'nuevo' | null>(null);
   const [preset, setPreset] = useState<Partial<ExpenseInput> | null>(null);
+  const [importing, setImporting] = useState(false);
   const [list, setList] = useState<{ title: string; ids: string[] } | null>(null);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
@@ -151,6 +153,7 @@ export function GastosPanel() {
     <>
       <PageHead title="Gastos y nómina" lead="Lo que gasta la empresa, lo que se debe a proveedores, el rol de pagos y la utilidad real de HULUL.">
         {canEdit && <button type="button" className="adm-btn solid" onClick={() => newExpense()}>+ Registrar gasto</button>}
+        {canEdit && <button type="button" className="adm-btn" onClick={() => setImporting(true)}>Subir estado de cuenta</button>}
         <button type="button" className="adm-btn" disabled={!data || !!busy} onClick={exportXlsx}>{busy === 'xlsx' ? 'Armando…' : 'Descargar Excel'}</button>
         <button type="button" className="adm-btn" disabled={!data || !!busy} onClick={sendAccountant}>{busy === 'mail' ? 'Enviando…' : 'Enviar a la contadora'}</button>
       </PageHead>
@@ -236,6 +239,7 @@ export function GastosPanel() {
       {open && (
         <ExpenseDrawer g={open === 'nuevo' ? null : open} preset={preset} canEdit={canEdit} today={today} onClose={() => setOpen(null)} onSaved={async () => { setOpen(null); await load(); }} />
       )}
+      {importing && <ImportStatement existing={gastos} onClose={() => setImporting(false)} onSaved={async (n) => { setImporting(false); setMsg(`Se crearon ${n} gastos desde el estado de cuenta.`); await load(); }} />}
       {list && (
         <Drawer title={list.title} sub={`${list.ids.length} gastos · ${money(list.ids.reduce((t, id) => t + (byId.get(id)?.base ?? 0), 0))}`} onClose={() => setList(null)}>
           <ExpenseTable rows={list.ids.map((id) => byId.get(id)).filter((g): g is Expense => !!g)} today={today} onOpen={(g) => { setList(null); setOpen(g); }} compact />
@@ -352,7 +356,8 @@ export function platformPreset(key: string, today: string): Partial<ExpenseInput
   const cover = p.billing === 'anual' ? 12 : 1;
   // Lo de consumo llega a inicios del mes siguiente: se devenga en el mes anterior.
   const desde = p.billing === 'consumo' ? addMonth(today.slice(0, 7), -1) : today.slice(0, 7);
-  return { plataforma: p.key, proveedor: p.name, categoria: p.categoria, exterior: p.exterior, formaPago: 'tarjeta', recurrente: p.billing === 'mensual' || p.billing === 'consumo', cubreMeses: cover, cubreDesde: desde, descripcion: p.what };
+  const c = cardDefaults();
+  return { plataforma: p.key, proveedor: p.name, categoria: p.categoria, exterior: p.exterior, formaPago: 'tarjeta', pagador: c.pagador, socio: c.socio, tarjeta: c.tarjeta, recurrente: p.billing === 'mensual' || p.billing === 'consumo', cubreMeses: cover, cubreDesde: desde, descripcion: p.what };
 }
 const addMonth = (m: string, n: number) => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo - 1 + n, 1)).toISOString().slice(0, 7); };
 

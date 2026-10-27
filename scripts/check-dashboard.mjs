@@ -206,6 +206,27 @@ assert.equal(complianceAlerts({ bookings, payouts: [], providers: [] }, { from: 
   const pc = sh.platformCosts(all, now);
   assert.equal(pc.find((x) => x.key === 'apple').months.at(-1).monto, 13.2, 'la cuota del mes + el ISD del cargo');
 
+  // Carga del estado de cuenta
+  assert.equal(sh.matchPlatform('GOOGLE *CLOUD FTRVZ'), 'firebase');
+  assert.equal(sh.matchPlatform('GOOGLE *GSUITE_hulul'), 'workspace');
+  assert.equal(sh.matchPlatform('CLAUDE.AI SUBSCRIPTION'), 'claude');
+  assert.equal(sh.matchPlatform('ANTHROPIC, PBC'), 'claude_api');
+  assert.equal(sh.matchPlatform('SUPERMAXI'), '');
+  const drafts = sh.statementDrafts([
+    { n: 1, fecha: '2026-10-02', descripcion: 'GOOGLE *CLOUD', monto: 40, tipo: 'consumo', relacionado: null, exterior: true },
+    { n: 2, fecha: '2026-10-02', descripcion: 'IVA SERV DIGITALES', monto: 6, tipo: 'iva', relacionado: 1, exterior: false },
+    { n: 3, fecha: '2026-10-02', descripcion: 'ISD', monto: 2.3, tipo: 'isd', relacionado: null, exterior: false },
+    { n: 4, fecha: '2026-10-05', descripcion: 'APPLE.COM/BILL', monto: 99, tipo: 'consumo', relacionado: null, exterior: true },
+    { n: 5, fecha: '2026-10-08', descripcion: 'INTERES', monto: 3, tipo: 'interes', relacionado: null, exterior: false },
+    { n: 6, fecha: '2026-10-10', descripcion: 'PAGO', monto: -100, tipo: 'pago', relacionado: null, exterior: false },
+    { n: 7, fecha: '2026-11-02', descripcion: 'Google Cloud', monto: 40, tipo: 'consumo', relacionado: null, exterior: true },
+  ], [gcp]);
+  assert.equal(drafts.length, 4, 'sin pagos ni líneas de IVA/ISD');
+  assert.deepEqual([drafts[0].iva, drafts[0].isd, drafts[0].cubreDesde], [6, 2.3, '2026-09'], 'consumo de la nube se devenga en el mes anterior');
+  assert.equal(drafts[1].cubreMeses, 12);
+  assert.equal(drafts[2].include, false, 'intereses no se incluyen solos');
+  assert.equal(drafts[3].dup, true, 'ya registrado');
+
   // Bandeja de novedades
   const dash = { range, generatedAt: now, bookings, ledger: [], payouts: [], providers: [], clients: [], claims: [] };
   const inbox = sh.inboxItems(dash, () => true, now, { gastos: { gastos: [g2, ...all], roles: [], pagosTarjeta: [] } });

@@ -1520,3 +1520,66 @@ export function inboxItems(data: DashData, can: (p: AdminPerm) => boolean, now: 
 }
 const fmtShort = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-EC', { timeZone: 'UTC', day: 'numeric', month: 'short' });
 const monthNameLong = (m: string) => `${MONTHS[Number(m.slice(5, 7)) - 1] ?? m} ${m.slice(0, 4)}`;
+
+/* ------------------------------ Carga del estado de cuenta de la tarjeta ------------------------------ */
+
+const PLATFORM_PATTERNS: [string, RegExp][] = [
+  ['google_play', /GOOGLE\s*\*?\s*PLAY|PLAY\s*CONSOLE/i],
+  ['workspace', /G\s*SUITE|WORKSPACE|GOOGLE\s*\*?\s*GSUITE/i],
+  ['dominios', /NAMECHEAP|GODADDY|NIC\.?\s*EC|PORKBUN|SQUARESPACE\s*DOM|GOOGLE\s*\*?\s*DOMAINS|HOSTINGER/i],
+  ['firebase', /GOOGLE\s*\*?\s*CLOUD|FIREBASE|CLOUD\s*PLATFORM|GOOGLE\s*\*?\s*GCP|GOOGLE\s*\*?\s*MAPS/i],
+  ['vercel', /VERCEL/i],
+  ['claude', /CLAUDE/i],
+  ['claude_api', /ANTHROPIC/i],
+  ['expo', /\bEXPO\b|EXPO\.DEV|\bEAS\b/i],
+  ['github', /GITHUB/i],
+  ['resend', /RESEND/i],
+  ['apple', /APPLE\.COM|APPLE\s*DEVELOPER|APPLE\s*DEV/i],
+  ['meta_ads', /FACEBK|FACEBOOK|META\s*ADS|META\s*PLATFORMS/i],
+];
+/** Reconoce la plataforma del stack por el texto del comercio en el estado de cuenta. */
+export const matchPlatform = (desc: string) => PLATFORM_PATTERNS.find(([, re]) => re.test(desc))?.[0] ?? '';
+
+export interface StatementMove { n: number; fecha: string; descripcion: string; monto: number; tipo: string; relacionado: number | null; exterior: boolean }
+export interface StatementDraft {
+  key: string; include: boolean; dup: boolean; nota: string; fecha: string; descripcion: string;
+  plataforma: string; categoria: string; proveedor: string; base: number; iva: number; isd: number; exterior: boolean; cubreDesde: string; cubreMeses: number;
+}
+
+/**
+ * Convierte los movimientos leídos en borradores de gasto: junta a cada consumo su IVA de servicios
+ * digitales y su ISD, reconoce la plataforma y su devengado, y marca lo ya registrado.
+ */
+export function statementDrafts(moves: StatementMove[], existing: Expense[]): StatementDraft[] {
+  const consumos = moves.filter((m) => m.tipo === 'consumo');
+  const extra = new Map<number, { iva: number; isd: number }>();
+  for (const m of moves.filter((x) => x.tipo === 'iva' || x.tipo === 'isd')) {
+    // Si la IA no lo relacionó, se asigna al consumo del exterior del mismo día (o el más cercano antes).
+    const target = m.relacionado ?? consumos.filter((c) => c.exterior && c.fecha <= m.fecha).sort((a, z) => z.fecha.localeCompare(a.fecha))[0]?.n;
+    if (target === undefined) continue;
+    const e = extra.get(target) ?? { iva: 0, isd: 0 };
+    if (m.tipo === 'iva') e.iva = r2(e.iva + m.monto); else e.isd = r2(e.isd + m.monto);
+    extra.set(target, e);
+  }
+  return moves.filter((m) => ['consumo', 'interes', 'comision', 'otro'].includes(m.tipo) && m.monto > 0).map((m) => {
+    const plat = m.tipo === 'consumo' ? matchPlatform(m.descripcion) : '';
+    const p = PLATFORMS.find((x) => x.key === plat);
+    const e = extra.get(m.n) ?? { iva: 0, isd: 0 };
+    const mes = m.fecha.slice(0, 7);
+    const consumo = p?.billing === 'consumo';
+    const base = r2(m.monto);
+    const dup = existing.some((g) => g.fecha === m.fecha && Math.abs(g.base - base) < 0.01);
+    const categoria = p?.categoria ?? (m.tipo === 'interes' || m.tipo === 'comision' ? 'bancarios' : 'otros');
+    let nota = '';
+    if (dup) nota = 'Ya está registrado';
+    else if (m.tipo === 'interes' || m.tipo === 'comision') nota = 'Cargo del banco: inclúyelo solo si lo asume la empresa';
+    else if (!p) nota = 'Elige la categoría';
+    // IVA de servicios digitales no puede pasar del 15 % de la base.
+    const iva = Math.min(e.iva, r2(base * 0.15));
+    return {
+      key: `${m.n}`, include: !dup && m.tipo === 'consumo', dup, nota, fecha: m.fecha, descripcion: m.descripcion,
+      plataforma: plat, categoria, proveedor: p?.name ?? m.descripcion, base, iva, isd: Math.min(e.isd, r2((base + iva) * 0.05)),
+      exterior: m.exterior || !!p?.exterior, cubreDesde: consumo ? addMonthsYm(mes, -1) : mes, cubreMeses: p?.billing === 'anual' ? 12 : 1,
+    };
+  });
+}

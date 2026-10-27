@@ -254,7 +254,7 @@ export function BookingCard({ b, onOpen, showStage }: { b: DashBooking; onOpen: 
 
 /* ------------------------------ Detalle de una reserva ----------------------------- */
 
-export function Drawer({ title, sub, onClose, children }: { title: React.ReactNode; sub?: React.ReactNode; onClose: () => void; children: React.ReactNode }) {
+export function Drawer({ title, sub, onClose, children, wide }: { title: React.ReactNode; sub?: React.ReactNode; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', k);
@@ -263,7 +263,7 @@ export function Drawer({ title, sub, onClose, children }: { title: React.ReactNo
   return (
     <>
       <div className="adm-drawer-bg" onClick={onClose} />
-      <aside className="adm-drawer" role="dialog" aria-modal="true">
+      <aside className={`adm-drawer${wide ? ' wide' : ''}`} role="dialog" aria-modal="true">
         <header>
           <div><h2>{title}</h2>{sub && <div className="muted" style={{ fontSize: 13.5, marginTop: 2 }}>{sub}</div>}</div>
           <button type="button" className="adm-x" aria-label="Cerrar" onClick={onClose}>×</button>

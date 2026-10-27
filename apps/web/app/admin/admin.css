@@ -290,3 +290,4 @@ body:has(.adm) .cookie-banner { display: none; }
 .adm-inbox-head:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 6px; }
 .adm-inbox-caret { font-size: 16px; line-height: 22px; color: var(--muted); width: 14px; }
 .adm-inbox-title { display: block; font-size: 16px; font-weight: 800; }
+.adm-drawer.wide { width: min(1100px, 100vw); max-width: 100vw; }

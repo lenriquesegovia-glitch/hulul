@@ -34,6 +34,7 @@ import { can, dashForRole, normEmail, roleFor, roleInput } from './roles-core.js
 import { clientStatementPdf, statementData, statementPdf } from './statement-pdf.js';
 import { bankFile, BANK_FORMATS, DEFAULT_BANK_FORMAT, paymentLines } from './bank-files.js';
 import { cardPaymentInput, employeeInput, expenseInput, PAYROLL_PARAMS_2026, payrollExpenses, payrollLine, payrollTotals } from './gastos-core.js';
+import { parseStatement, readStatement } from './estado-tarjeta.js';
 import { buildClaimPrompt, callClaude, IA_MODEL, parseAnalysis } from './ia-reclamos.js';
 import { appointmentAt, bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
@@ -2708,6 +2709,40 @@ export const copiarRecurrentes = onCall({ region: REGION }, async (req) => {
   if (n) await batch.commit();
   await logAdmin(admin, 'gastos_recurrentes', { mes, count: n });
   return { ok: true, count: n };
+});
+
+/**
+ * Lee el estado de cuenta de la tarjeta con Claude (PDF en base64 o texto de un Excel/CSV).
+ * No guarda el archivo; devuelve los movimientos para que el panel los revise.
+ */
+export const leerEstadoTarjeta = onCall({ region: REGION, memory: '1GiB', timeoutSeconds: 300 }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const pdf = typeof req.data?.pdf === 'string' ? req.data.pdf : '';
+  const text = typeof req.data?.text === 'string' ? req.data.text : '';
+  if (!pdf && !text) throw new HttpsError('invalid-argument', 'Sube el estado de cuenta en PDF, Excel o CSV.');
+  if (pdf.length > 9_000_000) throw new HttpsError('invalid-argument', 'El PDF pesa demasiado (máximo unos 6 MB). Sube un mes a la vez.');
+  const cfg = (await iaRef().get()).data();
+  if (!cfg?.key) throw new HttpsError('failed-precondition', 'Primero conecta Claude en Administración → Equipo, roles y permisos.');
+  let raw;
+  try { raw = await readStatement({ key: cfg.key, pdf, text }); } catch (e) { throw new HttpsError('unavailable', String(e.message ?? e)); }
+  let out;
+  try { out = parseStatement(raw); } catch { throw new HttpsError('internal', 'No se pudo entender el estado de cuenta. Prueba con el PDF original del banco o con un mes a la vez.'); }
+  await logAdmin(admin, 'estado_tarjeta_leido', { banco: out.banco, movimientos: out.movimientos.length, desde: out.periodo.desde, hasta: out.periodo.hasta });
+  return out;
+});
+
+/** Crea varios gastos de una vez (los cargos revisados del estado de cuenta). */
+export const guardarGastosLote = onCall({ region: REGION, timeoutSeconds: 120 }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const list = Array.isArray(req.data?.gastos) ? req.data.gastos.slice(0, 300) : [];
+  if (!list.length) throw new HttpsError('invalid-argument', 'No hay cargos para guardar.');
+  const rows = list.map((d, i) => { const g = expenseInput(d); if (g.error) throw new HttpsError('invalid-argument', `Fila ${i + 1} (${String(d?.proveedor ?? '')}): ${g.error}`); return g; });
+  const lote = `lote_${Date.now()}`;
+  const batch = db().batch();
+  for (const g of rows) batch.set(db().collection('gastos').doc(), { ...g, pagadoEl: g.formaPago === 'tarjeta' || g.estado === 'pagado' ? g.fecha : null, origen: 'manual', lote, creadoPor: admin.email, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+  await batch.commit();
+  await logAdmin(admin, 'gastos_lote', { lote, count: rows.length, total: Math.round(rows.reduce((t, g) => t + g.total, 0) * 100) / 100 });
+  return { ok: true, count: rows.length, lote };
 });
 
 /** Registra el pago del estado de cuenta de la tarjeta de crédito (baja la deuda de la tarjeta). */

@@ -13,6 +13,8 @@
 - Tarjeta de crédito: los cargos son deuda con la tarjeta (2010401) hasta registrar el pago del estado de cuenta; gastos pagados con tarjeta personal de un socio quedan como deuda con él (20108) hasta el reembolso.
 - Plataformas (el stack: Firebase/Google Cloud, Vercel, Claude, Claude API, Expo, GitHub, Resend, Workspace, Google Play, Apple, dominios, Meta Ads): costo mensual, meses que faltan por registrar, IVA de servicios digitales, ISD 5 % y aviso de liquidación de compra faltante.
 - Bandeja «Novedades por revisar» arriba del resumen ejecutivo: reclamos por vencer, pagos, aprobaciones, atrasos de hoy, calificaciones bajas, UAFE, SRI, gastos vencidos, rol e IESS, plataformas, socios. «Visto» por navegador; vuelve si cambia.
+- Novedades desplegable (se recuerda oculta o abierta en el navegador).
+- Subir estado de cuenta de la tarjeta (PDF, Excel o CSV): Claude lo lee (`leerEstadoTarjeta`, no se guarda el archivo), une IVA de servicios digitales e ISD a cada consumo, reconoce la plataforma y su devengado, marca duplicados; se revisa y se crean los gastos de una vez (`guardarGastosLote`). Por defecto la tarjeta es personal de Socio 1 (decisión de Luis): queda como deuda de la empresa con él hasta el reembolso.
 - Necesita publicar con backend (funciones nuevas).
 
 ## En PR — Asistente de reclamos y decisión prellenada, 26 de octubre de 2026 (Claude)
