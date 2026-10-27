@@ -66,7 +66,9 @@ export function friendlyError(e: unknown): Error {
   if (['functions/internal', 'functions/not-found', 'functions/unavailable', 'functions/deadline-exceeded'].includes(code) || /^internal$/i.test(msg)) {
     return Object.assign(new Error('No pudimos conectar con el servidor de HULUL. Revisa tu internet e inténtalo de nuevo. (Si acabas de actualizar, falta publicar el servidor.)'), { code });
   }
-  return e instanceof Error ? e : new Error(msg || 'Algo salió mal. Inténtalo de nuevo.');
+  // Sin el código técnico al final (p. ej. « [400]»): la persona solo ve el mensaje.
+  const clean = msg.replace(/\s*\[\d{3}\]\s*$/, '');
+  return Object.assign(new Error(clean || 'Algo salió mal. Inténtalo de nuevo.'), { code });
 }
 
 function callable<I, O>(name: string, timeout?: number) {
