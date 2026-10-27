@@ -434,6 +434,16 @@ async function checkPrice(b) {
   return { ok: okFor(visit, sc) || okFor(visit, pubSc) || pubOk, total, regime };
 }
 
+/** Reserva terminada del cliente que aún no calificó (id), o null. */
+async function unratedBookingOf(clientId, exceptId) {
+  const snap = await db().collection('bookings').where('clientId', '==', clientId).get();
+  const hit = snap.docs.find((d) => {
+    const x = d.data();
+    return d.id !== exceptId && ['completada', 'por_aprobar'].includes(x.status) && !x.rating && x.extra?.status !== 'propuesto';
+  });
+  return hit ? hit.id : null;
+}
+
 export const avisoReserva = onDocumentCreated(
   { document: 'bookings/{id}', region: REGION, secrets: [MAIL_PASSWORD] },
   async (event) => {
@@ -450,13 +460,16 @@ export const avisoReserva = onDocumentCreated(
     try {
       // Una hora que ya pasó no se reserva (la app y la web ya lo impiden; esto cubre llamadas directas).
       const past = appointmentMs(b.date, b.slot) < Date.now() - 10 * 60_000;
-      const priced = past ? { ok: false, total: Number(b.total ?? 0), reason: 'La hora elegida ya pasó.' } : await checkPrice(b);
+      // Hay que calificar el servicio anterior antes de reservar otro (la app y la web ya lo piden).
+      const unrated = b.clientId ? await unratedBookingOf(String(b.clientId), event.params.id) : null;
+      const priced = unrated ? { ok: false, total: Number(b.total ?? 0), reason: `Primero califica tu servicio anterior (${code(unrated)}).` }
+        : past ? { ok: false, total: Number(b.total ?? 0), reason: 'La hora elegida ya pasó.' } : await checkPrice(b);
       if (!priced.ok) {
         await event.data.ref.update({ status: 'cancelada', cancelledBy: 'sistema', cancelledAt: FieldValue.serverTimestamp(), cancelFee: 0,
           cancelReason: priced.reason ? `${priced.reason} Elige otra hora: no se te cobró nada.` : 'El precio de la reserva no coincide con la tarifa del profesional. Vuelve a reservar para ver el precio correcto.', expectedTotal: priced.total });
         await pushTo(b.clientId, 'Revisa tu reserva', priced.reason ? `${priced.reason} Vuelve a reservar: no se te cobró nada.` : 'El precio no coincidía con la tarifa actual del profesional. Vuelve a reservar: no se te cobró nada.', { bookingId: event.params.id, to: 'cliente' }).catch(() => {});
         const { from, notifyTo } = senders();
-        await mail.sendMail({ from, to: notifyTo, subject: `Reserva anulada ${past ? '(hora pasada)' : 'por precio'} ${code(event.params.id)}`,
+        await mail.sendMail({ from, to: notifyTo, subject: `Reserva anulada ${unrated ? '(calificación pendiente)' : past ? '(hora pasada)' : 'por precio'} ${code(event.params.id)}`,
           html: layout('Precio alterado o desactualizado', rows([['Código', code(event.params.id)], ['Cliente', esc(b.contactName)], ['Profesional', esc(b.professionalName)], ['Enviado', usd(b.total)], ['Correcto', usd(priced.total)]])) }).catch(() => {});
         logger.warn('Reserva anulada: precio no coincide', { id: event.params.id, sent: b.total, expected: priced.total });
         return;

@@ -24,7 +24,7 @@ export function StarInput({ value, onChange, size = 34, label }: { value: number
 }
 
 /** El cliente califica al profesional (obligatorio) y a la app (opcional); al enviar se cierra el servicio. */
-export function RatingBox({ id, proName }: { id: string; proName: string }) {
+export function RatingBox({ id, proName, onDone }: { id: string; proName: string; onDone?: () => void }) {
   const [pro, setPro] = useState(0);
   const [proText, setProText] = useState('');
   const [app, setApp] = useState(0);
@@ -41,6 +41,7 @@ export function RatingBox({ id, proName }: { id: string; proName: string }) {
     setBusy(true);
     try {
       await rateService({ id, proStars: pro, proComment: proText.trim(), ...(app ? { appStars: app, appComment: appText.trim() } : {}) });
+      onDone?.();
     } catch (e) {
       setMsg((e as { message?: string }).message || 'No se pudo enviar. Inténtalo de nuevo.');
     } finally {

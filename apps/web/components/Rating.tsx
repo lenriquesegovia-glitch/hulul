@@ -29,7 +29,7 @@ export function StarInput({ value, onChange, label, size = 34 }: { value: number
  * enviar se cierra el servicio. Sirve para que otros clientes elijan bien y
  * para que HULUL mejore y suspenda a quien trabaja mal.
  */
-export function RatingBox({ id, proName }: { id: string; proName: string }) {
+export function RatingBox({ id, proName, onDone }: { id: string; proName: string; onDone?: () => void }) {
   const [pro, setPro] = useState(0);
   const [proText, setProText] = useState('');
   const [app, setApp] = useState(0);
@@ -46,6 +46,7 @@ export function RatingBox({ id, proName }: { id: string; proName: string }) {
     try {
       const { rateService } = await import('@hulul/shared/firebase');
       await rateService({ id, proStars: pro, proComment: proText.trim(), ...(app ? { appStars: app, appComment: appText.trim() } : {}) });
+      onDone?.();
     } catch (e) {
       setMsg((e as { message?: string }).message || 'No se pudo enviar. Inténtalo de nuevo.');
     } finally {

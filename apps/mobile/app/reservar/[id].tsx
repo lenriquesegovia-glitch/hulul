@@ -8,7 +8,8 @@ import { Checkbox } from '@/components/Checkbox';
 import { ClientGate } from '@/components/ClientGate';
 import { Icon } from '@/components/Icon';
 import { MapPicker } from '@/components/MapPicker';
-import type { ClientProfile } from '@hulul/shared/firebase';
+import type { ClientBooking, ClientProfile } from '@hulul/shared/firebase';
+import { RatingBox } from '@/components/Rating';
 import { serviceCopy, HOME_SAFETY_ACCEPT, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, surchargeFor, isOffHour, SURCHARGE_LABEL, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quoteVisit, type Professional, slotAvailable, TEST_SLOTS, testPeriodOpen, timeAvailable, MAX_REQUEST_PHOTOS, type PaymentMethod } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
@@ -49,7 +50,32 @@ function BookingForm({ uid, profile }: { uid: string; profile: ClientProfile }) 
       </SafeAreaView>
     );
   }
-  return <BookingFormInner pro={pro} uid={uid} profile={profile} />;
+  return <RateFirst uid={uid}><BookingFormInner pro={pro} uid={uid} profile={profile} /></RateFirst>;
+}
+
+/** Antes de una nueva reserva, el cliente califica su servicio anterior. */
+function RateFirst({ uid, children }: { uid: string; children: React.ReactNode }) {
+  const [pending, setPending] = useState<ClientBooking | null | undefined>(undefined);
+  const load = async () => {
+    try {
+      const { clientBookings, pendingRating } = await import('@hulul/shared/firebase');
+      setPending(pendingRating(await clientBookings(uid)));
+    } catch { setPending(null); }
+  };
+  useEffect(() => { load(); }, [uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (pending === undefined) return <SafeAreaView style={{ flex: 1, padding: 20 }}><BackButton /><ActivityIndicator color={c.primary} style={{ marginTop: 40 }} /></SafeAreaView>;
+  if (!pending) return <>{children}</>;
+  const first = pending.professionalName.split(' ')[0] || 'el profesional';
+  return (
+    <SafeAreaView style={{ flex: 1 }}>
+      <KeyboardScroll contentContainerStyle={{ padding: 20, gap: 16 }}>
+        <BackButton />
+        <H2>Antes de reservar, califica tu servicio anterior</H2>
+        <Body muted>Tu servicio de {getCategory(pending.category)?.name ?? 'HULUL'} con {pending.professionalName} del {pending.date} aún no tiene calificación. Toma un minuto y luego sigues con tu reserva.</Body>
+        <RatingBox id={pending.id} proName={first} onDone={() => { setPending(undefined); load(); }} />
+      </KeyboardScroll>
+    </SafeAreaView>
+  );
 }
 
 function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: string; profile: ClientProfile }) {

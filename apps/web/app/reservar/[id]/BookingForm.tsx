@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import type { ClientBooking } from '@hulul/shared/firebase';
+import { RatingBox } from '@/components/Rating';
 import {
   dayAvailable,
   firstAvailable,
@@ -136,7 +138,31 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
       </div>
     );
   }
-  return <BookingFormBody pro={pro} uid={uid} profile={profile} />;
+  return <RateFirst uid={uid}><BookingFormBody pro={pro} uid={uid} profile={profile} /></RateFirst>;
+}
+
+/** Antes de una nueva reserva, el cliente califica su servicio anterior (así se alimenta la calidad de HULUL). */
+function RateFirst({ uid, children }: { uid: string; children: React.ReactNode }) {
+  const [pending, setPending] = useState<ClientBooking | null | undefined>(undefined);
+  const load = async () => {
+    try {
+      const { clientBookings, pendingRating } = await import('@hulul/shared/firebase');
+      setPending(pendingRating(await clientBookings(uid)));
+    } catch { setPending(null); }
+  };
+  useEffect(() => { load(); }, [uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (pending === undefined) return <p className="muted">Cargando…</p>;
+  if (!pending) return <>{children}</>;
+  const first = pending.professionalName.split(' ')[0] || 'el profesional';
+  return (
+    <div className="stack gap-16">
+      <div className="card stack gap-8">
+        <strong style={{ fontSize: 18 }}>Antes de reservar, califica tu servicio anterior</strong>
+        <span className="muted">Tu servicio de {getCategory(pending.category)?.name ?? 'HULUL'} con {pending.professionalName} del {pending.date} aún no tiene calificación. Toma un minuto y luego sigues con tu reserva.</span>
+      </div>
+      <RatingBox id={pending.id} proName={first} onDone={() => { setPending(undefined); load(); }} />
+    </div>
+  );
 }
 
 function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string; profile: ClientProfile }) {

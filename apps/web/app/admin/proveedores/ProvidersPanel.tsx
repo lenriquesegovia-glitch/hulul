@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { TAX_REGIME_LABEL, type TaxRegime } from '@hulul/shared';
-import { inRange, percent, providerStats, toCsv, type DashBooking, type ProviderStats } from '@hulul/shared/dashboard';
+import { caseFlags, caseOutcome, inRange, OUTCOMES, percent, providerStats, toCsv, type ProviderStats } from '@hulul/shared/dashboard';
 import { useAdmin } from '../AdminShell';
-import { Badge, BookingCard, BookingDetail, catName, downloadCsv, fmtDay, fmtWeek, fmtWhen, HBars, initials, Kpi, Loading, money, PageHead, PeriodBar } from '../ui';
+import { Badge, BookingListDrawer, BookingsCrm, catName, Donut, downloadCsv, fmtDay, fmtWeek, fmtWhen, HBars, initials, Kpi, Loading, money, PageHead, PeriodBar } from '../ui';
 
 type Sort = 'facturado' | 'trabajos' | 'calificacion' | 'problemas' | 'saldo' | 'nombre';
 const STATUS: Record<string, [string, string]> = {
@@ -112,14 +112,24 @@ export function ProvidersPanel() {
 
 function ProviderDetail({ p, onBack }: { p: ProviderStats; onBack: () => void }) {
   const { view, range } = useAdmin();
-  const [tab, setTab] = useState<'facturas' | 'pagos' | 'actividad'>('facturas');
-  const [open, setOpen] = useState<DashBooking | null>(null);
+  const [tab, setTab] = useState<'facturas' | 'pagos' | 'actividad'>('actividad');
+  const [drill, setDrill] = useState<{ title: string; ids: string[] } | null>(null);
   const v = p.provider;
   const st = STATUS[v.status] ?? STATUS[''];
-  const recent = useMemo(() => (view?.bookings ?? []).filter((b) => b.proId === v.uid && inRange(b.date, range)).sort((a, b) => (b.at ?? 0) - (a.at ?? 0)), [view, v.uid, range]);
+  const recent = useMemo(() => (view?.bookings ?? []).filter((b) => b.proId === v.uid && inRange(b.date, range)), [view, v.uid, range]);
+  const rated = recent.filter((b) => b.rating !== null);
+  const avg = rated.length ? rated.reduce((t, b) => t + (b.rating ?? 0), 0) / rated.length : null;
+  const outcomes = useMemo(() => OUTCOMES.map((o) => {
+    const ids = recent.filter((b) => caseOutcome(b) === o.key).map((b) => b.id);
+    return { label: o.label, color: o.color, count: ids.length, onClick: () => setDrill({ title: `${v.name}: ${o.label}`, ids }) };
+  }), [recent, v.name]);
+  const closed = outcomes.reduce((t, o) => t + o.count, 0);
+  const success = recent.filter((b) => caseFlags(b).success).length;
+  const ids = (pred: (f: ReturnType<typeof caseFlags>, b: (typeof recent)[number]) => boolean) => recent.filter((b) => pred(caseFlags(b), b)).map((b) => b.id);
+  const estimated = p.invoices.some((i) => i.estimated);
 
   const exportInvoices = () => downloadCsv(`hulul-facturas-${v.name.replace(/\s+/g, '-')}-${range.from}_${range.to}.csv`, toCsv(p.invoices.map((i) => ({
-    fecha: i.date, reserva: i.code, servicio: catName(i.category), cliente: i.clientName, base: i.base, iva: i.iva, total: i.total, comision_hulul: i.commission, iva_comision: i.commissionIva, estado: i.reversed ? 'anulada' : 'por emitir',
+    fecha: i.date, reserva: i.code, servicio: catName(i.category), cliente: i.clientName, base: i.base, iva: i.iva, total: i.total, comision_hulul: i.commission, iva_comision: i.commissionIva, estado: i.reversed ? 'anulada' : i.estimated ? 'estimada (sin movimiento)' : 'por emitir',
   })), ['fecha', 'reserva', 'servicio', 'cliente', 'base', 'iva', 'total', 'comision_hulul', 'iva_comision', 'estado'].map((k) => ({ key: k, label: k.replace(/_/g, ' ') }))));
 
   return (
@@ -144,41 +154,78 @@ function ProviderDetail({ p, onBack }: { p: ProviderStats; onBack: () => void })
       {v.suspendedReason && v.suspendedUntil && <div className="adm-err">Suspensión: {v.suspendedReason}</div>}
 
       <div className="adm-kpis">
-        <Kpi accent label="Facturado al cliente" value={money(p.billed.total)} hint={`Base ${money(p.billed.base)} · IVA ${money(p.billed.iva)}`} />
-        <Kpi label="Comisión de HULUL" value={money(p.commission)} hint={p.fines ? `Multas ${money(p.fines)}` : 'Sin multas'} />
-        <Kpi label="Pagado en el periodo" value={money(p.paid)} hint={p.toPay ? `Por transferir ${money(p.toPay)}` : 'Nada por transferir'} />
-        <Kpi label="Saldo sin liquidar" value={money(p.pending)} hint={v.cashDebt ? `Deuda de efectivo ${money(v.cashDebt)}` : 'Se liquida el lunes'} />
-        <Kpi label="Trabajos" value={p.done} hint={`${p.success} con éxito · ${p.scheduled} programados`} />
-        <Kpi label="Calificación" value={v.rating ? `★ ${v.rating.toFixed(2).replace('.', ',')}` : '—'} hint={`${v.reviewCount} reseñas · ${v.strikes30}/3 faltas en 30 días`} />
+        <Kpi accent label="Facturado al cliente" value={money(p.billed.total)} hint={`Base ${money(p.billed.base)} · IVA ${money(p.billed.iva)}${estimated ? ' · estimado' : ''}`} onClick={() => setTab('facturas')} />
+        <Kpi label="Comisión de HULUL" value={money(p.commission)} hint={p.fines ? `Multas ${money(p.fines)}` : 'Sin multas'} onClick={() => setTab('facturas')} />
+        <Kpi label="Pagado en el periodo" value={money(p.paid)} hint={p.toPay ? `Por transferir ${money(p.toPay)}` : 'Nada por transferir'} onClick={() => setTab('pagos')} />
+        <Kpi label="Saldo sin liquidar" value={money(p.pending)} hint={v.cashDebt ? `Deuda de efectivo ${money(v.cashDebt)}` : 'Se liquida el lunes'} href="/admin/contabilidad?vista=pagar" />
+        <Kpi label="Trabajos completados" value={p.done} hint={`${p.success} con éxito · ${p.scheduled} programados`} onClick={() => setDrill({ title: `${v.name}: completados`, ids: recent.filter((b) => b.status === 'completada').map((b) => b.id) })} />
+        <Kpi label="Calificación de clientes" value={avg !== null ? `★ ${avg.toFixed(2).replace('.', ',')}` : 'Sin calificar'}
+          hint={`${rated.length} de ${p.done} trabajos calificados · ${v.strikes30}/3 faltas en 30 días`} onClick={() => setDrill({ title: `${v.name}: calificaciones`, ids: rated.map((b) => b.id) })} />
       </div>
+      {p.done > 0 && rated.length === 0 && <div className="adm-note">Ningún cliente ha calificado aún a {v.name.split(' ')[0]}. Desde ahora, la app y la web piden calificar el servicio anterior antes de reservar otro.</div>}
 
       <div className="adm-tabs" role="tablist">
+        <button type="button" role="tab" className="adm-tab" aria-selected={tab === 'actividad'} onClick={() => setTab('actividad')}>Actividad ({recent.length})</button>
         <button type="button" role="tab" className="adm-tab" aria-selected={tab === 'facturas'} onClick={() => setTab('facturas')}>Facturas ({p.invoices.length})</button>
         <button type="button" role="tab" className="adm-tab" aria-selected={tab === 'pagos'} onClick={() => setTab('pagos')}>Liquidaciones ({p.payouts.length})</button>
-        <button type="button" role="tab" className="adm-tab" aria-selected={tab === 'actividad'} onClick={() => setTab('actividad')}>Actividad ({recent.length})</button>
       </div>
+
+      {tab === 'actividad' && (
+        <>
+          <div className="adm-grid g-2">
+            <section className="adm-card">
+              <h2>Desempeño</h2>
+              <p className="sub">Resultado de cada reserva terminada o cancelada en el periodo. Toca una fila para ver los casos.</p>
+              {closed ? <Donut items={outcomes} center={percent(success / closed)} sub="de éxito" /> : <div className="adm-empty">Sin reservas terminadas en el periodo.</div>}
+            </section>
+            <section className="adm-card">
+              <h2>Lo que hace</h2>
+              <p className="sub">Trabajos completados por categoría en el periodo.</p>
+              <HBars items={Object.entries(p.categoriesDone).sort((a, b) => b[1] - a[1]).map(([c, n]) => ({ label: catName(c), value: n, display: n, onClick: () => setDrill({ title: `${v.name}: ${catName(c)}`, ids: recent.filter((b) => b.category === c && b.status === 'completada').map((b) => b.id) }) }))} />
+              <p className="muted" style={{ fontSize: 12.5, margin: '10px 0 14px' }}>Registrado en: {v.categories.map((c) => `${catName(c)}${v.catStatus[c] && v.catStatus[c] !== 'aprobado' ? ` (${v.catStatus[c]})` : ''}`).join(', ') || '—'}</p>
+              <dl className="adm-kv">
+                {([
+                  ['Llegó atrasado', p.late, 'var(--warn)', ids((f) => f.late)],
+                  ['Mal servicio', p.bad, 'var(--bad)', ids((f) => f.badService)],
+                  ['No llegó o canceló', p.cancelledByPro, 'var(--bad)', ids((f) => f.proCancelled || f.proNoShow)],
+                  ['Reclamos', p.claims, 'var(--violet)', ids((_, b) => !!b.claim)],
+                ] as const).map(([label, n, color, list]) => (
+                  <div key={label} style={{ display: 'contents' }}>
+                    <dt>{label}</dt>
+                    <dd>{n ? <button type="button" className="adm-link-btn" style={{ color }} onClick={() => setDrill({ title: `${v.name}: ${label.toLowerCase()}`, ids: [...list] })}>{n} · ver</button> : 0}</dd>
+                  </div>
+                ))}
+                <dt>Último trabajo</dt><dd>{p.lastJob ? fmtDay(p.lastJob) : '—'}</dd>
+                <dt>Próximo trabajo</dt><dd>{p.nextJob ? fmtDay(p.nextJob) : '—'}</dd>
+              </dl>
+            </section>
+          </div>
+          <BookingsCrm bookings={recent} />
+        </>
+      )}
 
       {tab === 'facturas' && (
         <>
           <div className="adm-bar" style={{ justifyContent: 'space-between' }}>
             <span className="muted" style={{ fontSize: 13 }}>El profesional factura la visita al cliente; HULUL le factura la comisión cada semana.</span>
-            <button type="button" className="adm-btn" onClick={exportInvoices} disabled={!p.invoices.length}>Exportar CSV</button>
+            <button type="button" className="adm-btn" onClick={exportInvoices} disabled={!p.invoices.length}>Exportar Excel</button>
           </div>
           <div className="adm-table-wrap">
             <table className="adm-table">
               <thead><tr><th>Fecha</th><th>Reserva</th><th>Servicio</th><th>Cliente</th><th className="num">Base</th><th className="num">IVA</th><th className="num">Total</th><th className="num">Comisión HULUL</th><th>Estado</th></tr></thead>
               <tbody>
                 {p.invoices.length ? p.invoices.map((i) => (
-                  <tr key={i.bookingId} style={i.reversed ? { opacity: .55 } : undefined}>
+                  <tr key={i.bookingId} className="click" style={i.reversed ? { opacity: .55 } : undefined} onClick={() => setDrill({ title: `Reserva ${i.code}`, ids: [i.bookingId] })}>
                     <td style={{ whiteSpace: 'nowrap' }}>{fmtDay(i.date)}</td><td>{i.code}</td><td>{catName(i.category)}</td><td>{i.clientName}</td>
                     <td className="num">{money(i.base)}</td><td className="num">{money(i.iva)}</td><td className="num"><b>{money(i.total)}</b></td><td className="num">{money(i.commission + i.commissionIva)}</td>
-                    <td>{i.reversed ? <Badge tone="t-mute">Anulada</Badge> : <Badge tone="t-warn">Por emitir</Badge>}</td>
+                    <td>{i.reversed ? <Badge tone="t-mute">Anulada</Badge> : i.estimated ? <Badge tone="t-info">Estimada</Badge> : <Badge tone="t-warn">Por emitir</Badge>}</td>
                   </tr>
                 )) : <tr><td colSpan={9} className="adm-empty">Sin facturas en el periodo.</td></tr>}
               </tbody>
               {p.invoices.length > 0 && <tfoot><tr><td colSpan={4}>Total</td><td className="num">{money(p.billed.base)}</td><td className="num">{money(p.billed.iva)}</td><td className="num">{money(p.billed.total)}</td><td className="num">{money(p.invoices.reduce((t, i) => t + i.commission + i.commissionIva, 0))}</td><td /></tr></tfoot>}
             </table>
           </div>
+          {estimated && <div className="adm-note">«Estimada»: la reserva no generó movimientos de dinero (reserva de prueba o anterior al libro de movimientos). El monto se calcula con la tarifa de la reserva; no se cobra ni se liquida.</div>}
           <div className="adm-note">«Por emitir»: la facturación electrónica con la firma del profesional aún no está conectada. Estos son los comprobantes que corresponden a cada visita.</div>
         </>
       )}
@@ -194,39 +241,12 @@ function ProviderDetail({ p, onBack }: { p: ProviderStats; onBack: () => void })
                   <td><Badge tone={x.status === 'pagado' ? 't-ok' : 't-warn'}>{x.status === 'pagado' ? 'Pagado' : 'Por pagar'}</Badge>{x.paidAt && <div className="muted" style={{ fontSize: 12 }}>{fmtWhen(x.paidAt)}</div>}</td>
                   <td className="num">{money(x.gross)}</td><td className="num">{money(x.deductions)}</td><td className="num"><b>{money(x.net)}</b></td><td style={{ fontSize: 13 }}>{x.bank || '—'}</td>
                 </tr>
-              )) : <tr><td colSpan={6} className="adm-empty">Aún no tiene liquidaciones.</td></tr>}
+              )) : <tr><td colSpan={6} className="adm-empty">Aún no tiene liquidaciones. Se arman los lunes con el dinero cobrado con tarjeta.</td></tr>}
             </tbody>
           </table>
         </div>
       )}
-
-      {tab === 'actividad' && (
-        <>
-          <div className="adm-grid g-2">
-            <section className="adm-card">
-              <h2>Lo que hace</h2>
-              <p className="sub">Trabajos completados por categoría en el periodo.</p>
-              <HBars items={Object.entries(p.categoriesDone).sort((a, b) => b[1] - a[1]).map(([c, n]) => ({ label: catName(c), value: n, display: n }))} />
-              <p className="muted" style={{ fontSize: 12.5, margin: '10px 0 0' }}>Registrado en: {v.categories.map((c) => `${catName(c)}${v.catStatus[c] && v.catStatus[c] !== 'aprobado' ? ` (${v.catStatus[c]})` : ''}`).join(', ') || '—'}</p>
-            </section>
-            <section className="adm-card">
-              <h2>Desempeño</h2>
-              <dl className="adm-kv">
-                <dt>Completados</dt><dd>{p.done}</dd>
-                <dt>Con éxito</dt><dd>{p.success}</dd>
-                <dt>Llegó atrasado</dt><dd style={{ color: p.late ? 'var(--warn)' : undefined }}>{p.late}</dd>
-                <dt>Mal servicio</dt><dd style={{ color: p.bad ? 'var(--bad)' : undefined }}>{p.bad}</dd>
-                <dt>No llegó o canceló</dt><dd style={{ color: p.cancelledByPro ? 'var(--bad)' : undefined }}>{p.cancelledByPro}</dd>
-                <dt>Reclamos</dt><dd>{p.claims}</dd>
-                <dt>Último trabajo</dt><dd>{p.lastJob ? fmtDay(p.lastJob) : '—'}</dd>
-                <dt>Próximo trabajo</dt><dd>{p.nextJob ? fmtDay(p.nextJob) : '—'}</dd>
-              </dl>
-            </section>
-          </div>
-          {recent.length ? <div className="adm-cards">{recent.map((b) => <BookingCard key={b.id} b={b} onOpen={setOpen} showStage />)}</div> : <div className="adm-card adm-empty">Sin reservas en el periodo.</div>}
-        </>
-      )}
-      {open && <BookingDetail b={open} onClose={() => setOpen(null)} />}
+      {drill && <BookingListDrawer title={drill.title} ids={drill.ids} onClose={() => setDrill(null)} />}
     </>
   );
 }

@@ -288,6 +288,17 @@ export async function clientBookings(uid: string): Promise<ClientBooking[]> {
   return list.sort((a, b) => (a.date + a.slot < b.date + b.slot ? 1 : -1));
 }
 
+/**
+ * Reserva terminada que el cliente aún no calificó (la más reciente). Mientras
+ * exista, no puede hacer otra reserva: la app y la web le piden calificar primero
+ * y el servidor anula una reserva nueva si llega sin esa calificación.
+ */
+export function pendingRating(list: ClientBooking[]): ClientBooking | null {
+  return list
+    .filter((b) => ['completada', 'por_aprobar'].includes(b.status) && !b.rating && b.extra?.status !== 'propuesto')
+    .sort((a, b) => (a.date + a.slot < b.date + b.slot ? 1 : -1))[0] ?? null;
+}
+
 export const BOOKING_STATUS_LABEL: Record<string, string> = {
   pendiente: 'Por confirmar', confirmada: 'Confirmada', en_camino: 'En camino', en_curso: 'En curso',
   por_aprobar: 'Por aprobar', completada: 'Completada', cancelada: 'Cancelada', en_disputa: 'En revisión',

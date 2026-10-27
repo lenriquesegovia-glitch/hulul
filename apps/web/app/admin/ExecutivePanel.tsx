@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { caseFlags, caseOutcome, executive, inRange, quality, weekMoney, type CaseFlags, type DashBooking } from '@hulul/shared/dashboard';
+import { cashSeries, caseFlags, caseOutcome, executive, inRange, moneyFlow, quality, weekMoney, type CaseFlags, type DashBooking, type Granularity } from '@hulul/shared/dashboard';
 import { useAdmin } from './AdminShell';
-import { BookingListDrawer, catName, Donut, fmtDay, HBars, Kpi, Loading, money, PageHead, percent, PeriodBar, WeekBars } from './ui';
+import { BookingListDrawer, catName, Donut, FlowChart, fmtDay, HBars, Kpi, Loading, money, PageHead, percent, PeriodBar } from './ui';
 
 const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
 const stars = (x: number | null) => (x === null ? '—' : `★ ${x.toFixed(2).replace('.', ',')}`);
@@ -22,25 +22,38 @@ export function ExecutivePanel() {
   const ex = useMemo(() => (view ? executive(view.bookings, range) : null), [view, range]);
   const q = useMemo(() => (view ? quality(view.bookings, range) : null), [view, range]);
   const wm = useMemo(() => (view ? weekMoney(view, now) : null), [view, now]);
+  const span = (Date.parse(range.to) - Date.parse(range.from)) / 86_400_000;
+  const [gran, setGran] = useState<Granularity | null>(null);
+  const g: Granularity = gran ?? (span > 120 ? 'mes' : span > 35 ? 'semana' : 'dia');
+  const flow = useMemo(() => (view ? moneyFlow(view.bookings, range) : null), [view, range]);
+  const series = useMemo(() => (view ? cashSeries(view.bookings, range, g) : []), [view, range, g]);
   const rows = useMemo(() => (view?.bookings ?? []).filter((b) => inRange(b.date, range)), [view, range]);
   const ids = (pred: (b: DashBooking, f: CaseFlags) => boolean) => rows.filter((b) => pred(b, caseFlags(b))).map((b) => b.id);
 
   return (
     <>
-      <PageHead title="Resumen ejecutivo" lead="Dinero de la semana y cómo se está dando el servicio. Toca cualquier número para ver de dónde sale." />
+      <PageHead title="Resumen ejecutivo" lead="Cómo va el dinero y cómo se está dando el servicio. Toca cualquier número para ver de dónde sale." />
       <PeriodBar />
       {!ex || !q || !wm ? <Loading /> : (
         <>
-          {can('contabilidad') && (
+          {can('contabilidad') && flow && (
             <section className="adm-card">
-              <h2>Dinero de esta semana</h2>
-              <p className="sub">Del {fmtDay(wm.week.from)} al {fmtDay(wm.week.to)}. No depende del periodo elegido arriba.</p>
-              <div className="adm-kpis">
-                <Kpi accent label="Entra (cobrado con tarjeta)" value={money(wm.collected)} hint={`Ingreso propio de HULUL ${money(wm.income)}`} href="/admin/contabilidad?vista=movimientos" />
-                <Kpi label="HULUL debe pagar hoy" value={money(wm.toPayNow.amount)} hint={wm.toPayNow.count ? `${n(wm.toPayNow.count, 'liquidación', 'liquidaciones')} por transferir` : 'Nada pendiente'} href="/admin/contabilidad?vista=pagar" />
-                <Kpi label={`Pago del lunes ${fmtDay(wm.nextPayout.date)}`} value={money(wm.nextPayout.estimate)} hint={`Estimado · ${n(wm.nextPayout.pros, 'profesional', 'profesionales')}`} href="/admin/contabilidad?vista=pagar" />
-                <Kpi label="IVA y créditos a clientes" value={money(wm.vatDue + wm.credits)} hint={`IVA ${money(wm.vatDue)} · créditos ${money(wm.credits)}`} href="/admin/contabilidad" />
+              <div className="adm-bar" style={{ justifyContent: 'space-between' }}>
+                <div><h2 style={{ margin: 0 }}>Dinero del periodo</h2><p className="sub" style={{ margin: 0 }}>Lo que entra, lo que falta cobrar, lo que sale y lo que queda para HULUL. Toca cada número o un punto de la curva.</p></div>
+                <div className="adm-bar" role="group" aria-label="Agrupar por">
+                  {(['dia', 'semana', 'mes'] as Granularity[]).map((k) => <button key={k} type="button" className="adm-chip" aria-pressed={g === k} onClick={() => setGran(k)}>{{ dia: 'Por día', semana: 'Por semana', mes: 'Por mes' }[k]}</button>)}
+                </div>
               </div>
+              <div className="adm-kpis" style={{ marginTop: 12 }}>
+                <Kpi accent label="Entra (todos los medios)" value={money(flow.inflow.total)} hint={flow.inflow.byMethod.length ? flow.inflow.byMethod.map((m) => `${m.label} ${money(m.amount)}`).join(' · ') : 'Sin cobros en el periodo'} onClick={() => open('Lo que entró', flow.inflow.ids)} />
+                <Kpi label="Por cobrar (proyección)" value={money(flow.receivable.total)} hint={`${n(flow.receivable.count, 'reserva programada', 'reservas programadas')}`} onClick={() => open('Por cobrar: reservas programadas', flow.receivable.ids)} />
+                <Kpi label="Sale" value={money(flow.outflow.total)} hint={`Profesionales ${money(flow.outflow.toPros)} · créditos a clientes ${money(flow.outflow.credits)}`} onClick={() => open('Lo que sale', flow.outflow.ids)} />
+                <Kpi label="Queda para HULUL" value={money(flow.net.total)} hint={`+ ${money(flow.net.projected)} cuando se cobre lo programado`} onClick={() => open('Ingreso de HULUL', flow.inflow.ids)} />
+              </div>
+              <div style={{ marginTop: 14 }}><FlowChart points={series} gran={g} onPick={open} /></div>
+              {wm && <p className="muted" style={{ fontSize: 12.5, margin: '10px 0 0' }}>
+                Pagos a profesionales: <Link href="/admin/contabilidad?vista=pagar">{money(wm.toPayNow.amount)} por transferir hoy</Link> · <Link href="/admin/contabilidad?vista=pagar">{money(wm.nextPayout.estimate)} el lunes {fmtDay(wm.nextPayout.date)}</Link>. «Entra» cuenta lo cobrado al cliente por cualquier medio; en efectivo, DeUna o transferencia lo recibe el profesional y él debe a HULUL su parte.
+              </p>}
             </section>
           )}
 
@@ -54,6 +67,7 @@ export function ExecutivePanel() {
           </div>
 
           <div className="adm-grid g-21">
+            <div className="adm-stack">
             <section className="adm-card">
               <h2>Del 100 % de lo terminado</h2>
               <p className="sub">Cada reserva terminada o cancelada cuenta una vez, con su resultado principal. Toca una fila para ver los casos.</p>
@@ -64,6 +78,23 @@ export function ExecutivePanel() {
                 }))} />
               ) : <div className="adm-empty">Aún no hay reservas terminadas en este periodo. Prueba con «Todo» o marca «Incluir pruebas».</div>}
             </section>
+            <section className="adm-card">
+              <h2>Cómo quedó el trabajo</h2>
+              <p className="sub">Lo que marcó el profesional al terminar.</p>
+              <HBars items={q.outcomes.map((o) => ({ label: o.label, value: o.count, display: o.count, color: o.key === 'resuelto' ? '#206344' : o.key === 'parcial' ? '#C98A1B' : '#B42318', onClick: o.count ? () => open(o.label, o.ids) : undefined }))} />
+            </section>
+            <section className="adm-card">
+              <h2>Puntualidad y respuesta</h2>
+              <p className="sub">Llegada a la dirección y tiempo para aceptar.</p>
+              <HBars items={[
+                { label: 'A tiempo', value: q.punctuality.onTime.count, display: q.punctuality.onTime.count, color: '#206344', onClick: q.punctuality.onTime.count ? () => open('Llegaron a tiempo', q.punctuality.onTime.ids) : undefined },
+                { label: 'Tarde (+15 min)', value: q.punctuality.late.count, display: q.punctuality.late.count, color: '#C98A1B', onClick: q.punctuality.late.count ? () => open('Llegaron tarde', q.punctuality.late.ids) : undefined },
+              ]} />
+              <p className="muted" style={{ fontSize: 13, margin: '12px 0 0' }}>
+                Aceptan en {q.accept.avgMin !== null ? `${q.accept.avgMin} min en promedio` : '—'}{q.accept.count ? ` · ${percent(q.accept.within15 / q.accept.count)} en menos de 15 min` : ''}.
+              </p>
+            </section>
+            </div>
             <section className="adm-card">
               <h2>Lo que opinan los clientes</h2>
               <p className="sub">Estrellas que dieron al profesional en el periodo.</p>
@@ -88,22 +119,6 @@ export function ExecutivePanel() {
 
           <div className="adm-grid g-3">
             <section className="adm-card">
-              <h2>Cómo quedó el trabajo</h2>
-              <p className="sub">Lo que marcó el profesional al terminar.</p>
-              <HBars items={q.outcomes.map((o) => ({ label: o.label, value: o.count, display: o.count, color: o.key === 'resuelto' ? '#206344' : o.key === 'parcial' ? '#C98A1B' : '#B42318', onClick: o.count ? () => open(o.label, o.ids) : undefined }))} />
-            </section>
-            <section className="adm-card">
-              <h2>Puntualidad y respuesta</h2>
-              <p className="sub">Llegada a la dirección y tiempo para aceptar.</p>
-              <HBars items={[
-                { label: 'A tiempo', value: q.punctuality.onTime.count, display: q.punctuality.onTime.count, color: '#206344', onClick: q.punctuality.onTime.count ? () => open('Llegaron a tiempo', q.punctuality.onTime.ids) : undefined },
-                { label: 'Tarde (+15 min)', value: q.punctuality.late.count, display: q.punctuality.late.count, color: '#C98A1B', onClick: q.punctuality.late.count ? () => open('Llegaron tarde', q.punctuality.late.ids) : undefined },
-              ]} />
-              <p className="muted" style={{ fontSize: 13, margin: '12px 0 0' }}>
-                Aceptan en {q.accept.avgMin !== null ? `${q.accept.avgMin} min en promedio` : '—'}{q.accept.count ? ` · ${percent(q.accept.within15 / q.accept.count)} en menos de 15 min` : ''}.
-              </p>
-            </section>
-            <section className="adm-card">
               <h2>Fidelidad</h2>
               <p className="sub">Señal de que el servicio gustó.</p>
               <HBars max={Math.max(1, q.loyalty.clients)} items={[
@@ -111,9 +126,6 @@ export function ExecutivePanel() {
                 { label: 'Mismo profesional', value: q.loyalty.samePro.count, display: `${q.loyalty.samePro.count} de ${q.loyalty.clients}`, color: '#1F4E79', onClick: q.loyalty.samePro.count ? () => open('Repiten con el mismo profesional', q.loyalty.samePro.ids) : undefined },
               ]} />
             </section>
-          </div>
-
-          <div className="adm-grid g-2">
             <section className="adm-card">
               <h2>Calificación por servicio</h2>
               <p className="sub">Promedio de estrellas y trabajos completados por categoría.</p>
@@ -133,16 +145,39 @@ export function ExecutivePanel() {
           </div>
 
           <section className="adm-card">
-            <h2>Semana a semana</h2>
-            <p className="sub">Casos de éxito, con problema y por atender cada semana.</p>
-            <WeekBars
-              weeks={ex.byWeek.map((w) => ({ week: w.week, parts: [
-                { value: w.success, color: '#206344', label: 'Éxito' },
-                { value: w.problems, color: '#C98A1B', label: 'Con problema' },
-                { value: Math.max(0, w.total - w.success - w.problems), color: '#9DB6C9', label: 'Por atender' },
-              ] }))}
-              legend={[{ label: 'Éxito', color: '#206344' }, { label: 'Con problema', color: '#C98A1B' }, { label: 'Por atender', color: '#9DB6C9' }]}
-            />
+            <h2>Resultado por servicio</h2>
+            <p className="sub">Cada categoría con lo que salió bien, lo que tuvo algún problema y lo que sigue pendiente. Toca una barra para ver los casos.</p>
+            {(() => {
+              const cats = [...new Set(rows.map((b) => b.category))].map((c) => {
+                const mine = rows.filter((b) => b.category === c);
+                const ok = mine.filter((b) => caseFlags(b).success);
+                const bad = mine.filter((b) => { const f = caseFlags(b); return f.closed && !f.success; });
+                const pend = mine.filter((b) => !caseFlags(b).closed);
+                return { c, mine, ok, bad, pend };
+              }).sort((a, z) => z.mine.length - a.mine.length);
+              if (!cats.length) return <div className="adm-empty">Sin reservas en el periodo.</div>;
+              const max = Math.max(...cats.map((x) => x.mine.length));
+              return (
+                <div className="adm-grid" style={{ gap: 10 }}>
+                  {cats.map((x) => (
+                    <div key={x.c} className="adm-catrow">
+                      <span>{catName(x.c)}</span>
+                      <div className="adm-catbar" style={{ width: `${(x.mine.length / max) * 100}%` }}>
+                        {([['ok', x.ok, '#206344', 'con éxito'], ['bad', x.bad, '#C98A1B', 'con problema'], ['pend', x.pend, '#9DB6C9', 'pendientes']] as const).filter(([, l]) => l.length).map(([k, l, color, label]) => (
+                          <button key={k} type="button" style={{ flex: l.length, background: color }} title={`${catName(x.c)}: ${l.length} ${label}`}
+                            onClick={() => open(`${catName(x.c)}: ${label}`, l.map((b) => b.id))}>{l.length}</button>
+                        ))}
+                      </div>
+                      <b>{x.mine.length ? percent(x.ok.length / Math.max(1, x.ok.length + x.bad.length)) : '—'}</b>
+                    </div>
+                  ))}
+                  <div className="adm-bar" style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+                    {[['Éxito', '#206344'], ['Con problema', '#C98A1B'], ['Pendiente', '#9DB6C9']].map(([l, c]) => <span key={l} className="row gap-4"><i style={{ width: 10, height: 10, borderRadius: 3, background: c, display: 'inline-block' }} />{l}</span>)}
+                    <span>· % = éxito sobre lo terminado</span>
+                  </div>
+                </div>
+              );
+            })()}
           </section>
 
           <div className="adm-grid g-3">

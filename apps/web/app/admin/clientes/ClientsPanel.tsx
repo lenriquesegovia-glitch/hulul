@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { bookingMoney, caseFlags, clientStats, inRange, stageOf, STAGES, toCsv, type ClientStats, type DashBooking } from '@hulul/shared/dashboard';
+import { bookingMoney, caseFlags, clientStats, inRange, toCsv, type ClientStats, type DashBooking } from '@hulul/shared/dashboard';
 import { useAdmin } from '../AdminShell';
-import { Badge, BookingCard, BookingDetail, downloadCsv, fmtDay, initials, Kpi, Loading, money, PageHead, PeriodBar } from '../ui';
+import { Badge, BookingDetail, BookingListDrawer, BookingsCrm, downloadCsv, fmtDay, initials, Kpi, Loading, money, PageHead, PeriodBar } from '../ui';
 
 type Sort = 'reciente' | 'reservas' | 'gasto' | 'riesgo' | 'nombre';
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -94,7 +94,8 @@ export function ClientsPanel() {
 function ClientDetail({ c, onBack }: { c: ClientStats; onBack: () => void }) {
   const [open, setOpen] = useState<DashBooking | null>(null);
   const [tab, setTab] = useState<'historial' | 'cuenta'>('historial');
-  const groups = STAGES.map((s) => ({ ...s, list: c.bookings.filter((b) => stageOf(b) === s.key) })).filter((g) => g.list.length);
+  const [drill, setDrill] = useState<{ title: string; ids: string[] } | null>(null);
+  const pick = (title: string, pred: (b: DashBooking) => boolean) => setDrill({ title: `${c.name}: ${title}`, ids: c.bookings.filter(pred).map((b) => b.id) });
   const moves = c.bookings.filter((b) => b.status === 'completada' || (b.status === 'cancelada' && b.cancelFee > 0) || b.clientCredit > 0);
   return (
     <>
@@ -112,23 +113,18 @@ function ClientDetail({ c, onBack }: { c: ClientStats; onBack: () => void }) {
         </div>
       </div>
       <div className="adm-kpis">
-        <Kpi accent label="Servicios" value={c.total} hint={`${c.done} completados · ${c.scheduled} programados`} />
-        <Kpi label="Gastado en HULUL" value={money(c.spent)} />
+        <Kpi accent label="Servicios" value={c.total} hint={`${c.done} completados · ${c.scheduled} programados`} onClick={() => pick('servicios', () => true)} />
+        <Kpi label="Gastado en HULUL" value={money(c.spent)} onClick={() => setTab('cuenta')} />
         <Kpi label="Saldo pendiente" value={money(c.profile?.balance ?? 0)} hint="Cargos por ausencia o cancelación sin pagar" />
-        <Kpi label="Calificación que da" value={c.avgStarsGiven ? `★ ${c.avgStarsGiven}` : '—'} hint={c.avgStarsReceived ? `Recibe ★ ${c.avgStarsReceived} de los profesionales` : 'Aún sin nota de profesionales'} />
-        <Kpi label="Cancelaciones" value={c.cancelled} hint={`${c.claims} reclamos`} />
+        <Kpi label="Calificación que da" value={c.avgStarsGiven ? `★ ${c.avgStarsGiven}` : 'Sin calificar'} hint={c.avgStarsReceived ? `Recibe ★ ${c.avgStarsReceived} de los profesionales` : 'Aún sin nota de profesionales'} onClick={() => pick('calificaciones', (b) => b.rating !== null || b.clientStars !== null)} />
+        <Kpi label="Cancelaciones" value={c.cancelled} hint={`${c.claims} reclamos`} onClick={() => pick('cancelaciones y reclamos', (b) => b.status === 'cancelada' || !!b.claim)} />
       </div>
       <div className="adm-tabs" role="tablist">
         <button type="button" role="tab" className="adm-tab" aria-selected={tab === 'historial'} onClick={() => setTab('historial')}>Historial ({c.bookings.length})</button>
         <button type="button" role="tab" className="adm-tab" aria-selected={tab === 'cuenta'} onClick={() => setTab('cuenta')}>Estado de cuenta</button>
       </div>
       {tab === 'historial' ? (
-        groups.length ? groups.map((g) => (
-          <section key={g.key} className="adm-grid" style={{ gap: 8 }}>
-            <h2 style={{ margin: 0, fontSize: 15 }}>{g.label} <span className="muted" style={{ fontWeight: 600 }}>· {g.list.length}</span></h2>
-            <div className="adm-cards">{g.list.map((b) => <BookingCard key={b.id} b={b} onOpen={setOpen} showStage />)}</div>
-          </section>
-        )) : <div className="adm-card adm-empty">Este cliente aún no ha reservado en el rango cargado.</div>
+        c.bookings.length ? <BookingsCrm bookings={c.bookings} /> : <div className="adm-card adm-empty">Este cliente aún no ha reservado en el rango cargado.</div>
       ) : (
         <div className="adm-table-wrap">
           <table className="adm-table">
@@ -151,6 +147,7 @@ function ClientDetail({ c, onBack }: { c: ClientStats; onBack: () => void }) {
         </div>
       )}
       {open && <BookingDetail b={open} onClose={() => setOpen(null)} />}
+      {drill && <BookingListDrawer title={drill.title} ids={drill.ids} onClose={() => setDrill(null)} />}
     </>
   );
 }

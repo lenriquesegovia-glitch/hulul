@@ -88,6 +88,10 @@ export function bookingRow(id, b, claim = null, review = null) {
     ratingText: str(review?.text, 300),
     clientStars: Number(b.clientRating?.stars) > 0 ? Number(b.clientRating.stars) : null,
     photos: (Array.isArray(b.diagnosisPhotos) ? b.diagnosisPhotos.length : 0),
+    photoUrls: {
+      request: (Array.isArray(b.photos) ? b.photos : []).filter((u) => typeof u === 'string' && u.startsWith('https://')).slice(0, 8),
+      work: (Array.isArray(b.diagnosisPhotos) ? b.diagnosisPhotos : []).filter((u) => typeof u === 'string' && u.startsWith('https://')).slice(0, 8),
+    },
     claim: claim ? {
       status: str(claim.status, 30), openedBy: str(claim.openedBy, 20), kind: str(claim.kind, 30), kindLabel: str(claim.kindLabel, 80),
       outcome: str(claim.decision?.outcome, 20), openedAt: ms(claim.openedAt), resolveDueAt: ms(claim.resolveDueAt),
