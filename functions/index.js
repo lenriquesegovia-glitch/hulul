@@ -35,6 +35,7 @@ import { clientStatementPdf, statementData, statementPdf } from './statement-pdf
 import { bankFile, BANK_FORMATS, DEFAULT_BANK_FORMAT, paymentLines } from './bank-files.js';
 import { cardPaymentInput, employeeInput, expenseInput, PAYROLL_PARAMS_2026, payrollExpenses, payrollLine, payrollTotals } from './gastos-core.js';
 import { parseStatement, readStatement } from './estado-tarjeta.js';
+import { acceptanceInput, acceptancePdf, caseInput, clientInfo, fingerprint, LEGAL_DOCS } from './legal-core.js';
 import { buildClaimPrompt, callClaude, IA_MODEL, parseAnalysis } from './ia-reclamos.js';
 import { appointmentAt, bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
@@ -2636,13 +2637,16 @@ async function payrollParams() {
 export const adminGastos = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
   const admin = await requireAdmin(req, 'contabilidad');
   const full = can(admin.role, 'pagos');
-  const [g, e, r, params, tc] = await Promise.all([db().collection('gastos').get(), full ? db().collection('empleados').get() : null, db().collection('rolPagos').get(), payrollParams(), db().collection('pagosTarjeta').get()]);
+  const [g, e, r, params, tc, lab, ut] = await Promise.all([db().collection('gastos').get(), full ? db().collection('empleados').get() : null, db().collection('rolPagos').get(), payrollParams(), db().collection('pagosTarjeta').get(),
+    full ? db().collection('laboral').get() : null, full ? db().collection('utilidades').get() : null]);
+  const laboral = Object.fromEntries((lab?.docs ?? []).map((d) => [d.id, d.data()]));
+  const utilidades = (ut?.docs ?? []).map((d) => ({ year: d.id, ...d.data(), aprobadoEl: tsMs(d.data().aprobadoEl), updatedAt: tsMs(d.data().updatedAt) }));
   const pagosTarjeta = tc.docs.map((d) => { const x = d.data(); return { id: d.id, fecha: x.fecha, monto: x.monto, tipo: x.tipo ?? 'tarjeta', socio: x.socio ?? '', tarjeta: x.tarjeta ?? '', referencia: x.referencia ?? '', creadoPor: x.creadoPor ?? '' }; });
   const gastos = g.docs.map((d) => { const x = d.data(); return { id: d.id, ...x, createdAt: tsMs(x.createdAt), updatedAt: tsMs(x.updatedAt) }; });
   const empleados = (e?.docs ?? []).map((d) => { const x = d.data(); return { id: d.id, ...x, createdAt: tsMs(x.createdAt), updatedAt: tsMs(x.updatedAt) }; });
   const roles = r.docs.map((d) => { const x = d.data(); return { mes: d.id, status: x.status, totals: x.totals, lines: full ? x.lines ?? [] : [], aprobadoPor: x.aprobadoPor ?? null, aprobadoEl: tsMs(x.aprobadoEl) }; });
   await logAdmin(admin, 'ver_gastos');
-  return { gastos, empleados, roles, params, pagosTarjeta, canEdit: full, viewer: { role: admin.role, email: admin.email } };
+  return { gastos, empleados, roles, params, pagosTarjeta, laboral, utilidades, canEdit: full, viewer: { role: admin.role, email: admin.email } };
 });
 
 /** Crea o actualiza un gasto manual. */
@@ -2764,6 +2768,82 @@ export const borrarPagoTarjeta = onCall({ region: REGION }, async (req) => {
   return { ok: true };
 });
 
+/* ---------------------------- Laboral: documentos, utilidades y finiquito ---------------------------- */
+
+const LAB_OWNER = /^[A-Za-z0-9_-]{2,60}$/;
+const LAB_KEY = /^[a-z0-9_]{2,30}$/;
+const LAB_TYPES = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' };
+
+/** Marca una obligación laboral como hecha (fecha, referencia) y guarda su archivo (PDF o foto, máx. 8 MB). */
+export const guardarDocLaboral = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const owner = String(req.data?.owner ?? ''); const key = String(req.data?.key ?? '');
+  if (!LAB_OWNER.test(owner) || !LAB_KEY.test(key)) throw new HttpsError('invalid-argument', 'Documento no válido.');
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(req.data?.fecha ?? '')) ? req.data.fecha : null;
+  const state = { hecho: req.data?.hecho !== false, fecha, ref: String(req.data?.ref ?? '').trim().slice(0, 120), por: admin.email, at: Date.now() };
+  const ref = db().doc(`laboral/${owner}`);
+  const prev = (await ref.get()).data()?.[key] ?? {};
+  let archivo = prev.archivo ?? null;
+  const f = req.data?.archivo;
+  if (f?.content) {
+    const type = String(f.contentType ?? '');
+    if (!LAB_TYPES[type]) throw new HttpsError('invalid-argument', 'Sube un PDF o una foto (JPG o PNG).');
+    const buf = Buffer.from(String(f.content), 'base64');
+    if (buf.length > 8 * 1024 * 1024) throw new HttpsError('invalid-argument', 'El archivo pesa más de 8 MB.');
+    const path = `laboral/${owner}/${key}-${Date.now()}.${LAB_TYPES[type]}`;
+    await getStorage().bucket().file(path).save(buf, { contentType: type, resumable: false });
+    archivo = { path, name: String(f.fileName ?? `${key}.${LAB_TYPES[type]}`).replace(/[^\w.\- ]+/g, '').slice(0, 80) };
+  }
+  await ref.set({ [key]: { ...state, archivo } }, { merge: true });
+  await logAdmin(admin, 'doc_laboral', { owner, key, hecho: state.hecho, archivo: !!archivo });
+  return { ok: true, state: { ...state, archivo } };
+});
+
+/** Descarga el archivo guardado de una obligación laboral. */
+export const verDocLaboral = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const owner = String(req.data?.owner ?? ''); const key = String(req.data?.key ?? '');
+  if (!LAB_OWNER.test(owner) || !LAB_KEY.test(key)) throw new HttpsError('invalid-argument', 'Documento no válido.');
+  const a = (await db().doc(`laboral/${owner}`).get()).data()?.[key]?.archivo;
+  if (!a?.path) throw new HttpsError('not-found', 'Ese documento no tiene archivo.');
+  const file = getStorage().bucket().file(a.path);
+  const [buf] = await file.download(); const [meta] = await file.getMetadata();
+  await logAdmin(admin, 'doc_laboral_visto', { owner, key });
+  return { fileName: a.name, contentType: meta.contentType ?? 'application/pdf', content: buf.toString('base64') };
+});
+
+/** Guarda (y opcionalmente aprueba) el cálculo de utilidades de un año. */
+export const guardarUtilidades = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const year = String(req.data?.year ?? '');
+  if (!/^\d{4}$/.test(year)) throw new HttpsError('invalid-argument', 'Año no válido.');
+  const utilidad = Math.round(Number(req.data?.utilidad ?? 0) * 100) / 100;
+  const lines = Array.isArray(req.data?.lines) ? req.data.lines.slice(0, 500).map((l) => ({
+    empleadoId: String(l.empleadoId ?? '').slice(0, 60), nombre: String(l.nombre ?? '').slice(0, 100), cedula: String(l.cedula ?? '').slice(0, 13),
+    dias: Number(l.dias) || 0, cargas: Number(l.cargas) || 0, parte10: Number(l.parte10) || 0, parte5: Number(l.parte5) || 0, total: Number(l.total) || 0, excedente: Number(l.excedente) || 0, aPagar: Number(l.aPagar) || 0,
+  })) : [];
+  const ref = db().doc(`utilidades/${year}`);
+  if ((await ref.get()).data()?.status === 'aprobado' && req.data?.reabrir !== true) throw new HttpsError('failed-precondition', 'Las utilidades de ese año ya están aprobadas.');
+  const status = req.data?.reabrir === true ? 'borrador' : req.data?.aprobar === true ? 'aprobado' : 'borrador';
+  await ref.set({ year, utilidad, lines, status, aprobadoPor: status === 'aprobado' ? admin.email : null, aprobadoEl: status === 'aprobado' ? FieldValue.serverTimestamp() : null, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await logAdmin(admin, `utilidades_${status}`, { year, utilidad });
+  return { ok: true, status };
+});
+
+/** Guarda el cálculo del finiquito en la ficha del empleado. */
+export const guardarFiniquito = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const id = String(req.data?.id ?? '');
+  if (!GASTO_ID.test(id)) throw new HttpsError('invalid-argument', 'Empleado no válido.');
+  const f = req.data?.finiquito ?? {};
+  const lines = (l) => (Array.isArray(l) ? l.slice(0, 20).map((x) => ({ concepto: String(x.concepto ?? '').slice(0, 120), valor: Number(x.valor) || 0, nota: String(x.nota ?? '').slice(0, 160) })) : []);
+  const snap = { salida: String(f.salida ?? '').slice(0, 10), motivo: String(f.motivo ?? '').slice(0, 30), anios: Number(f.anios) || 0, ingresos: lines(f.ingresos), descuentos: lines(f.descuentos),
+    totalIngresos: Number(f.totalIngresos) || 0, totalDescuentos: Number(f.totalDescuentos) || 0, neto: Number(f.neto) || 0, calculadoEl: new Date().toISOString().slice(0, 10), por: admin.email };
+  await db().doc(`empleados/${id}`).set({ finiquito: snap, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await logAdmin(admin, 'finiquito', { empleadoId: id, neto: snap.neto });
+  return { ok: true, finiquito: snap };
+});
+
 /** Crea o actualiza un empleado en relación de dependencia. */
 export const guardarEmpleado = onCall({ region: REGION }, async (req) => {
   const admin = await requireAdmin(req, 'pagos');
@@ -2821,6 +2901,127 @@ export const rolPagos = onCall({ region: REGION }, async (req) => {
   await batch.commit();
   await logAdmin(admin, accion === 'aprobar' ? 'rol_aprobado' : 'rol_calculado', { mes, neto: totals.neto, costo: totals.costo });
   return { ok: true, status: doc.status, lines, totals };
+});
+
+/* ---------------------------------- Legal ---------------------------------- */
+
+/**
+ * Prueba de aceptación: cada vez que un cliente o profesional acepta los términos queda un registro
+ * que nadie puede cambiar desde la app (aceptaciones/{id}): quién, qué versión, cuándo, IP y dispositivo,
+ * con su huella SHA-256. Se le envía copia por correo y se marca la versión en su perfil.
+ */
+export const registrarAceptacion = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const a = acceptanceInput(req.data);
+  if (a.error) throw new HttpsError('invalid-argument', a.error);
+  const profRef = db().doc(a.tipo === 'profesional' ? `providers/${uid}` : `clients/${uid}`);
+  const prof = (await profRef.get()).data() ?? {};
+  const email = String(req.auth.token?.email ?? prof.email ?? '').toLowerCase();
+  const nombre = a.tipo === 'profesional' ? `${prof.firstName ?? ''} ${prof.lastName ?? ''}`.trim() || prof.businessName || '' : prof.name ?? '';
+  const info = clientInfo(req.rawRequest);
+  const atIso = new Date().toISOString();
+  const rec = { uid, email, nombre, telefono: req.auth.token?.phone_number ?? prof.phone ?? '', tipo: a.tipo, docs: a.docs, canal: a.canal, momento: a.momento, ...info, atIso };
+  rec.huella = fingerprint(rec);
+  const ref = await db().collection('aceptaciones').add({ ...rec, createdAt: FieldValue.serverTimestamp() });
+  const legal = Object.fromEntries(a.docs.map((d) => [d.doc, d.version]));
+  await profRef.set({ legal: { ...(prof.legal ?? {}), ...legal, at: atIso, aceptacionId: ref.id } }, { merge: true });
+  if (email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    try {
+      const { from, notifyTo } = senders();
+      await transport().sendMail({ from, to: email, replyTo: notifyTo, subject: 'Tu aceptación de los términos de HULUL',
+        html: layout('Aceptaste los términos de HULUL', `<p style="font-size:15px">Hola${nombre ? ` ${esc(nombre.split(' ')[0])}` : ''}, esta es tu copia de lo que aceptaste en HULUL.</p>` + rows([
+          ['Fecha', new Date(atIso).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })],
+          ...a.docs.map((d) => [LEGAL_DOCS[d.doc], `versión ${d.version}`]),
+          ['Registro', ref.id],
+        ]) + `<p style="font-size:14px">Puedes leerlos cuando quieras: <a href="https://hululec.com/legal/terminos">Términos y condiciones</a> · <a href="https://hululec.com/legal/privacidad">Política de privacidad</a>.</p>`) });
+    } catch (e) { logger.warn('No se pudo enviar la copia de la aceptación', { uid, e: String(e) }); }
+  }
+  return { ok: true, id: ref.id };
+});
+
+/** Panel: aceptaciones registradas y cuántos usuarios tienen la versión vigente. */
+export const adminAceptaciones = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
+  const admin = await requireAdmin(req, 'cumplimiento');
+  const v = req.data?.versiones ?? {};
+  const snap = await db().collection('aceptaciones').orderBy('createdAt', 'desc').limit(1000).get();
+  const list = snap.docs.map((d) => { const x = d.data(); return { id: d.id, uid: x.uid, email: x.email, nombre: x.nombre, tipo: x.tipo, docs: x.docs, canal: x.canal, momento: x.momento, ip: x.ip, userAgent: x.userAgent, atIso: x.atIso, huella: x.huella }; });
+  const count = async (col, field, val) => (val ? (await db().collection(col).where(`legal.${field}`, '==', String(val)).count().get()).data().count : 0);
+  const total = async (col, filter) => (await (filter ? db().collection(col).where(filter[0], '==', filter[1]) : db().collection(col)).count().get()).data().count;
+  const [clientes, clientesAl, pros, prosAl] = await Promise.all([total('clients'), count('clients', 'terminos', v.terminos), total('providers'), count('providers', 'mandato', v.mandato)]);
+  await logAdmin(admin, 'ver_aceptaciones');
+  return { list, stats: { clientes, clientesAlDia: clientesAl, profesionales: pros, profesionalesAlDia: prosAl } };
+});
+
+/** Panel: constancia en PDF de una aceptación. */
+export const constanciaAceptacion = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
+  const admin = await requireAdmin(req, 'cumplimiento');
+  const id = String(req.data?.id ?? '');
+  if (!/^[A-Za-z0-9]{10,40}$/.test(id)) throw new HttpsError('invalid-argument', 'Registro no válido.');
+  const snap = await db().doc(`aceptaciones/${id}`).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Ese registro no existe.');
+  const rec = { id, ...snap.data() };
+  const ok = fingerprint(rec) === rec.huella;
+  const pdf = await acceptancePdf(rec);
+  await logAdmin(admin, 'constancia_aceptacion', { aceptacionId: id });
+  return { fileName: `HULUL-constancia-${id}.pdf`, content: pdf.toString('base64'), integro: ok };
+});
+
+/** Panel: casos legales (demandas, denuncias, reclamos ante autoridades) y lista de blindaje. */
+export const adminCasos = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'reclamos');
+  const [c, cfg] = await Promise.all([db().collection('casosLegales').get(), db().doc('adminConfig/legal').get()]);
+  const casos = c.docs.map((d) => { const x = d.data(); return { id: d.id, ...x, createdAt: tsMs(x.createdAt), updatedAt: tsMs(x.updatedAt) }; });
+  await logAdmin(admin, 'ver_casos_legales');
+  return { casos, blindaje: cfg.data()?.items ?? {} };
+});
+
+export const guardarCaso = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
+  const admin = await requireAdmin(req, 'reclamos');
+  const id = req.data?.id ? String(req.data.id) : null;
+  if (id && !GASTO_ID.test(id)) throw new HttpsError('invalid-argument', 'Caso no válido.');
+  const c = caseInput(req.data);
+  if (c.error) throw new HttpsError('invalid-argument', c.error);
+  const ref = id ? db().doc(`casosLegales/${id}`) : db().collection('casosLegales').doc();
+  const prev = id ? (await ref.get()).data() : null;
+  const archivos = [...(prev?.archivos ?? [])];
+  const f = req.data?.archivo;
+  if (f?.content) {
+    const type = String(f.contentType ?? '');
+    if (!LAB_TYPES[type]) throw new HttpsError('invalid-argument', 'Sube un PDF o una foto (JPG o PNG).');
+    const buf = Buffer.from(String(f.content), 'base64');
+    if (buf.length > 8 * 1024 * 1024) throw new HttpsError('invalid-argument', 'El archivo pesa más de 8 MB.');
+    const path = `legal/${ref.id}/${Date.now()}.${LAB_TYPES[type]}`;
+    await getStorage().bucket().file(path).save(buf, { contentType: type, resumable: false });
+    archivos.push({ path, name: String(f.fileName ?? 'documento').replace(/[^\w.\- ]+/g, '').slice(0, 80), at: new Date().toISOString(), por: admin.email });
+  }
+  const hist = [...(prev?.historial ?? [])];
+  if (!prev || prev.estado !== c.estado) hist.push({ estado: c.estado, at: new Date().toISOString(), por: admin.email });
+  await ref.set({ ...c, archivos, historial: hist.slice(-50), ...(prev ? {} : { creadoPor: admin.email, createdAt: FieldValue.serverTimestamp() }), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await logAdmin(admin, id ? 'caso_legal_editado' : 'caso_legal_creado', { casoId: ref.id, estado: c.estado });
+  return { ok: true, id: ref.id };
+});
+
+export const verArchivoCaso = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
+  const admin = await requireAdmin(req, 'reclamos');
+  const id = String(req.data?.id ?? ''); const i = Number(req.data?.i);
+  if (!GASTO_ID.test(id)) throw new HttpsError('invalid-argument', 'Caso no válido.');
+  const a = (await db().doc(`casosLegales/${id}`).get()).data()?.archivos?.[i];
+  if (!a?.path) throw new HttpsError('not-found', 'Ese archivo no existe.');
+  const file = getStorage().bucket().file(a.path);
+  const [buf] = await file.download(); const [meta] = await file.getMetadata();
+  await logAdmin(admin, 'caso_legal_archivo', { casoId: id });
+  return { fileName: a.name, contentType: meta.contentType ?? 'application/pdf', content: buf.toString('base64') };
+});
+
+export const guardarBlindaje = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'reclamos');
+  const key = String(req.data?.key ?? '');
+  if (!/^[a-z0-9_]{2,40}$/.test(key)) throw new HttpsError('invalid-argument', 'Elemento no válido.');
+  const item = { hecho: req.data?.hecho === true, fecha: /^\d{4}-\d{2}-\d{2}$/.test(String(req.data?.fecha ?? '')) ? req.data.fecha : null, nota: String(req.data?.nota ?? '').slice(0, 500), por: admin.email, at: new Date().toISOString() };
+  await db().doc('adminConfig/legal').set({ items: { [key]: item } }, { merge: true });
+  await logAdmin(admin, 'blindaje', { key, hecho: item.hecho });
+  return { ok: true, item };
 });
 
 /* ---------------------------- Equipo y roles (solo dueño) ---------------------------- */

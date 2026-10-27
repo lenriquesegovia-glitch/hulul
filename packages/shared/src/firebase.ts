@@ -18,7 +18,7 @@ import { sortPros, toProfessional, type PublicPro } from './demo-data';
 import type { JobOutcome } from './policy';
 import type { CategoryEvidence } from './provider';
 import type { TaxRegime } from './tax';
-import type { CardPayment, Employee, Expense, Payroll, PayrollLine, PayrollTotals, StatementMove } from './dashboard';
+import type { CardPayment, Employee, Expense, LaborDocState, Payroll, PayrollLine, PayrollTotals, ProfitLine, Settlement, StatementMove } from './dashboard';
 import { featuredHomeServices, validateHomeDiscovery } from './home-discovery';
 
 /** Read-only aggregate; unavailable or stale recommendations never block booking. */
@@ -66,7 +66,9 @@ export function friendlyError(e: unknown): Error {
   if (['functions/internal', 'functions/not-found', 'functions/unavailable', 'functions/deadline-exceeded'].includes(code) || /^internal$/i.test(msg)) {
     return Object.assign(new Error('No pudimos conectar con el servidor de HULUL. Revisa tu internet e inténtalo de nuevo. (Si acabas de actualizar, falta publicar el servidor.)'), { code });
   }
-  return e instanceof Error ? e : new Error(msg || 'Algo salió mal. Inténtalo de nuevo.');
+  // Sin el código técnico al final (p. ej. « [400]»): la persona solo ve el mensaje.
+  const clean = msg.replace(/\s*\[\d{3}\]\s*$/, '');
+  return Object.assign(new Error(clean || 'Algo salió mal. Inténtalo de nuevo.'), { code });
 }
 
 function callable<I, O>(name: string, timeout?: number) {
@@ -207,6 +209,8 @@ export interface ClientProfile {
   phone: string;
   email: string;
   consentMarketing: boolean;
+  /** Versiones aceptadas (las escribe el servidor al registrar la aceptación). */
+  legal?: LegalAccepted;
 }
 
 export async function loadClientProfile(uid: string): Promise<ClientProfile | null> {
@@ -984,11 +988,13 @@ export async function adminSaveIAKey(key: string, remove = false): Promise<{ con
 
 export interface ExpensesData {
   gastos: Expense[]; empleados: Employee[]; roles: Payroll[]; pagosTarjeta: CardPayment[];
-  params: { sbu: number; aportePersonal: number; aportePatronal: number; iece: number; secap: number; fondoReserva: number };
+  laboral?: Record<string, Record<string, LaborDocState>>;
+  utilidades?: { year: string; utilidad: number; lines: ProfitLine[]; status: 'borrador' | 'aprobado'; aprobadoPor?: string | null; aprobadoEl?: number | null }[];
+  params: { cfb?: number; sbu: number; aportePersonal: number; aportePatronal: number; iece: number; secap: number; fondoReserva: number };
   canEdit: boolean; viewer: { role: string; email: string };
 }
 export type ExpenseInput = Omit<Expense, 'id' | 'total' | 'aPagar' | 'pagadoEl' | 'origen' | 'creadoPor'> & { id?: string; pagadoEl?: string | null };
-export type EmployeeInput = Omit<Employee, 'id' | 'bajoSbu'> & { id?: string };
+export type EmployeeInput = Omit<Employee, 'id' | 'bajoSbu' | 'finiquito'> & { id?: string };
 export interface PayrollAdjust { dias?: number; extras?: number; bonos?: number; anticipos?: number; otrosDescuentos?: number }
 
 export async function adminExpenses(): Promise<ExpensesData> {
@@ -1024,4 +1030,83 @@ export async function adminSaveEmployee(input: EmployeeInput): Promise<string> {
 }
 export async function adminPayroll(mes: string, accion: 'calcular' | 'aprobar' | 'reabrir', ajustes?: Record<string, PayrollAdjust>) {
   return (await callable<{ mes: string; accion: string; ajustes?: Record<string, PayrollAdjust> }, { ok: boolean; status: Payroll['status']; lines?: PayrollLine[]; totals?: PayrollTotals }>('rolPagos')({ mes, accion, ajustes })).data;
+}
+
+export async function adminSaveLaborDoc(input: { owner: string; key: string; hecho: boolean; fecha?: string | null; ref?: string; archivo?: { fileName: string; contentType: string; content: string } | null }): Promise<LaborDocState> {
+  return (await callable<typeof input, { ok: boolean; state: LaborDocState }>('guardarDocLaboral', 120_000)(input)).data.state;
+}
+export async function adminLaborDocFile(owner: string, key: string): Promise<{ fileName: string; contentType: string; content: string }> {
+  return (await callable<{ owner: string; key: string }, { fileName: string; contentType: string; content: string }>('verDocLaboral')({ owner, key })).data;
+}
+export async function adminSaveProfitSharing(input: { year: string; utilidad: number; lines: ProfitLine[]; aprobar?: boolean; reabrir?: boolean }): Promise<string> {
+  return (await callable<typeof input, { ok: boolean; status: string }>('guardarUtilidades')(input)).data.status;
+}
+export async function adminSaveSettlement(id: string, finiquito: Settlement): Promise<void> {
+  await callable<{ id: string; finiquito: Settlement }, { ok: boolean }>('guardarFiniquito')({ id, finiquito });
+}
+
+/* ------------------------------ Prueba de aceptación de términos ------------------------------ */
+
+export interface LegalAccepted { terminos?: string; privacidad?: string; mandato?: string; at?: string; aceptacionId?: string }
+type LegalDocKey = 'terminos' | 'privacidad' | 'mandato';
+
+async function sha256(text: string): Promise<string | null> {
+  try {
+    const subtle = (globalThis as { crypto?: Crypto }).crypto?.subtle;
+    if (!subtle) return null;
+    const buf = await subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch { return null; }
+}
+
+/** Documentos vigentes que acepta cada tipo de usuario (versión y huella del texto). */
+export async function currentLegalDocs(tipo: 'cliente' | 'profesional'): Promise<{ doc: LegalDocKey; version: string; textoHash: string | null }[]> {
+  const [{ termsOfService, TERMS_VERSION }, { privacyPolicy }] = await Promise.all([import('./terms'), import('./legal')]);
+  const t = await sha256(JSON.stringify(termsOfService)); const p = await sha256(JSON.stringify(privacyPolicy));
+  const docs: { doc: LegalDocKey; version: string; textoHash: string | null }[] = [{ doc: 'terminos', version: TERMS_VERSION, textoHash: t }, { doc: 'privacidad', version: PRIVACY_VERSION, textoHash: p }];
+  if (tipo === 'profesional') docs.push({ doc: 'mandato', version: TERMS_VERSION, textoHash: t });
+  return docs;
+}
+
+/** ¿Le falta aceptar la versión vigente? */
+export async function needsLegalUpdate(legal: LegalAccepted | undefined, tipo: 'cliente' | 'profesional' = 'cliente'): Promise<boolean> {
+  const { TERMS_VERSION } = await import('./terms');
+  return !legal || legal.terminos !== TERMS_VERSION || legal.privacidad !== PRIVACY_VERSION || (tipo === 'profesional' && legal.mandato !== TERMS_VERSION);
+}
+
+/** Registra la aceptación en el servidor (IP, dispositivo, versión, huella) y envía copia por correo. */
+export async function recordAcceptance(tipo: 'cliente' | 'profesional', canal: 'web' | 'app', momento: 'registro' | 'cambio_version' | 'reserva' = 'registro'): Promise<string> {
+  const docs = await currentLegalDocs(tipo);
+  return (await callable<{ tipo: string; canal: string; momento: string; docs: typeof docs }, { ok: boolean; id: string }>('registrarAceptacion')({ tipo, canal, momento, docs })).data.id;
+}
+
+/* ------------------------------ Panel: legal ------------------------------ */
+
+export interface AcceptanceRecord { id: string; uid: string; email: string; nombre: string; tipo: 'cliente' | 'profesional'; docs: { doc: string; version: string; textoHash: string | null }[]; canal: string; momento: string; ip: string; userAgent: string; atIso: string; huella: string }
+export interface LegalCase {
+  id: string; tipo: string; titulo: string; notificado: string; contraparteTipo: string; contraparte: string; contraparteId: string; reserva: string;
+  autoridad: string; proceso: string; abogado: string; estado: string; proxima: string | null; proximaQue: string; monto: number; notas: string;
+  archivos?: { path: string; name: string; at: string; por: string }[]; historial?: { estado: string; at: string; por: string }[]; createdAt?: number | null; updatedAt?: number | null;
+}
+export type LegalCaseInput = Omit<LegalCase, 'id' | 'archivos' | 'historial' | 'createdAt' | 'updatedAt'> & { id?: string; archivo?: { fileName: string; contentType: string; content: string } | null };
+export interface ShieldItem { hecho: boolean; fecha: string | null; nota: string; por?: string; at?: string }
+
+export async function adminAcceptances(): Promise<{ list: AcceptanceRecord[]; stats: { clientes: number; clientesAlDia: number; profesionales: number; profesionalesAlDia: number } }> {
+  const { TERMS_VERSION } = await import('./terms');
+  return (await callable<{ versiones: Record<string, string> }, { list: AcceptanceRecord[]; stats: { clientes: number; clientesAlDia: number; profesionales: number; profesionalesAlDia: number } }>('adminAceptaciones')({ versiones: { terminos: TERMS_VERSION, privacidad: PRIVACY_VERSION, mandato: TERMS_VERSION } })).data;
+}
+export async function adminAcceptancePdf(id: string): Promise<{ fileName: string; content: string; integro: boolean }> {
+  return (await callable<{ id: string }, { fileName: string; content: string; integro: boolean }>('constanciaAceptacion')({ id })).data;
+}
+export async function adminLegalCases(): Promise<{ casos: LegalCase[]; blindaje: Record<string, ShieldItem> }> {
+  return (await callable<Record<string, never>, { casos: LegalCase[]; blindaje: Record<string, ShieldItem> }>('adminCasos')({})).data;
+}
+export async function adminSaveLegalCase(input: LegalCaseInput): Promise<string> {
+  return (await callable<LegalCaseInput, { ok: boolean; id: string }>('guardarCaso', 120_000)(input)).data.id;
+}
+export async function adminLegalCaseFile(id: string, i: number): Promise<{ fileName: string; contentType: string; content: string }> {
+  return (await callable<{ id: string; i: number }, { fileName: string; contentType: string; content: string }>('verArchivoCaso')({ id, i })).data;
+}
+export async function adminSaveShield(key: string, item: Omit<ShieldItem, 'por' | 'at'>): Promise<ShieldItem> {
+  return (await callable<{ key: string } & Omit<ShieldItem, 'por' | 'at'>, { ok: boolean; item: ShieldItem }>('guardarBlindaje')({ key, ...item })).data.item;
 }

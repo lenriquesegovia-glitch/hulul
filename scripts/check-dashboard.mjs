@@ -206,6 +206,22 @@ assert.equal(complianceAlerts({ bookings, payouts: [], providers: [] }, { from: 
   const pc = sh.platformCosts(all, now);
   assert.equal(pc.find((x) => x.key === 'apple').months.at(-1).monto, 13.2, 'la cuota del mes + el ISD del cargo');
 
+  // Utilidades, finiquito y obligaciones laborales
+  const ana = { id: 'e1', nombre: 'Ana', cedula: '0912345678', sueldo: 600, ingreso: '2025-01-01', activo: true, decimosMensuales: false, fondoMensual: false, cargasUtilidades: 2 };
+  const beto = { id: 'e2', nombre: 'Beto', cedula: '0923456789', sueldo: 482, ingreso: '2025-07-01', activo: true, decimosMensuales: true, fondoMensual: false, cargasUtilidades: 0 };
+  const ps = sh.profitSharing([ana, beto], '2025', 10000, 482);
+  assert.equal(ps.quince, 1500); assert.equal(ps.lines[0].dias, 360);
+  assert.equal(sh.r2(ps.lines.reduce((t, l) => t + l.total, 0)), 1500, 'se reparte todo el 15 %');
+  assert.equal(ps.lines[1].parte5, 0, 'sin cargas no recibe el 5 %');
+  assert.equal(sh.profitSharing([ana], '2025', 1e7, 482).lines[0].aPagar, 482 * 24, 'tope de 24 básicos');
+  const fin = sh.settlement(ana, '2026-10-15', 'despido_intempestivo', 482);
+  assert.ok(fin.ingresos.some((l) => l.concepto.startsWith('Indemnización') && l.valor === 1800), 'menos de 3 años: 3 sueldos');
+  assert.ok(fin.ingresos.some((l) => l.concepto.startsWith('Bonificación por desahucio')));
+  assert.equal(sh.settlement(ana, '2026-10-15', 'visto_bueno', 482).ingresos.some((l) => l.concepto.startsWith('Bonificación')), false);
+  const lab = sh.laborChecklist([{ ...beto, ingreso: '2026-09-01' }], { e2: { contrato: { hecho: true } } }, now);
+  assert.ok(lab.find((i) => i.key === 'contrato_sut').overdue, 'contrato sin registrar en el SUT después de 30 días');
+  assert.equal(lab.find((i) => i.key === 'contrato').overdue, false);
+
   // Carga del estado de cuenta
   assert.equal(sh.matchPlatform('GOOGLE *CLOUD FTRVZ'), 'firebase');
   assert.equal(sh.matchPlatform('GOOGLE *GSUITE_hulul'), 'workspace');

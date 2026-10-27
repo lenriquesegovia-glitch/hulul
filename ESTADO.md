@@ -1,5 +1,23 @@
 # HULUL — Estado y registro de entregas
 
+## En PR — Legal y blindaje, 27 de octubre de 2026 (Claude)
+
+- Prueba de aceptación: `registrarAceptacion` guarda en `aceptaciones/{id}` (solo servidor) quién aceptó, qué versión de términos, privacidad y mandato, fecha, IP, dispositivo y huella SHA-256; marca `legal` en el perfil (las reglas impiden cambiarlo desde la app) y envía copia por correo. Se registra al crear la cuenta de cliente (web y app) y al enviar el registro de profesional.
+- Si cambia TERMS_VERSION o PRIVACY_VERSION, el cliente debe aceptar la versión nueva antes de reservar (web y app). Los clientes actuales la aceptan una vez al volver a entrar.
+- Panel → Control → Legal y blindaje: aceptaciones con constancia en PDF y Excel; casos legales (demandas, denuncias, Defensoría, Ministerio del Trabajo, LOPDP, SRI) con diligencias, documentos e historial; lista de blindaje. Diligencias próximas en Novedades.
+- Pendiente: firma electrónica del contrato del profesional (.p12 en el navegador o proveedor de firma en la nube); revisión del abogado de términos, contrato y privacidad (incluir el uso de IA).
+- Necesita publicar con backend y con Android (cambió la app).
+
+## En PR — Laboral: impuesto a la renta, utilidades, finiquito y documentos del Ministerio del Trabajo, 27 de octubre de 2026 (Claude)
+
+- Rol de pagos con retención mensual de impuesto a la renta (tabla 2026 Res. NAC-DGERCGC25-00000043; rebaja 18 % de gastos personales con tope por canastas, CFB enero 2026 $821,80).
+- Empleados con cargas (utilidades e IR), gastos personales proyectados, región (décimo cuarto Costa o Sierra) y salida con finiquito: sueldo del mes, décimos proporcionales, vacaciones no gozadas, desahucio 25 % por año e indemnización por despido intempestivo; Excel de la liquidación.
+- Utilidades del 15 % (10 % por días, 5 % por días y cargas, tope 24 salarios básicos con excedente al IESS), borrador y aprobación (`utilidades/{año}`).
+- Documentos laborales: contrato y registro en el SUT, avisos de entrada y salida al IESS, finiquito y su registro, pagos y registros de décimos y utilidades, formulario 107, RDEP, reglamento interno y SST; con fecha, referencia y archivo (`laboral/{dueño}`, archivos en Storage `laboral/`). Avisos de vencidos y próximos en Novedades.
+- Mensajes de error sin el código técnico al final.
+- Validar con la contadora: tope de utilidades, plazos de aviso de salida y cronogramas anuales del Ministerio.
+- Necesita publicar con backend.
+
 ## En PR — Gastos de la empresa y nómina (/admin/gastos), 26 de octubre de 2026 (Claude)
 
 - Nueva página en Finanzas: «Gastos y nómina». La ven socios, contadora y UAFE; registran y aprueban socios y contadora (permiso pagos). La UAFE no ve cédulas, cuentas ni el detalle por empleado.

@@ -44,6 +44,7 @@ await ok('crea su perfil', setDoc(doc(cli1, 'clients/cli1'), profile));
 await no('perfil con correo en lista', setDoc(doc(cli2, 'clients/cli2'), { ...profile, uid: 'cli2', email: 'a@x.com,b@y.com' }));
 await no('cambia su correo a una lista', updateDoc(doc(cli1, 'clients/cli1'), { email: 'a@x.com, b@y.com', updatedAt: serverTimestamp() }));
 await ok('cambia su nombre', updateDoc(doc(cli1, 'clients/cli1'), { name: 'Ana María Ruiz', updatedAt: serverTimestamp() }));
+await no('se marca la aceptación de términos desde la app', updateDoc(doc(cli1, 'clients/cli1'), { legal: { terminos: '2099-01-01' }, updatedAt: serverTimestamp() }));
 await no('se pone saldo a favor', updateDoc(doc(cli1, 'clients/cli1'), { credit: 50, updatedAt: serverTimestamp() }));
 
 console.log('Datos privados');
@@ -77,6 +78,11 @@ await no('nadie lee los gastos de la empresa', getDoc(doc(intruso, 'gastos/g1'))
 await no('nadie crea gastos desde la app', setDoc(doc(intruso, 'gastos/g2'), { base: 10 }));
 await no('nadie lee los empleados', getDoc(doc(intruso, 'empleados/e1')));
 await no('nadie lee los pagos de la tarjeta', getDoc(doc(intruso, 'pagosTarjeta/p1')));
+await no('nadie lee los documentos laborales', getDoc(doc(intruso, 'laboral/e1')));
+await no('nadie lee las utilidades', getDoc(doc(intruso, 'utilidades/2025')));
+await no('nadie lee las aceptaciones', getDoc(doc(cli1, 'aceptaciones/a1')));
+await no('nadie crea aceptaciones desde la app', setDoc(doc(cli1, 'aceptaciones/a2'), { uid: 'cli1' }));
+await no('nadie lee los casos legales', getDoc(doc(intruso, 'casosLegales/c1')));
 await no('nadie lee el rol de pagos', getDoc(doc(intruso, 'rolPagos/2026-10')));
 await no('nadie lee el análisis de IA de un reclamo', getDoc(doc(cli1, 'reclamos/b1/privado/ia')));
 

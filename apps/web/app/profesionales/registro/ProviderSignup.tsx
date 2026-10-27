@@ -248,6 +248,8 @@ function Wizard({ user }: { user: User }) {
         // Mandato de cobro: HULUL cobra la visita en su nombre y le liquida cada semana.
         mandateAccepted: true,
       }, STEPS.length - 1);
+      // Prueba de la aceptación de términos, privacidad y mandato de cobro (versión, fecha, IP, dispositivo).
+      try { const { recordAcceptance } = await import('@hulul/shared/firebase'); await recordAcceptance('profesional', 'web', 'registro'); } catch { /* el registro ya quedó */ }
       setStatus('en_revision');
       setEditing(false);
       top.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });

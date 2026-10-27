@@ -10,7 +10,7 @@ import { whenEc } from '@/components/Claim';
 const H = 3_600_000;
 type Filter = 'abiertos' | 'urgentes' | 'resueltos' | 'todos';
 
-const errMsg = (e: unknown) => (e as { message?: string }).message || 'No se pudo cargar.';
+const errMsg = (e: unknown) => ((e as { message?: string }).message || 'No se pudo cargar.').replace(/\s*\[\d{3}\]\s*$/, '');
 const catName = (slug: string) => { try { return getCategory(slug as never)?.name ?? slug; } catch { return slug; } };
 
 /** "en 41 h", "hace 3 h" respecto de ahora. */

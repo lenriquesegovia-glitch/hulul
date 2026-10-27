@@ -8,6 +8,8 @@ import {
 import type { EmployeeInput, ExpenseInput, ExpensesData, PayrollAdjust } from '@hulul/shared/firebase';
 import { MUESTRA, useAdmin } from '../AdminShell';
 import { cardDefaults, ImportStatement } from './ImportStatement';
+import { EmployeesTab, LaborDocsTab, ProfitTab } from './Laboral';
+import { NumInput } from './NumInput';
 import { Badge, Donut, Drawer, fmtDay, FlowChart, HBars, Kpi, Loading, money, PageHead, PeriodBar } from '../ui';
 
 /**
@@ -16,8 +18,8 @@ import { Badge, Donut, Drawer, fmtDay, FlowChart, HBars, Kpi, Loading, money, Pa
  * de resultados (ingresos de HULUL − gastos = utilidad). Escriben socios y contadora (permiso pagos).
  */
 
-type Tab = 'gastos' | 'pagar' | 'plataformas' | 'tarjeta' | 'nomina' | 'empleados';
-const TABS: Tab[] = ['gastos', 'pagar', 'plataformas', 'tarjeta', 'nomina', 'empleados'];
+type Tab = 'gastos' | 'pagar' | 'plataformas' | 'tarjeta' | 'nomina' | 'empleados' | 'utilidades' | 'laboral';
+const TABS: Tab[] = ['gastos', 'pagar', 'plataformas', 'tarjeta', 'nomina', 'empleados', 'utilidades', 'laboral'];
 const HEAD = ['CORPORACIÓN COFFEEPORT CÍA. LTDA. — HULUL', 'RUC 0993265160001'];
 const errMsg = (e: unknown) => ((e as { message?: string }).message || 'No se pudo completar.').replace(/\s*\[\d{3}\]\s*$/, '');
 const fb = () => import('@hulul/shared/firebase');
@@ -146,7 +148,7 @@ export function GastosPanel() {
 
   if (error) return (<><PageHead title="Gastos y nómina" /><div className="adm-err" role="alert">{error}</div></>);
 
-  const tabs: [Tab, string][] = [['gastos', `Gastos (${rows.length})`], ['pagar', `Por pagar (${sum.porPagar.ids.length})`], ['plataformas', 'Plataformas'], ['tarjeta', 'Tarjeta de crédito'], ['nomina', 'Rol de pagos'], ...(canEdit ? [['empleados', `Empleados (${data?.empleados.filter((e) => e.activo).length ?? 0})`] as [Tab, string]] : [])];
+  const tabs: [Tab, string][] = [['gastos', `Gastos (${rows.length})`], ['pagar', `Por pagar (${sum.porPagar.ids.length})`], ['plataformas', 'Plataformas'], ['tarjeta', 'Tarjeta de crédito'], ['nomina', 'Rol de pagos'], ...(canEdit ? [['empleados', `Empleados (${data?.empleados.filter((e) => e.activo).length ?? 0})`], ['utilidades', 'Utilidades'], ['laboral', 'Documentos laborales']] as [Tab, string][] : [])];
   const groupItems = sum.byGroup.map((g) => ({ label: g.label, color: g.color, count: Math.round(g.value ?? 0), onClick: () => goGroup(g.key as ExpenseGroup) }));
 
   return (
@@ -232,7 +234,9 @@ export function GastosPanel() {
           {tab === 'nomina' && <PayrollTab data={data} month={thisMonth} canEdit={canEdit} onDone={load} />}
           {tab === 'plataformas' && <PlatformsTab gastos={gastos} now={now} canEdit={canEdit} onAdd={(k) => newExpense(platformPreset(k, today))} onList={showList} />}
           {tab === 'tarjeta' && <CardTab data={data} now={now} canEdit={canEdit} onList={showList} onDone={load} />}
-          {tab === 'empleados' && canEdit && <EmployeesTab empleados={data.empleados} sbu={data.params.sbu} onDone={load} />}
+          {tab === 'empleados' && canEdit && <EmployeesTab empleados={data.empleados} sbu={data.params.sbu} now={now} onDone={load} />}
+          {tab === 'utilidades' && canEdit && <ProfitTab data={data} ledger={ledger} now={now} onDone={load} />}
+          {tab === 'laboral' && canEdit && <LaborDocsTab data={data} now={now} onDone={load} />}
         </>
       )}
 
@@ -524,7 +528,7 @@ function ExpenseDrawer({ g, preset, canEdit, today, onClose, onSaved }: { g: Exp
 
 const PAYROLL_COLUMNS: { key: keyof PayrollLine; header: string }[] = [
   { key: 'dias', header: 'Días' }, { key: 'sueldo', header: 'Sueldo' }, { key: 'extras', header: 'Horas extra' }, { key: 'bonos', header: 'Bonos' }, { key: 'ingresos', header: 'Total ingresos' },
-  { key: 'aportePersonal', header: 'Aporte IESS 9,45 %' }, { key: 'anticipos', header: 'Anticipos' }, { key: 'otrosDescuentos', header: 'Otros descuentos' },
+  { key: 'aportePersonal', header: 'Aporte IESS 9,45 %' }, { key: 'retencionIr', header: 'Retención IR' }, { key: 'anticipos', header: 'Anticipos' }, { key: 'otrosDescuentos', header: 'Otros descuentos' },
   { key: 'decimosEnRol', header: 'Décimos en rol' }, { key: 'fondoEnRol', header: 'Fondos de reserva en rol' }, { key: 'neto', header: 'Neto a recibir' },
   { key: 'patronal', header: 'Aporte patronal 11,15 %' }, { key: 'iece', header: 'IECE 0,5 %' }, { key: 'secap', header: 'SECAP 0,5 %' }, { key: 'decimo13', header: 'Provisión 13.º' }, { key: 'decimo14', header: 'Provisión 14.º' },
   { key: 'fondo', header: 'Fondos de reserva' }, { key: 'vacaciones', header: 'Provisión vacaciones' }, { key: 'costo', header: 'Costo empresa' },
@@ -592,7 +596,7 @@ function PayrollTab({ data, month, canEdit, onDone }: { data: ExpensesData; mont
       {(active.length > 0 || result) && (
         <div className="adm-table-wrap">
           <table className="adm-table">
-            <thead><tr><th>Empleado</th>{canEdit && !approved && <><th>Días</th><th>Extras</th><th>Bonos</th><th>Anticipos</th><th>Otros desc.</th></>}<th className="num">Ingresos</th><th className="num">IESS 9,45 %</th><th className="num">Neto</th><th className="num">Costo empresa</th></tr></thead>
+            <thead><tr><th>Empleado</th>{canEdit && !approved && <><th>Días</th><th>Extras</th><th>Bonos</th><th>Anticipos</th><th>Otros desc.</th></>}<th className="num">Ingresos</th><th className="num">IESS 9,45 %</th><th className="num">Ret. IR</th><th className="num">Neto</th><th className="num">Costo empresa</th></tr></thead>
             <tbody>
               {(canEdit && !approved ? active.map((e) => ({ e, l: result?.lines.find((x) => x.empleadoId === e.id) })) : (result?.lines ?? []).map((l) => ({ e: null as Employee | null, l }))).map(({ e, l }) => {
                 const id = e?.id ?? l!.empleadoId; const a = adjOf(id);
@@ -602,7 +606,7 @@ function PayrollTab({ data, month, canEdit, onDone }: { data: ExpensesData; mont
                     {canEdit && !approved && (['dias', 'extras', 'bonos', 'anticipos', 'otrosDescuentos'] as (keyof PayrollAdjust)[]).map((k) => (
                       <td key={k}><NumInput style={{ width: k === 'dias' ? 56 : 82 }} aria-label={k} placeholder={k === 'dias' ? '30' : '0'} value={a[k]} onChange={(n) => setA(id, k, n)} /></td>
                     ))}
-                    <td className="num">{l ? money(l.ingresos) : '—'}</td><td className="num">{l ? money(l.aportePersonal) : '—'}</td><td className="num"><b>{l ? money(l.neto) : '—'}</b></td><td className="num">{l ? money(l.costo) : '—'}</td>
+                    <td className="num">{l ? money(l.ingresos) : '—'}</td><td className="num">{l ? money(l.aportePersonal) : '—'}</td><td className="num">{l ? money(l.retencionIr ?? 0) : '—'}</td><td className="num"><b>{l ? money(l.neto) : '—'}</b></td><td className="num">{l ? money(l.costo) : '—'}</td>
                   </tr>
                 );
               })}
@@ -623,80 +627,6 @@ function PayrollTab({ data, month, canEdit, onDone }: { data: ExpensesData; mont
       </p>
     </div>
   );
-}
-
-/* ---------------------------------- Empleados ---------------------------------- */
-
-const emptyEmployee = (): EmployeeInput => ({ nombre: '', cedula: '', cargo: '', correo: '', cuenta: '', sueldo: 482, ingreso: '', activo: true, decimosMensuales: false, fondoMensual: false });
-
-function EmployeesTab({ empleados, sbu, onDone }: { empleados: Employee[]; sbu: number; onDone: () => Promise<void> }) {
-  const [open, setOpen] = useState<EmployeeInput | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const set = <K extends keyof EmployeeInput>(k: K, v: EmployeeInput[K]) => setOpen((x) => (x ? { ...x, [k]: v } : x));
-  const save = async () => {
-    if (!open) return;
-    setBusy(true); setErr('');
-    try { if (MUESTRA) throw new Error('En la muestra no se guardan cambios.'); await (await fb()).adminSaveEmployee(open); setOpen(null); await onDone(); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
-  };
-  const sorted = [...empleados].sort((a, z) => Number(z.activo) - Number(a.activo) || a.nombre.localeCompare(z.nombre));
-  return (
-    <div className="adm-grid" style={{ gap: 12 }}>
-      <div className="adm-bar"><button type="button" className="adm-btn solid" onClick={() => { setErr(''); setOpen(emptyEmployee()); }}>+ Agregar empleado</button>
-        <span className="muted" style={{ fontSize: 13 }}>Solo personal en relación de dependencia. Los freelancers y profesionales con factura van como gasto en «Subcontratos» u «Honorarios».</span></div>
-      {!sorted.length ? <div className="adm-empty">Aún no hay empleados registrados.</div> : (
-        <div className="adm-cards">
-          {sorted.map((e) => (
-            <button key={e.id} type="button" className="adm-card" style={{ textAlign: 'left', cursor: 'pointer', opacity: e.activo ? 1 : .6 }} onClick={() => { setErr(''); setOpen({ ...e }); }}>
-              <h3>{e.nombre}</h3>
-              <div className="muted" style={{ fontSize: 13 }}>{e.cargo || 'Sin cargo'} · desde {fmtDay(e.ingreso)}</div>
-              <div className="adm-bar" style={{ marginTop: 8 }}>
-                <b>{money(e.sueldo)}</b>
-                {!e.activo && <Badge tone="t-mute">Inactivo</Badge>}
-                {e.sueldo < sbu && <Badge tone="t-bad">Bajo el salario básico</Badge>}
-                {e.decimosMensuales && <Badge tone="t-info">Décimos mensuales</Badge>}
-                {e.fondoMensual && <Badge tone="t-info">Fondos en rol</Badge>}
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-      {open && (
-        <Drawer title={open.id ? open.nombre : 'Nuevo empleado'} sub="Datos para el rol de pagos y la planilla del IESS." onClose={() => setOpen(null)}>
-          <form className="adm-grid" style={{ gap: 12 }} onSubmit={(e) => { e.preventDefault(); save(); }}>
-            <label className="adm-field">Nombre completo<input className="adm-input" required value={open.nombre} onChange={(e) => set('nombre', e.target.value)} /></label>
-            <div className="adm-grid g-2" style={{ gap: 10 }}>
-              <label className="adm-field">Cédula<input className="adm-input" required inputMode="numeric" maxLength={10} value={open.cedula} onChange={(e) => set('cedula', e.target.value)} /></label>
-              <label className="adm-field">Cargo<input className="adm-input" value={open.cargo} onChange={(e) => set('cargo', e.target.value)} /></label>
-              <label className="adm-field">Sueldo mensual<NumInput required value={open.sueldo} onChange={(n) => set('sueldo', n ?? 0)} /></label>
-              <label className="adm-field">Fecha de ingreso<input className="adm-input" type="date" required value={open.ingreso} onChange={(e) => set('ingreso', e.target.value)} /></label>
-              <label className="adm-field">Correo<input className="adm-input" type="email" value={open.correo} onChange={(e) => set('correo', e.target.value)} /></label>
-              <label className="adm-field">Cuenta bancaria<input className="adm-input" value={open.cuenta} onChange={(e) => set('cuenta', e.target.value)} placeholder="Banco, tipo y número" /></label>
-            </div>
-            {open.sueldo > 0 && open.sueldo < sbu && <div className="adm-err">El sueldo es menor al salario básico ({money(sbu)}). Solo es válido si trabaja a tiempo parcial.</div>}
-            <label className="adm-toggle"><input type="checkbox" checked={open.decimosMensuales} onChange={(e) => set('decimosMensuales', e.target.checked)} /> Pidió recibir el 13.º y 14.º sueldo cada mes</label>
-            <label className="adm-toggle"><input type="checkbox" checked={open.fondoMensual} onChange={(e) => set('fondoMensual', e.target.checked)} /> Pidió recibir los fondos de reserva en el rol (si no, van al IESS)</label>
-            <label className="adm-toggle"><input type="checkbox" checked={open.activo} onChange={(e) => set('activo', e.target.checked)} /> Activo (si sale de la empresa, desmárcalo)</label>
-            {err && <div className="adm-err" role="alert">{err}</div>}
-            <div className="adm-bar"><button type="submit" className="adm-btn solid" disabled={busy}>{busy ? 'Guardando…' : 'Guardar'}</button><button type="button" className="adm-btn" onClick={() => setOpen(null)}>Cancelar</button></div>
-          </form>
-        </Drawer>
-      )}
-    </div>
-  );
-}
-
-/** Campo de dinero: deja escribir «12,» o «12.5» sin perder lo tecleado; entrega el número. */
-function NumInput({ value, onChange, ...rest }: { value: number | undefined; onChange: (n: number | undefined) => void } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
-  const [text, setText] = useState(value === undefined || value === 0 ? '' : String(value).replace('.', ','));
-  useEffect(() => {
-    const cur = text === '' ? undefined : Number(text.replace(',', '.'));
-    if (cur !== value && !(cur === undefined && !value)) setText(value === undefined || value === 0 ? '' : String(value).replace('.', ','));
-  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
-  return <input {...rest} className="adm-input" inputMode="decimal" value={text} onChange={(e) => {
-    const t = e.target.value.replace(/[^\d.,]/g, ''); setText(t);
-    const n = Number(t.replace(',', '.')); onChange(t === '' ? undefined : Number.isFinite(n) ? n : undefined);
-  }} />;
 }
 
 /* ---------------------------------- Plataformas (stack) ---------------------------------- */

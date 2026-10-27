@@ -113,7 +113,40 @@ export function cardPaymentInput(d) {
 /** Parámetros 2026 (Ecuador). Editables en el panel; confirmar con la contadora. */
 export const PAYROLL_PARAMS_2026 = {
   sbu: 482, aportePersonal: 0.0945, aportePatronal: 0.1115, iece: 0.005, secap: 0.005, fondoReserva: 0.0833,
+  // Canasta familiar básica de enero 2026 (rebaja de IR por gastos personales).
+  cfb: 821.80,
 };
+
+/** Tabla del impuesto a la renta 2026, personas naturales (Res. NAC-DGERCGC25-00000043): [desde, impuesto fijo, % excedente]. */
+export const IR_TABLE_2026 = [
+  [0, 0, 0], [12208, 0, 0.05], [15549, 167, 0.10], [20188, 631, 0.12], [26700, 1412, 0.15],
+  [35136, 2678, 0.20], [46575, 4965, 0.25], [62005, 8823, 0.30], [82679, 15025, 0.35], [109956, 24572, 0.37],
+];
+/** Canastas para el tope de gastos personales según cargas familiares (0, 1, 2, 3, 4, 5+). */
+export const IR_CANASTAS = [7, 9, 11, 14, 17, 20];
+export const IR_REBATE = 0.18;
+
+export function incomeTaxAnnual(base, table = IR_TABLE_2026) {
+  if (!(base > 0)) return 0;
+  const row = [...table].reverse().find(([from]) => base > from) ?? table[0];
+  return r2(row[1] + (base - row[0]) * row[2]);
+}
+
+/**
+ * Retención mensual de IR en relación de dependencia: proyecta el ingreso gravado del año
+ * (sueldo × 12 + extras y bonos del mes, menos el aporte personal; décimos y fondos son exentos),
+ * calcula el impuesto, resta la rebaja por gastos personales (18 % del menor entre lo proyectado
+ * y el tope de canastas) y divide para 12.
+ */
+export function incomeTaxRetention(emp, ingresosMes, p = PAYROLL_PARAMS_2026) {
+  const extrasMes = Math.max(0, r2(ingresosMes - Number(emp.sueldo || 0)));
+  const bruto = Number(emp.sueldo || 0) * 12 + extrasMes;
+  const base = r2(bruto * (1 - p.aportePersonal));
+  const tax = incomeTaxAnnual(base);
+  const canastas = IR_CANASTAS[Math.min(5, Math.max(0, Math.round(Number(emp.cargasIr || 0))))];
+  const rebaja = r2(Math.min(Number(emp.gastosPersonales || 0), canastas * (p.cfb ?? 821.80)) * IR_REBATE);
+  return { base, impuesto: tax, rebaja, mensual: r2(Math.max(0, tax - rebaja) / 12) };
+}
 
 /** Meses completos entre el ingreso y el mes de la nómina. */
 export function monthsWorked(ingreso, mes) {
@@ -139,10 +172,11 @@ export function payrollLine(emp, adj = {}, mes, p = PAYROLL_PARAMS_2026) {
   const anticipos = r2(adj.anticipos); const otrosDesc = r2(adj.otrosDescuentos);
   const decimosEnRol = emp.decimosMensuales ? r2(decimo13 + decimo14) : 0;
   const fondoEnRol = emp.fondoMensual ? fondo : 0;
-  const neto = r2(ingresos + decimosEnRol + fondoEnRol - aportePersonal - anticipos - otrosDesc);
+  const retencionIr = incomeTaxRetention(emp, ingresos, p).mensual;
+  const neto = r2(ingresos + decimosEnRol + fondoEnRol - aportePersonal - retencionIr - anticipos - otrosDesc);
   return {
     empleadoId: emp.id, nombre: emp.nombre, cedula: emp.cedula ?? '', cargo: emp.cargo ?? '', dias, sueldo, proporcional, extras, bonos, ingresos,
-    aportePersonal, anticipos, otrosDescuentos: otrosDesc, decimo13, decimo14, decimosEnRol, fondo, fondoEnRol, vacaciones,
+    aportePersonal, retencionIr, anticipos, otrosDescuentos: otrosDesc, decimo13, decimo14, decimosEnRol, fondo, fondoEnRol, vacaciones,
     patronal, iece, secap, neto,
     // Lo que le cuesta a la empresa en el mes.
     costo: r2(ingresos + decimo13 + decimo14 + fondo + vacaciones + patronal + iece + secap),
@@ -152,7 +186,7 @@ export function payrollLine(emp, adj = {}, mes, p = PAYROLL_PARAMS_2026) {
 }
 
 export function payrollTotals(lines) {
-  const keys = ['ingresos', 'aportePersonal', 'anticipos', 'otrosDescuentos', 'decimo13', 'decimo14', 'decimosEnRol', 'fondo', 'fondoEnRol', 'vacaciones', 'patronal', 'iece', 'secap', 'neto', 'costo', 'alIess'];
+  const keys = ['ingresos', 'aportePersonal', 'retencionIr', 'anticipos', 'otrosDescuentos', 'decimo13', 'decimo14', 'decimosEnRol', 'fondo', 'fondoEnRol', 'vacaciones', 'patronal', 'iece', 'secap', 'neto', 'costo', 'alIess'];
   return Object.fromEntries(keys.map((k) => [k, r2(lines.reduce((t, l) => t + Number(l[k] || 0), 0))]));
 }
 
@@ -169,6 +203,9 @@ export function payrollExpenses(mes, totals) {
   }));
 }
 
+const int = (v, min, max) => Math.max(min, Math.min(max, Math.round(Number(v) || 0)));
+export const EXIT_REASONS = ['renuncia', 'mutuo_acuerdo', 'despido_intempestivo', 'desahucio', 'visto_bueno', 'periodo_prueba', 'fin_obra'];
+
 /** Valida un empleado. */
 export function employeeInput(d) {
   const nombre = String(d?.nombre ?? '').trim().slice(0, 100);
@@ -179,9 +216,17 @@ export function employeeInput(d) {
   if (cedula.length !== 10) return { error: 'La cédula debe tener 10 dígitos.' };
   if (!(sueldo > 0)) return { error: 'Escribe el sueldo mensual.' };
   if (!ISO.test(ingreso)) return { error: 'Escribe la fecha de ingreso.' };
+  if (d?.activo === false && d?.salida && (!ISO.test(String(d.salida)) || d.salida < ingreso)) return { error: 'La fecha de salida no es válida.' };
   return {
     nombre, cedula, sueldo, ingreso, cargo: String(d?.cargo ?? '').trim().slice(0, 80), correo: String(d?.correo ?? '').trim().toLowerCase().slice(0, 120),
     cuenta: String(d?.cuenta ?? '').trim().slice(0, 60), activo: d?.activo !== false, decimosMensuales: !!d?.decimosMensuales, fondoMensual: !!d?.fondoMensual,
     bajoSbu: sueldo < PAYROLL_PARAMS_2026.sbu,
+    // Cargas: para utilidades (cónyuge o conviviente, hijos menores o con discapacidad) y para el IR (además padres e hijos hasta 21).
+    cargasUtilidades: int(d?.cargasUtilidades, 0, 15), cargasIr: int(d?.cargasIr, 0, 15),
+    gastosPersonales: Math.max(0, Math.min(200000, r2(d?.gastosPersonales))),
+    region: d?.region === 'sierra' ? 'sierra' : 'costa',
+    salida: d?.activo === false && ISO.test(String(d?.salida ?? '')) ? d.salida : null,
+    motivoSalida: d?.activo === false && EXIT_REASONS.includes(d?.motivoSalida) ? d.motivoSalida : null,
+    vacacionesPendientes: Math.max(0, Math.min(90, r2(d?.vacacionesPendientes))),
   };
 }
