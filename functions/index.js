@@ -33,6 +33,7 @@ import { MAX_FILE_BYTES, PRO_UID, REVIEW_LIST_STATUSES, maskBank, providerFiles,
 import { can, dashForRole, normEmail, roleFor, roleInput } from './roles-core.js';
 import { clientStatementPdf, statementData, statementPdf } from './statement-pdf.js';
 import { bankFile, BANK_FORMATS, DEFAULT_BANK_FORMAT, paymentLines } from './bank-files.js';
+import { buildClaimPrompt, callClaude, IA_MODEL, parseAnalysis } from './ia-reclamos.js';
 import { appointmentAt, bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
 
@@ -1936,6 +1937,58 @@ export const adminReclamo = onCall({ region: REGION }, async (req) => {
   const id = String(req.data?.id ?? '');
   const reveal = req.data?.reveal === true;
   if (!BOOKING_ID.test(id)) throw new HttpsError('invalid-argument', 'Reclamo no válido.');
+  const file = await loadClaimFile(id, reveal);
+  await logAccess(id, admin, reveal ? 'ver_contacto' : 'abrir');
+  const ia = await db().doc(`reclamos/${id}/privado/ia`).get();
+  return { ...file, ia: ia.exists ? ia.data() : null };
+});
+
+/* ------------------------------ Claude (IA) para reclamos ------------------------------ */
+
+const iaRef = () => db().doc('adminConfig/ia');
+
+/** Guarda la clave de la API de Claude (solo servidor; nunca vuelve al navegador). */
+export const guardarClaveIA = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'equipo');
+  const key = String(req.data?.key ?? '').trim();
+  if (req.data?.remove === true) { await iaRef().delete(); return { ok: true, connected: false }; }
+  if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(key)) throw new HttpsError('invalid-argument', 'Esa no parece una clave de Claude (empieza con sk-ant-).');
+  // Prueba corta para confirmar que la clave funciona.
+  try { await callClaude({ key, system: 'Responde solo: ok', text: 'ok', photos: [] }); }
+  catch (e) { throw new HttpsError('failed-precondition', String(e.message ?? e)); }
+  await iaRef().set({ key, last4: key.slice(-4), setBy: admin.email, setAt: FieldValue.serverTimestamp() });
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, role: admin.role, action: 'clave_ia', at: FieldValue.serverTimestamp() });
+  return { ok: true, connected: true, last4: key.slice(-4) };
+});
+
+export const estadoIA = onCall({ region: REGION }, async (req) => {
+  await requireAdmin(req, 'reclamos');
+  const d = (await iaRef().get()).data();
+  return { connected: !!d?.key, last4: d?.last4 ?? '', setBy: d?.setBy ?? '', model: IA_MODEL };
+});
+
+/** Claude lee el expediente (versiones, chat, fotos, evidencia) y recomienda una decisión. */
+export const analizarReclamoIA = onCall({ region: REGION, timeoutSeconds: 120, memory: '512MiB' }, async (req) => {
+  const admin = await requireAdmin(req, 'reclamos');
+  const id = String(req.data?.id ?? '');
+  if (!BOOKING_ID.test(id)) throw new HttpsError('invalid-argument', 'Reclamo no válido.');
+  const cfg = (await iaRef().get()).data();
+  if (!cfg?.key) throw new HttpsError('failed-precondition', 'Primero conecta Claude en Administración → Equipo, roles y permisos.');
+  const file = await loadClaimFile(id, false);
+  const prompt = buildClaimPrompt(file);
+  let out;
+  try { out = await callClaude({ key: cfg.key, ...prompt }); }
+  catch (e) { throw new HttpsError('unavailable', String(e.message ?? e)); }
+  let analysis;
+  try { analysis = parseAnalysis(out.text); } catch { throw new HttpsError('internal', 'La IA respondió en un formato inesperado. Intenta de nuevo.'); }
+  const doc = { ...analysis, model: IA_MODEL, photosSent: out.photosSent, usage: out.usage, at: Date.now(), by: admin.email };
+  await db().doc(`reclamos/${id}/privado/ia`).set(doc);
+  await logAccess(id, admin, 'analisis_ia');
+  return doc;
+});
+
+/** Expediente completo de un reclamo (para el panel y para la IA). */
+async function loadClaimFile(id, reveal = false) {
   const [cs, bs, ms_, mod, priv, acc] = await Promise.all([
     db().doc(`reclamos/${id}`).get(), db().doc(`bookings/${id}`).get(),
     db().collection(`bookings/${id}/messages`).orderBy('at').limit(500).get(),
@@ -1944,7 +1997,6 @@ export const adminReclamo = onCall({ region: REGION }, async (req) => {
     db().collection(`reclamos/${id}/accesos`).orderBy('at', 'desc').limit(50).get(),
   ]);
   if (!cs.exists || !bs.exists) throw new HttpsError('not-found', 'No encontramos ese reclamo.');
-  await logAccess(id, admin, reveal ? 'ver_contacto' : 'abrir');
   const c = cs.data(); const b = bs.data();
   const originals = Object.fromEntries(mod.docs.map((d) => [d.id, d.data().original]));
   const messages = ms_.docs.map((d) => {
@@ -1983,7 +2035,7 @@ export const adminReclamo = onCall({ region: REGION }, async (req) => {
       parties: { client: { reclamos: others.size, strikes: Number(cl.data()?.strikes ?? 0) }, pro: { reclamos: proOthers.size, strikes: Number(pr.data()?.strikes ?? 0) } },
     }),
   };
-});
+}
 
 /**
  * Panel: decisión. outcome 'cliente' | 'profesional', motivo (lo ven las dos

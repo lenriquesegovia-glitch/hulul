@@ -600,6 +600,7 @@ export interface ClaimFile {
   accesses: { email: string; action: string; at: number }[];
   revealed: boolean;
   advice?: ClaimAdvice;
+  ia?: ClaimAI | null;
 }
 
 export interface ClaimDecisionDraft { outcome: 'cliente' | 'profesional'; multaPro: number; creditoCliente: number; faltaPro: boolean; faltaCliente: boolean; note: string }
@@ -953,4 +954,22 @@ export async function adminSendClientStatement(clientId: string): Promise<string
 /** Envía archivos (Excel) por correo a las personas con rol Contabilidad del equipo. */
 export async function adminSendToAccountant(input: { subject: string; message: string; files: { fileName: string; content: string }[] }): Promise<string[]> {
   return (await callable<typeof input, { ok: boolean; to: string[] }>('enviarContadora')(input)).data.to;
+}
+
+/* ------------------------------ Claude (IA) para reclamos ------------------------------ */
+
+export interface ClaimAI {
+  lado: 'cliente' | 'profesional' | 'indeterminado'; confianza: 'alta' | 'media' | 'baja'; resumen: string;
+  version_cliente: string; version_profesional: string; hechos: string[]; contradicciones: string[]; riesgos: string[];
+  decision: { multaPro: number; creditoCliente: number; faltaPro: boolean; faltaCliente: boolean }; motivo: string;
+  model: string; photosSent: number; at: number; by: string;
+}
+export async function adminAnalyzeClaim(id: string): Promise<ClaimAI> {
+  return (await callable<{ id: string }, ClaimAI>('analizarReclamoIA')({ id })).data;
+}
+export async function adminIAStatus(): Promise<{ connected: boolean; last4: string; setBy: string; model: string }> {
+  return (await callable<Record<string, never>, { connected: boolean; last4: string; setBy: string; model: string }>('estadoIA')({})).data;
+}
+export async function adminSaveIAKey(key: string, remove = false): Promise<{ connected: boolean; last4?: string }> {
+  return (await callable<{ key: string; remove: boolean }, { ok: boolean; connected: boolean; last4?: string }>('guardarClaveIA')({ key, remove })).data;
 }

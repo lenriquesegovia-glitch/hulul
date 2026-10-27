@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getCategory } from '@hulul/shared';
-import { CLAIM_STATUS_LABEL, type ClaimAdvice, type ClaimFile, type ClaimListItem } from '@hulul/shared/firebase';
+import { CLAIM_STATUS_LABEL, type ClaimAdvice, type ClaimAI, type ClaimFile, type ClaimListItem } from '@hulul/shared/firebase';
 import { SignIn } from '@/components/SignIn';
 import { logout, useUser } from '@/lib/auth';
 import { whenEc } from '@/components/Claim';
@@ -274,7 +274,7 @@ function ClaimDetail({ id, now, onBack }: { id: string; now: number; onBack: () 
           <Row k="Medidas" v={[c.decision.multaPro ? `multa ${usd(c.decision.multaPro)}` : '', c.decision.creditoCliente ? `crédito ${usd(c.decision.creditoCliente)}` : '', c.decision.faltaPro ? 'falta al profesional' : '', c.decision.faltaCliente ? 'falta al cliente' : ''].filter(Boolean).join(' · ') || 'Ninguna'} />
           <Row k="Fecha" v={whenEc(c.decision.at)} />
         </Section>
-      ) : <DecisionForm id={id} clientOpened={c.openedBy === 'cliente'} advice={f.advice} onDone={() => load()} />}
+      ) : <DecisionForm id={id} clientOpened={c.openedBy === 'cliente'} advice={f.advice} ia={f.ia ?? null} onDone={() => load()} />}
 
       <Section title="Registro de accesos a este expediente">
         {f.accesses.map((a, i) => <span key={i} className="muted" style={{ fontSize: 13 }}>{whenEc(a.at)} · {a.email} · {a.action}</span>)}
@@ -285,7 +285,21 @@ function ClaimDetail({ id, now, onBack }: { id: string; now: number; onBack: () 
 
 const CONF_LABEL: Record<string, string> = { alta: 'confianza alta', media: 'confianza media', baja: 'confianza baja', sin_datos: 'sin evidencia clara' };
 
-function DecisionForm({ id, clientOpened, advice, onDone }: { id: string; clientOpened: boolean; advice?: ClaimAdvice; onDone: () => void }) {
+function DecisionForm({ id, clientOpened, advice, ia: iaInit, onDone }: { id: string; clientOpened: boolean; advice?: ClaimAdvice; ia: ClaimAI | null; onDone: () => void }) {
+  const [ia, setIa] = useState<ClaimAI | null>(iaInit);
+  const [iaBusy, setIaBusy] = useState(false);
+  const [iaMsg, setIaMsg] = useState('');
+  const analyze = async () => {
+    setIaBusy(true); setIaMsg('');
+    try { const { adminAnalyzeClaim } = await import('@hulul/shared/firebase'); setIa(await adminAnalyzeClaim(id)); }
+    catch (e) { setIaMsg(errMsg(e)); } finally { setIaBusy(false); }
+  };
+  const useIa = () => {
+    if (!ia || ia.lado === 'indeterminado') return;
+    setOutcome(ia.lado); setConfirm(false);
+    setMultaPro(ia.decision.multaPro ? String(ia.decision.multaPro) : ''); setCredito(ia.decision.creditoCliente ? String(ia.decision.creditoCliente) : '');
+    setFaltaPro(ia.decision.faltaPro); setFaltaCliente(ia.decision.faltaCliente); setNote(ia.motivo);
+  };
   const [outcome, setOutcome] = useState<'' | 'cliente' | 'profesional'>('');
   const [note, setNote] = useState('');
   const [multaPro, setMultaPro] = useState('');
@@ -324,6 +338,28 @@ function DecisionForm({ id, clientOpened, advice, onDone }: { id: string; client
 
   return (
     <Section title="Decisión">
+      <div className="stack gap-8" style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14 }}>
+        <div className="row gap-8" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <strong>Análisis con IA (Claude)</strong>
+          <button type="button" className="btn btn-secondary" disabled={iaBusy} onClick={analyze}>{iaBusy ? 'Leyendo el caso…' : ia ? 'Volver a analizar' : 'Analizar con IA'}</button>
+        </div>
+        {iaMsg && <p role="alert" className="form-error" style={{ margin: 0 }}>{iaMsg}</p>}
+        {!ia && !iaMsg && <span className="muted" style={{ fontSize: 13 }}>Claude lee las dos versiones, el chat completo, las fotos y la evidencia (llegada, timbres, código, tiempos) y te recomienda una decisión. Tarda unos segundos.</span>}
+        {ia && (
+          <div className="stack gap-8" style={{ fontSize: 14 }}>
+            <strong style={{ color: ia.lado === 'cliente' ? '#1F4E79' : ia.lado === 'profesional' ? '#206344' : 'inherit' }}>
+              {ia.lado === 'indeterminado' ? 'La IA no ve evidencia suficiente' : `Recomienda: a favor del ${ia.lado}`} · confianza {ia.confianza}
+            </strong>
+            <span>{ia.resumen}</span>
+            {(ia.version_cliente || ia.version_profesional) && <span className="muted" style={{ fontSize: 13 }}>Cliente: {ia.version_cliente || '—'} · Profesional: {ia.version_profesional || '—'}</span>}
+            {ia.hechos.length > 0 && <div><b style={{ fontSize: 13 }}>Hechos</b><ul style={{ margin: '2px 0 0', paddingLeft: 18, fontSize: 13 }}>{ia.hechos.map((h, i) => <li key={i}>{h}</li>)}</ul></div>}
+            {ia.contradicciones.length > 0 && <div><b style={{ fontSize: 13 }}>Contradicciones</b><ul style={{ margin: '2px 0 0', paddingLeft: 18, fontSize: 13 }}>{ia.contradicciones.map((h, i) => <li key={i}>{h}</li>)}</ul></div>}
+            {ia.riesgos.length > 0 && <div><b style={{ fontSize: 13 }}>Señales de abuso o riesgo</b><ul style={{ margin: '2px 0 0', paddingLeft: 18, fontSize: 13 }}>{ia.riesgos.map((h, i) => <li key={i}>{h}</li>)}</ul></div>}
+            {ia.lado !== 'indeterminado' && <button type="button" className="btn btn-primary" style={{ alignSelf: 'flex-start' }} onClick={useIa}>Usar la recomendación de la IA (llena todo)</button>}
+            <span className="muted" style={{ fontSize: 12 }}>{ia.model} · {ia.photosSent} fotos revisadas · {new Date(ia.at).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' })}. Es una recomendación: la decisión es tuya.</span>
+          </div>
+        )}
+      </div>
       {advice && (
         <div className="stack gap-8" style={{ background: 'var(--surface-warm, #F4F1EA)', borderRadius: 12, padding: 14, borderLeft: `5px solid ${advice.side === 'cliente' ? '#1F4E79' : advice.side === 'profesional' ? '#206344' : '#9AA8A5'}` }}>
           <strong>Asistente: {advice.side ? `a favor del ${advice.side}` : 'revisar a mano'} <span className="muted" style={{ fontWeight: 600, fontSize: 13 }}>· {CONF_LABEL[advice.confidence] ?? advice.confidence}</span></strong>
