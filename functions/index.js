@@ -31,6 +31,7 @@ import { CLAIM_STATUS, CLIENT_KINDS, PRO_KINDS, RESOLVE_HOURS, RESPONSE_HOURS, R
 import { VERIFIED_DOCS, expectOf, submissionCheck, verifySelfie, verifyText } from './doc-verify.js';
 import { MAX_FILE_BYTES, PRO_UID, REVIEW_LIST_STATUSES, maskBank, providerFiles, reviewMessage, reviewPatch } from './pro-review.js';
 import { can, dashForRole, normEmail, roleFor, roleInput } from './roles-core.js';
+import { statementData, statementPdf } from './statement-pdf.js';
 import { bankFile, BANK_FORMATS, DEFAULT_BANK_FORMAT, paymentLines } from './bank-files.js';
 import { bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
@@ -434,6 +435,16 @@ async function checkPrice(b) {
   return { ok: okFor(visit, sc) || okFor(visit, pubSc) || pubOk, total, regime };
 }
 
+/** Reserva terminada del cliente que aún no calificó (id), o null. */
+async function unratedBookingOf(clientId, exceptId) {
+  const snap = await db().collection('bookings').where('clientId', '==', clientId).get();
+  const hit = snap.docs.find((d) => {
+    const x = d.data();
+    return d.id !== exceptId && ['completada', 'por_aprobar'].includes(x.status) && !x.rating && x.extra?.status !== 'propuesto';
+  });
+  return hit ? hit.id : null;
+}
+
 export const avisoReserva = onDocumentCreated(
   { document: 'bookings/{id}', region: REGION, secrets: [MAIL_PASSWORD] },
   async (event) => {
@@ -450,13 +461,16 @@ export const avisoReserva = onDocumentCreated(
     try {
       // Una hora que ya pasó no se reserva (la app y la web ya lo impiden; esto cubre llamadas directas).
       const past = appointmentMs(b.date, b.slot) < Date.now() - 10 * 60_000;
-      const priced = past ? { ok: false, total: Number(b.total ?? 0), reason: 'La hora elegida ya pasó.' } : await checkPrice(b);
+      // Hay que calificar el servicio anterior antes de reservar otro (la app y la web ya lo piden).
+      const unrated = b.clientId ? await unratedBookingOf(String(b.clientId), event.params.id) : null;
+      const priced = unrated ? { ok: false, total: Number(b.total ?? 0), reason: `Primero califica tu servicio anterior (${code(unrated)}).` }
+        : past ? { ok: false, total: Number(b.total ?? 0), reason: 'La hora elegida ya pasó.' } : await checkPrice(b);
       if (!priced.ok) {
         await event.data.ref.update({ status: 'cancelada', cancelledBy: 'sistema', cancelledAt: FieldValue.serverTimestamp(), cancelFee: 0,
           cancelReason: priced.reason ? `${priced.reason} Elige otra hora: no se te cobró nada.` : 'El precio de la reserva no coincide con la tarifa del profesional. Vuelve a reservar para ver el precio correcto.', expectedTotal: priced.total });
         await pushTo(b.clientId, 'Revisa tu reserva', priced.reason ? `${priced.reason} Vuelve a reservar: no se te cobró nada.` : 'El precio no coincidía con la tarifa actual del profesional. Vuelve a reservar: no se te cobró nada.', { bookingId: event.params.id, to: 'cliente' }).catch(() => {});
         const { from, notifyTo } = senders();
-        await mail.sendMail({ from, to: notifyTo, subject: `Reserva anulada ${past ? '(hora pasada)' : 'por precio'} ${code(event.params.id)}`,
+        await mail.sendMail({ from, to: notifyTo, subject: `Reserva anulada ${unrated ? '(calificación pendiente)' : past ? '(hora pasada)' : 'por precio'} ${code(event.params.id)}`,
           html: layout('Precio alterado o desactualizado', rows([['Código', code(event.params.id)], ['Cliente', esc(b.contactName)], ['Profesional', esc(b.professionalName)], ['Enviado', usd(b.total)], ['Correcto', usd(priced.total)]])) }).catch(() => {});
         logger.warn('Reserva anulada: precio no coincide', { id: event.params.id, sent: b.total, expected: priced.total });
         return;
@@ -1859,8 +1873,40 @@ export const responderReclamo = onCall({ region: REGION, secrets: [MAIL_PASSWORD
 });
 
 /** Panel: lista de reclamos (sin datos de contacto). */
+/**
+ * Reclamos abiertos antes del protocolo V5.5 (solo en bookings.dispute): se pasan al
+ * expediente (reclamos/{id}) para verlos y decidirlos en el panel. Plazos desde hoy.
+ */
+async function migrateLegacyDisputes() {
+  const snap = await db().collection('bookings').where('status', '==', 'en_disputa').limit(200).get();
+  let n = 0;
+  for (const d of snap.docs) {
+    const bk = d.data();
+    if (!bk.dispute || typeof bk.dispute !== 'object') continue;
+    const cref = db().doc(`reclamos/${d.id}`);
+    if ((await cref.get()).exists) continue;
+    const side = bk.dispute.by === 'profesional' ? 'profesional' : 'cliente';
+    const kinds = side === 'cliente' ? CLIENT_KINDS : PRO_KINDS;
+    const openedAt = bk.dispute.at?.toMillis?.() ?? Date.now();
+    const due = deadlines(Date.now());
+    await cref.set({
+      code: code(d.id), bookingId: d.id, openedBy: side, openerId: side === 'cliente' ? bk.clientId : bk.professionalId,
+      clientId: bk.clientId, proId: bk.professionalId, clientName: String(bk.contactName ?? ''), proName: String(bk.professionalName ?? ''),
+      category: bk.category ?? '', date: bk.date ?? '', slot: bk.slot ?? '',
+      kind: String(bk.dispute.kind ?? 'otro'), kindLabel: kinds[bk.dispute.kind] ?? String(bk.dispute.kind ?? 'Reclamo').replace(/_/g, ' '),
+      text: String(bk.dispute.text ?? '').slice(0, 1500), photos: [],
+      status: 'en_revision', openedAt, responseDueAt: due.responseDueAt, resolveDueAt: due.resolveDueAt,
+      response: null, responseMissed: true, decision: null, alerts: {}, moneyHeld: side === 'cliente', legacy: true,
+    });
+    await d.ref.update({ claimId: d.id }).catch(() => {});
+    n += 1;
+  }
+  if (n) logger.info('Reclamos antiguos pasados al expediente', { n });
+}
+
 export const adminReclamos = onCall({ region: REGION }, async (req) => {
   await requireAdmin(req, 'reclamos');
+  await migrateLegacyDisputes().catch((e) => logger.warn('No se pudieron pasar reclamos antiguos', { e: String(e) }));
   const snap = await db().collection('reclamos').orderBy('openedAt', 'desc').limit(200).get();
   return {
     items: snap.docs.map((d) => {
@@ -2071,9 +2117,10 @@ async function refreshProBalance(proId) {
  * semana siguiente. La transferencia la hará la dispersión de la pasarela;
  * mientras tanto HULUL la hace y cambia status a "pagado".
  */
-export const liquidacionSemanal = onSchedule({ schedule: 'every monday 06:00', region: REGION, timeZone: 'America/Guayaquil', secrets: [MAIL_PASSWORD] }, async () => {
+export const liquidacionSemanal = onSchedule({ schedule: 'every monday 06:00', region: REGION, timeZone: 'America/Guayaquil', secrets: [MAIL_PASSWORD], memory: '512MiB', timeoutSeconds: 540 }, async () => {
   const now = Date.now();
   const week = payoutWeek(now);
+  const emailed = new Set();
   const pending = (await db().collection('ledger').where('payoutId', '==', null).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
   if (!pending.length) return;
   // Reservas en disputa: su dinero espera a que HULUL resuelva.
@@ -2114,7 +2161,11 @@ export const liquidacionSemanal = onSchedule({ schedule: 'every monday 06:00', r
     summary.push({ proId, name: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim(), net: liq.net, email: p.email, liq, bank });
     if (p.email) {
       const { from, notifyTo } = senders();
+      // Estado de cuenta en PDF (últimos 30 días) como respaldo del depósito.
+      const st = await proStatementPdf(proId, now - 30 * 86_400_000, now).catch((e) => { logger.warn('PDF de estado de cuenta', { proId, e: String(e) }); return null; });
+      emailed.add(proId);
       await transport().sendMail({
+        ...(st ? { attachments: [{ filename: `HULUL-estado-de-cuenta-${week}.pdf`, content: st.pdf, contentType: 'application/pdf' }] } : {}),
         from, to: p.email, replyTo: notifyTo, subject: `Tu liquidación HULUL de la semana ${week}`,
         html: layout('Tu liquidación semanal', `<p style="font-size:15px">Hola ${esc(p.firstName ?? '')}, este es el resumen de lo que te depositamos esta semana.</p>` + rows([
           ['Cobrado por tus servicios', usd(liq.gross)],
@@ -2125,6 +2176,15 @@ export const liquidacionSemanal = onSchedule({ schedule: 'every monday 06:00', r
         ]) + '<p style="font-size:13px;color:#6B6560">La factura de la comisión y el comprobante de retención te llegan aparte.</p>'),
       }).catch((e) => logger.warn('No se pudo enviar la liquidación', { proId, e: String(e) }));
     }
+  }
+  // Estado de cuenta semanal a los demás profesionales con movimientos en los últimos 7 días.
+  const recent = await db().collection('ledger').where('createdAt', '>=', Timestamp.fromMillis(now - 7 * 86_400_000)).get();
+  for (const proId of new Set(recent.docs.map((d) => d.data().proId).filter(Boolean))) {
+    if (emailed.has(proId)) continue;
+    try {
+      const st = await proStatementPdf(proId, now - 30 * 86_400_000, now);
+      if (st.email) await sendStatementMail(st, `Tu estado de cuenta HULUL · semana ${week}`);
+    } catch (e) { logger.warn('No se pudo enviar el estado de cuenta', { proId, e: String(e) }); }
   }
   const { from, notifyTo } = senders();
   const toPay = summary.filter((s) => !s.carried);
@@ -2267,9 +2327,90 @@ export const marcarLotePagado = onCall({ region: REGION }, async (req) => {
   return { ok: true, count: ok.length };
 });
 
+/* ------------------------ Deudas de efectivo y estado de cuenta ------------------------ */
+
+/** El profesional pagó a HULUL su deuda (efectivo, multas) por transferencia o DeUna: queda en el libro. */
+export const registrarAbono = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const proId = String(req.data?.proId ?? '');
+  const amount = Math.round(Number(req.data?.amount ?? 0) * 100) / 100;
+  const reference = String(req.data?.reference ?? '').trim().slice(0, 80);
+  if (!PRO_UID.test(proId)) throw new HttpsError('invalid-argument', 'Profesional no válido.');
+  if (!(amount > 0)) throw new HttpsError('invalid-argument', 'Escribe el monto que pagó.');
+  if (reference.length < 4) throw new HttpsError('invalid-argument', 'Escribe la referencia de la transferencia o DeUna.');
+  const pend = await db().collection('ledger').where('proId', '==', proId).where('payoutId', '==', null).get();
+  const debt = Math.round(-pend.docs.reduce((t, d) => t + Number(d.data().proDelta ?? 0), 0) * 100) / 100;
+  if (debt <= 0) throw new HttpsError('failed-precondition', 'Este profesional no tiene deuda pendiente.');
+  if (amount > debt + 0.009) throw new HttpsError('invalid-argument', `La deuda es de $${debt.toFixed(2)}; no se puede registrar más.`);
+  const now = Date.now();
+  await db().collection('ledger').doc(`abono_${proId}_${now}`).set({
+    kind: 'abono_profesional', bucket: 'recaudo', amount, proDelta: amount, proId, bookingId: null, clientId: null, paymentMethod: 'transferencia',
+    reference, payoutId: null, availableAt: now, createdAt: FieldValue.serverTimestamp(), by: admin.email,
+  });
+  await refreshProBalance(proId);
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, role: admin.role, action: 'abono_profesional', proId, amount, reference, at: FieldValue.serverTimestamp() });
+  return { ok: true, debt: Math.round((debt - amount) * 100) / 100 };
+});
+
+/** Datos y PDF del estado de cuenta de un profesional (panel y correo de los lunes). */
+async function proStatementPdf(proId, from, to) {
+  const [p, bank, lg, po] = await Promise.all([
+    db().doc(`providers/${proId}`).get(), db().doc(`providers/${proId}/private/banco`).get(),
+    db().collection('ledger').where('proId', '==', proId).get(), db().collection('payouts').where('proId', '==', proId).get(),
+  ]);
+  const pd = p.data() ?? {};
+  const ms = (t) => t?.toMillis?.() ?? (typeof t === 'number' ? t : 0);
+  const ledger = lg.docs.map((d) => { const e = d.data(); return { kind: e.kind, proDelta: Number(e.proDelta ?? 0), createdAt: ms(e.createdAt), bookingId: e.bookingId ?? null, availableAt: Number(e.availableAt ?? 0), payoutId: e.payoutId ?? null }; });
+  const payouts = po.docs.map((d) => { const x = d.data(); return { week: x.week, status: x.status, net: Number(x.net ?? 0), paidAt: ms(x.paidAt) || null, createdAt: ms(x.createdAt), paymentReference: x.paymentReference ?? '' }; });
+  const data = statementData({ ledger, payouts, from, to });
+  const b = bank.data();
+  const name = pd.kind === 'empresa' && pd.businessName ? pd.businessName : `${pd.firstName ?? ''} ${pd.lastName ?? ''}`.trim();
+  const REG = { general: 'Régimen general', rimpe_emprendedor: 'RIMPE emprendedor', rimpe_popular: 'RIMPE negocio popular' };
+  const pdf = await statementPdf({ pro: { name, ruc: pd.ruc ?? '', regime: REG[pd.taxRegime] ?? 'Régimen general', bank: b ? `${b.bank} •••• ${String(b.number ?? '').replace(/\D/g, '').slice(-4)}` : '' }, from, to, data });
+  return { pdf, data, name, email: pd.email, firstName: pd.firstName ?? '' };
+}
+
+/** Panel: descarga el estado de cuenta en PDF (fechas AAAA-MM-DD, por defecto últimos 30 días). */
+export const estadoCuentaPdf = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
+  const admin = await requireAdmin(req, 'proveedores');
+  const proId = String(req.data?.proId ?? '');
+  if (!PRO_UID.test(proId)) throw new HttpsError('invalid-argument', 'Profesional no válido.');
+  const d = (v, fb) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? Date.parse(`${v}T05:00:00Z`) : fb);
+  const to = d(req.data?.hasta, Date.now()) + (req.data?.hasta ? 86_400_000 - 1 : 0);
+  const from = d(req.data?.desde, to - 30 * 86_400_000);
+  const { pdf, name } = await proStatementPdf(proId, from, to);
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, role: admin.role, action: 'estado_cuenta_pdf', proId, at: FieldValue.serverTimestamp() });
+  return { fileName: `HULUL-estado-de-cuenta-${name.replace(/[^A-Za-z0-9]+/g, '-')}.pdf`, content: pdf.toString('base64') };
+});
+
+/** Panel: envía ahora el estado de cuenta por correo al profesional. */
+export const enviarEstadoCuenta = onCall({ region: REGION, memory: '512MiB', secrets: [MAIL_PASSWORD] }, async (req) => {
+  const admin = await requireAdmin(req, 'proveedores');
+  const proId = String(req.data?.proId ?? '');
+  if (!PRO_UID.test(proId)) throw new HttpsError('invalid-argument', 'Profesional no válido.');
+  const to = Date.now(); const from = to - 30 * 86_400_000;
+  const st = await proStatementPdf(proId, from, to);
+  if (!st.email) throw new HttpsError('failed-precondition', 'El profesional no tiene correo registrado.');
+  await sendStatementMail(st, 'Tu estado de cuenta HULUL');
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, role: admin.role, action: 'estado_cuenta_correo', proId, at: FieldValue.serverTimestamp() });
+  return { ok: true, email: st.email };
+});
+
+async function sendStatementMail(st, subject) {
+  const { from, notifyTo } = senders();
+  await transport().sendMail({
+    from, to: st.email, replyTo: notifyTo, subject,
+    html: layout('Tu estado de cuenta', `<p style="font-size:15px">Hola ${esc(st.firstName)}, adjuntamos tu estado de cuenta de los últimos 30 días: lo que ganaste, la comisión, multas, depósitos y tu saldo.</p>` + rows([
+      ['Ganado', usd(st.data.earned)], ['Comisión y cargos', `−${usd(st.data.fees)}`], ...(st.data.fines ? [['Multas', `−${usd(st.data.fines)}`]] : []),
+      ['Depositado', usd(st.data.paid)], ['Saldo sin liquidar', usd(st.data.pending)],
+    ]) + '<p style="font-size:13px;color:#6B6560">También lo ves en la app, en «Mi estado de cuenta».</p>'),
+    attachments: [{ filename: `HULUL-estado-de-cuenta-${new Date().toISOString().slice(0, 10)}.pdf`, content: st.pdf, contentType: 'application/pdf' }],
+  });
+}
+
 /* ---------------------------- Equipo y roles (solo dueño) ---------------------------- */
 
-const ROLE_NAMES = { socio: 'Socio', contabilidad: 'Contabilidad', cumplimiento: 'Oficial de cumplimiento (UAFE)' };
+const ROLE_NAMES = { socio: 'Socio 2', contabilidad: 'Contabilidad', cumplimiento: 'Oficial de cumplimiento (UAFE)' };
 
 /** Lista de personas con acceso al panel (dueños + adminRoles) y últimos cambios. */
 export const adminEquipo = onCall({ region: REGION }, async (req) => {

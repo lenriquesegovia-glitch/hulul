@@ -101,7 +101,7 @@ export function TeamPanel() {
           <h2>Qué ve cada rol</h2>
           <div className="adm-table-wrap" style={{ border: 'none' }}>
             <table className="adm-table">
-              <thead><tr><th>Sección</th><th>Dueño</th><th>Socio</th><th>Contab.</th><th>UAFE</th></tr></thead>
+              <thead><tr><th>Sección</th><th>Socio 1</th><th>Socio 2</th><th>Contab.</th><th>UAFE</th></tr></thead>
               <tbody>
                 {[
                   ['Resumen ejecutivo', 'sí', 'sí', 'sí', 'ver'],
@@ -127,7 +127,7 @@ export function TeamPanel() {
             <tbody>
               {!team ? <tr><td colSpan={5} className="adm-empty">Cargando…</td></tr> : team.members.map((m) => (
                 <tr key={m.email}>
-                  <td><b>{m.name || (m.role === 'dueno' ? 'Dueño' : '—')}</b><div className="muted" style={{ fontSize: 12.5 }}>{m.email}</div></td>
+                  <td><b>{m.name || (m.role === 'dueno' ? 'Socio 1' : '—')}</b><div className="muted" style={{ fontSize: 12.5 }}>{m.email}</div></td>
                   <td>
                     {m.role === 'dueno' ? <Badge tone={ROLE_TONE.dueno}>{ROLE_INFO.dueno.label}</Badge> : (
                       <select className="adm-select" value={m.role} disabled={busy || muestra} aria-label={`Rol de ${m.email}`} onChange={(e) => changeRole(m.email, m.name, e.target.value as Assignable)}>
@@ -135,7 +135,7 @@ export function TeamPanel() {
                       </select>
                     )}
                   </td>
-                  <td style={{ fontSize: 13 }}>{m.role === 'dueno' ? 'Configuración' : fmtWhen(m.addedAt)}</td>
+                  <td style={{ fontSize: 13 }}>{m.role === 'dueno' ? 'Desde el inicio' : fmtWhen(m.addedAt)}</td>
                   <td style={{ fontSize: 13 }}>{m.lastSeen ? fmtWhen(m.lastSeen) : '—'}</td>
                   <td>{m.role !== 'dueno' && <button type="button" className="adm-btn danger" disabled={busy || muestra} onClick={() => remove(m.email)}>Quitar</button>}</td>
                 </tr>

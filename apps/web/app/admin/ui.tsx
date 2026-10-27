@@ -115,7 +115,19 @@ export function Loading() {
 
 /* -------------------------------- Indicadores -------------------------------- */
 
-export function Kpi({ label, value, hint, accent, onClick, href }: { label: string; value: React.ReactNode; hint?: React.ReactNode; accent?: boolean; onClick?: () => void; href?: string }) {
+export function Kpi({ label, value, hint, accent, onClick, href, detail, selected }: { label: string; value: React.ReactNode; hint?: React.ReactNode; accent?: boolean; onClick?: () => void; href?: string; detail?: () => void; selected?: boolean }) {
+  if (detail) {
+    // Tarjeta que filtra la curva al tocarla; «Ver reservas» abre la lista.
+    return (
+      <div role="button" tabIndex={0} aria-pressed={!!selected} onClick={onClick} onKeyDown={(e) => { if (e.key === 'Enter') onClick?.(); }} className={`adm-kpi click${accent ? ' accent' : ''}${selected ? ' selected' : ''}`}>
+        <span>{label}</span><b>{value}</b>{hint && <small>{hint}</small>}
+        <span className="row gap-8" style={{ justifyContent: 'space-between' }}>
+          <i className="adm-kpi-go">{selected ? 'En la curva ✓' : 'Ver en la curva'}</i>
+          <button type="button" className="adm-kpi-link" onClick={(e) => { e.stopPropagation(); detail(); }}>Ver reservas →</button>
+        </span>
+      </div>
+    );
+  }
   const body = <><span>{label}</span><b>{value}</b>{hint && <small>{hint}</small>}{(onClick || href) && <i className="adm-kpi-go" aria-hidden="true">Ver detalle →</i>}</>;
   if (href) return <Link href={href} className={`adm-kpi click${accent ? ' accent' : ''}`}>{body}</Link>;
   if (onClick) return <button type="button" onClick={onClick} className={`adm-kpi click${accent ? ' accent' : ''}`}>{body}</button>;
@@ -324,7 +336,25 @@ export function BookingDetail({ b, onClose }: { b: DashBooking; onClose: () => v
           <dt>Forma de pago</dt><dd>{b.paymentMethod || '—'}</dd>
         </dl>
       </div>
-      {b.claim && can('reclamos') && <Link className="adm-btn solid" href={`/admin/reclamos?caso=${encodeURIComponent(b.id)}`}>Abrir el expediente del reclamo</Link>}
+      {b.claim && (
+        <div className="adm-card" style={{ borderLeft: '5px solid #6A3A8C' }}>
+          <h3 style={{ marginBottom: 10 }}>Reclamo</h3>
+          <dl className="adm-kv">
+            <dt>Lo abrió</dt><dd>{b.claim.openedBy === 'profesional' ? 'El profesional' : 'El cliente'}</dd>
+            {b.claim.kindLabel && <><dt>Motivo</dt><dd>{b.claim.kindLabel}</dd></>}
+            <dt>Estado</dt><dd>{b.claim.status === 'resuelto' ? 'Resuelto' : b.claim.status === 'esperando_respuesta' ? 'Esperando la respuesta de la otra parte' : 'En revisión de HULUL'}</dd>
+            {b.claim.openedAt && <><dt>Abierto</dt><dd>{fmtWhen(b.claim.openedAt)}</dd></>}
+            {b.claim.resolveDueAt && b.claim.status !== 'resuelto' && <><dt>HULUL decide hasta</dt><dd>{fmtWhen(b.claim.resolveDueAt)}</dd></>}
+            {b.claim.outcome && <><dt>Decisión</dt><dd>A favor del {b.claim.outcome === 'cliente' ? 'cliente' : 'profesional'}</dd></>}
+          </dl>
+          {b.claim.text && <div className="adm-quote" style={{ borderColor: '#6A3A8C', marginTop: 10 }}><p>«{b.claim.text}»</p><small>Lo que escribió {b.claim.openedBy === 'profesional' ? 'el profesional' : 'el cliente'}</small></div>}
+          {b.claim.response && <div className="adm-quote" style={{ borderColor: '#9AA8A5', marginTop: 8 }}><p>«{b.claim.response}»</p><small>Respuesta de la otra parte</small></div>}
+          {b.claim.decisionNote && <p className="muted" style={{ fontSize: 13, margin: '8px 0 0' }}>Motivo de la decisión: {b.claim.decisionNote}</p>}
+          {b.claim.formal === false && <p className="muted" style={{ fontSize: 12.5, margin: '8px 0 0' }}>Reclamo anterior al expediente: se resuelve en la consola o pidiendo que lo vuelvan a abrir.</p>}
+          {can('reclamos') && b.claim.formal !== false && <Link className="adm-btn solid" style={{ marginTop: 12, justifySelf: 'start' }} href={`/admin/reclamos?caso=${encodeURIComponent(b.id)}`}>Abrir el expediente completo (chat, evidencia, decidir)</Link>}
+        </div>
+      )}
+      {can('reclamos') && <BookingPhotos b={b} />}
     </Drawer>
   );
 }
@@ -344,5 +374,197 @@ export function BookingListDrawer({ title, ids, onClose }: { title: string; ids:
       {list.length ? <div className="adm-grid" style={{ gap: 10 }}>{list.map((b) => <BookingCard key={b.id} b={b} onOpen={setOpen} showStage />)}</div>
         : <div className="adm-empty">No hay reservas en este grupo.</div>}
     </Drawer>
+  );
+}
+
+/* --------------------------- Mini CRM de reservas (tarjetas) --------------------------- */
+
+type CrmView = 'fecha' | 'tablero' | 'linea';
+const CRM_VIEWS: { key: CrmView; label: string }[] = [{ key: 'fecha', label: 'Por fecha' }, { key: 'tablero', label: 'Tablero' }, { key: 'linea', label: 'Línea de tiempo' }];
+
+/**
+ * Reservas de una persona (profesional o cliente) como mini CRM: filtro por etapa,
+ * vista por fecha, tablero por etapa (tipo Bitrix) o línea de tiempo por día (tipo Gantt).
+ */
+export function BookingsCrm({ bookings }: { bookings: DashBooking[] }) {
+  const [view, setView] = useState<CrmView>('fecha');
+  const [stage, setStage] = useState<Stage | 'todas'>('todas');
+  const [open, setOpen] = useState<DashBooking | null>(null);
+  const counts = STAGES_ALL.map((s) => ({ ...s, n: bookings.filter((b) => stageOf(b) === s.key).length }));
+  const list = bookings.filter((b) => stage === 'todas' || stageOf(b) === stage).sort((a, z) => (z.at ?? 0) - (a.at ?? 0));
+  const byDay = new Map<string, DashBooking[]>();
+  for (const b of list) byDay.set(b.date, [...(byDay.get(b.date) ?? []), b]);
+  const days = [...byDay.entries()];
+
+  return (
+    <div className="adm-grid" style={{ gap: 12 }}>
+      <div className="adm-bar" style={{ justifyContent: 'space-between' }}>
+        <div className="adm-bar" role="group" aria-label="Etapa">
+          <button type="button" className="adm-chip" aria-pressed={stage === 'todas'} onClick={() => setStage('todas')}>Todas ({bookings.length})</button>
+          {counts.map((s) => <button key={s.key} type="button" className="adm-chip" aria-pressed={stage === s.key} onClick={() => setStage(s.key)} disabled={!s.n}>{s.label} ({s.n})</button>)}
+        </div>
+        <div className="adm-bar" role="group" aria-label="Vista">
+          {CRM_VIEWS.map((v) => <button key={v.key} type="button" className="adm-chip" aria-pressed={view === v.key} onClick={() => setView(v.key)}>{v.label}</button>)}
+        </div>
+      </div>
+      {!list.length ? <div className="adm-card adm-empty">Sin reservas con este filtro en el periodo.</div> : view === 'fecha' ? (
+        days.map(([day, items]) => (
+          <section key={day} className="adm-grid" style={{ gap: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 14.5, textTransform: 'capitalize' }}>{fmtDay(day)} <span className="muted" style={{ fontWeight: 600 }}>· {items.length}</span></h3>
+            <div className="adm-cards">{items.sort((a, z) => (a.at ?? 0) - (z.at ?? 0)).map((b) => <BookingCard key={b.id} b={b} onOpen={setOpen} showStage />)}</div>
+          </section>
+        ))
+      ) : view === 'tablero' ? (
+        <div className="adm-board">
+          {STAGES_ALL.filter((s) => stage === 'todas' || s.key === stage).map((s) => {
+            const col = list.filter((b) => stageOf(b) === s.key);
+            return (
+              <section key={s.key} className="adm-col" aria-label={s.label}>
+                <div className="adm-col-head" style={{ ['--c' as string]: STAGE_COLOR[s.key] }}><span>{s.label} <small>· {col.length}</small></span></div>
+                <div className="adm-col-body">{col.length ? col.map((b) => <BookingCard key={b.id} b={b} onOpen={setOpen} />) : <p className="muted" style={{ fontSize: 13, margin: 4 }}>Nada aquí.</p>}</div>
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <Gantt days={days} onOpen={setOpen} />
+      )}
+      {open && <BookingDetail b={open} onClose={() => setOpen(null)} />}
+    </div>
+  );
+}
+
+const STAGES_ALL: { key: Stage; label: string }[] = [
+  { key: 'programada', label: 'Programadas' }, { key: 'ejecucion', label: 'En ejecución' }, { key: 'ejecutada', label: 'Completadas' },
+  { key: 'reclamo', label: 'En reclamo' }, { key: 'cancelada', label: 'Canceladas' },
+];
+
+/** Línea de tiempo: una fila por día, cada reserva como barra según su hora y duración. */
+function Gantt({ days, onOpen }: { days: [string, DashBooking[]][]; onOpen: (b: DashBooking) => void }) {
+  const H0 = 6, H1 = 23, span = H1 - H0;
+  const hourOf = (b: DashBooking) => { const [h, m] = b.slot.split(':').map(Number); return (h || 0) + (m || 0) / 60; };
+  const durOf = (b: DashBooking) => {
+    const start = b.startedAt ?? b.arrivedAt; const end = b.finishedAt;
+    return start && end && end > start ? Math.min(8, Math.max(0.5, (end - start) / 3_600_000)) : 1.5;
+  };
+  return (
+    <div className="adm-card adm-gantt">
+      <div className="adm-gantt-row adm-gantt-axis">
+        <span />
+        <div className="adm-gantt-track">{Array.from({ length: span / 2 + 1 }, (_, i) => H0 + i * 2).map((h) => <i key={h} style={{ left: `${((h - H0) / span) * 100}%` }}>{String(h).padStart(2, '0')}:00</i>)}</div>
+      </div>
+      {days.map(([day, items]) => (
+        <div key={day} className="adm-gantt-row">
+          <span style={{ textTransform: 'capitalize' }}>{fmtDay(day)}</span>
+          <div className="adm-gantt-track">
+            {items.map((b) => {
+              const left = Math.max(0, Math.min(100, ((hourOf(b) - H0) / span) * 100));
+              const width = Math.max(4, Math.min(100 - left, (durOf(b) / span) * 100));
+              const st = stageOf(b);
+              return (
+                <button key={b.id} type="button" className="adm-gantt-bar" title={`${b.code} · ${b.slot} · ${catName(b.category)} · ${STATUS_LABEL[b.status] ?? b.status}`}
+                  style={{ left: `${left}%`, width: `${width}%`, background: STAGE_COLOR[st] }} onClick={() => onOpen(b)}>
+                  {b.slot} {b.code}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      <div className="adm-bar" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>
+        {STAGES_ALL.map((s) => <span key={s.key} className="row gap-4"><i style={{ width: 10, height: 10, borderRadius: 3, background: STAGE_COLOR[s.key], display: 'inline-block' }} />{s.label}</span>)}
+      </div>
+    </div>
+  );
+}
+
+/** Fotos del pedido y del trabajo, cargadas solo al pedirlas (dueño y socio). */
+export function BookingPhotos({ b }: { b: DashBooking }) {
+  const [show, setShow] = useState(false);
+  const req = b.photoUrls?.request ?? []; const work = b.photoUrls?.work ?? [];
+  if (!req.length && !work.length) return null;
+  return (
+    <div className="adm-card">
+      <h3 style={{ marginBottom: 6 }}>Fotos</h3>
+      <p className="muted" style={{ fontSize: 12.5, margin: '0 0 10px' }}>Son de la casa del cliente: ábrelas solo para revisar la calidad o un reclamo.</p>
+      {!show ? <button type="button" className="adm-btn" onClick={() => setShow(true)}>Ver {req.length + work.length} fotos</button> : (
+        <div className="adm-grid" style={{ gap: 10 }}>
+          {[['Lo que pidió el cliente', req], ['Trabajo terminado (profesional)', work]].filter(([, u]) => (u as string[]).length).map(([label, urls]) => (
+            <div key={label as string} className="adm-grid" style={{ gap: 6 }}>
+              <small style={{ fontWeight: 700 }}>{label as string}</small>
+              <div className="adm-photos">{(urls as string[]).map((u) => <a key={u} href={u} target="_blank" rel="noreferrer"><img src={u} alt={label as string} loading="lazy" /></a>)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------ Curva de dinero (tipo trading) ------------------------------ */
+
+export type FlowKey = 'inflow' | 'card' | 'outflow' | 'net' | 'projected';
+const FLOW_SERIES = [
+  { key: 'inflow', label: 'Ingreso (todos los medios)', color: '#206344' },
+  { key: 'card', label: 'Ingreso por tarjeta', color: '#3E8E6A', dash: true },
+  { key: 'outflow', label: 'Salida', color: '#B42318' },
+  { key: 'net', label: 'Queda para HULUL', color: '#123F43' },
+  { key: 'projected', label: 'Por cobrar (proyección)', color: '#1F4E79', dash: true },
+] as const;
+
+/** Entradas, salidas, neto y proyección en el tiempo. Toca un punto para ver sus reservas. */
+export function FlowChart({ points, gran, onPick, labels, only, onOnly }: { labels?: Partial<Record<FlowKey, string>>; only?: FlowKey[] | null; onOnly?: (k: FlowKey[] | null) => void; points: { key: string; from: string; to: string; inflow: number; card: number; outflow: number; net: number; projected: number; ids: string[] }[]; gran: 'dia' | 'semana' | 'mes'; onPick: (title: string, ids: string[]) => void }) {
+  const SERIES = FLOW_SERIES.map((x) => ({ ...x, label: labels?.[x.key] ?? x.label }));
+  const [hover, setHover] = useState<number | null>(null);
+  const [ownHidden, setOwnHidden] = useState<string[]>([]);
+  const hidden = only ? SERIES.map((x) => x.key as string).filter((k) => !only.includes(k as FlowKey)) : ownHidden;
+  const setHidden = (f: (h: string[]) => string[]) => { if (only && onOnly) onOnly(null); setOwnHidden(f(hidden)); };
+  const series = SERIES.filter((x) => !labels || x.key !== 'card' || labels.card);
+  if (!points.length) return <div className="adm-empty">Sin movimientos en este periodo.</div>;
+  const W = 1000, H = 260, L = 74, R = 12, T = 12, B = 34;
+  const vals = points.flatMap((p) => series.filter((s) => !hidden.includes(s.key)).map((s) => p[s.key]));
+  const max = Math.max(1, ...vals); const min = Math.min(0, ...vals);
+  const x = (i: number) => L + (points.length === 1 ? (W - L - R) / 2 : (i / (points.length - 1)) * (W - L - R));
+  const y = (v: number) => T + (1 - (v - min) / (max - min)) * (H - T - B);
+  const label = (p: { from: string; to: string }) => (gran === 'mes' ? new Date(`${p.from}T12:00:00Z`).toLocaleDateString('es-EC', { timeZone: 'UTC', month: 'short', year: '2-digit' }) : fmtWeek(p.from));
+  const ticks = Array.from({ length: 5 }, (_, i) => min + ((max - min) * i) / 4);
+  const every = Math.max(1, Math.ceil(points.length / 10));
+  const h = hover !== null ? points[hover] : null;
+  return (
+    <div className="adm-flowchart">
+      <div className="adm-bar" style={{ fontSize: 12.5 }}>
+        {series.map((s) => (
+          <button key={s.key} type="button" className="adm-legend-btn" aria-pressed={!hidden.includes(s.key)} onClick={() => setHidden((h) => (h.includes(s.key) ? h.filter((k) => k !== s.key) : [...h, s.key]))}>
+            <i style={{ background: s.color, opacity: hidden.includes(s.key) ? .3 : 1 }} />{s.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ position: 'relative' }}>
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Curva de entradas y salidas" onMouseLeave={() => setHover(null)}>
+          {ticks.map((t) => <g key={t}><line x1={L} x2={W - R} y1={y(t)} y2={y(t)} stroke="#E4E9E7" /><text x={L - 6} y={y(t) + 4} textAnchor="end" fontSize="11" fill="var(--muted)">{money(t).replace(',00', '')}</text></g>)}
+          {min < 0 && <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} stroke="#9AA8A5" />}
+          {!hidden.includes('inflow') && <path d={`M${x(0)},${y(0)} ${points.map((p, i) => `L${x(i)},${y(p.inflow)}`).join(' ')} L${x(points.length - 1)},${y(0)} Z`} fill="#206344" opacity=".08" />}
+          {series.filter((s) => !hidden.includes(s.key)).map((s) => (
+            <path key={s.key} d={points.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(p[s.key])}`).join(' ')} fill="none" stroke={s.color} strokeWidth={s.key === 'net' ? 2.6 : 2} strokeDasharray={'dash' in s ? '6 5' : undefined} strokeLinejoin="round" />
+          ))}
+          {points.map((p, i) => (
+            <g key={p.key}>
+              {i % every === 0 && <text x={x(i)} y={H - 10} textAnchor="middle" fontSize="11" fill="var(--muted)">{label(p)}</text>}
+              <rect x={x(i) - (W - L - R) / Math.max(1, points.length) / 2} y={T} width={(W - L - R) / Math.max(1, points.length)} height={H - T - B} fill="transparent"
+                style={{ cursor: p.ids.length ? 'pointer' : 'default' }} onMouseEnter={() => setHover(i)} onClick={() => p.ids.length && onPick(`${gran === 'dia' ? fmtDay(p.from) : `${fmtWeek(p.from)} – ${fmtWeek(p.to)}`}`, p.ids)} />
+            </g>
+          ))}
+          {h && <line x1={x(hover!)} x2={x(hover!)} y1={T} y2={H - B} stroke="#9AA8A5" strokeDasharray="3 3" />}
+          {h && series.filter((s) => !hidden.includes(s.key)).map((s) => <circle key={s.key} cx={x(hover!)} cy={y(h[s.key])} r="4" fill={s.color} />)}
+        </svg>
+        {h && (
+          <div className="adm-flowtip" style={{ left: `${(x(hover!) / W) * 100}%` }}>
+            <b>{gran === 'dia' ? fmtDay(h.from) : `${fmtWeek(h.from)} – ${fmtWeek(h.to)}`}</b>
+            {series.map((s) => <span key={s.key}><i style={{ background: s.color }} />{s.label}: {money(h[s.key])}</span>)}
+            {h.ids.length > 0 && <small>Toca para ver {h.ids.length} reservas</small>}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

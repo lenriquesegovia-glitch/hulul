@@ -13,11 +13,17 @@
 export interface DashClaimRef {
   status: string; openedBy: string; kind: string; kindLabel: string; outcome: string;
   openedAt: number | null; resolveDueAt: number | null;
+  /** Textos (moderados) del reclamo, la respuesta y la decisión: solo dueño y socio. */
+  text?: string; response?: string; decisionNote?: string;
+  /** false = reclamo antiguo sin expediente (solo en la reserva). */
+  formal?: boolean;
 }
 
 export interface DashBooking {
   id: string; code: string; date: string; slot: string; at: number | null; createdAt: number | null;
   acceptedAt?: number | null; enRouteAt?: number | null; ratingText?: string;
+  /** Fotos del pedido y del trabajo (solo dueño y socio). */
+  photoUrls?: { request: string[]; work: string[] };
   category: string; status: string; demo: boolean; source: string;
   clientId: string; clientName: string; clientPhone: string; proId: string; proName: string;
   paymentMethod: string; visit: number; surcharge: number; surchargeKind: string; fee: number; iva: number; total: number; taxRegime: string;
@@ -85,8 +91,8 @@ export const ROLE_PERMS: Record<AdminRole, AdminPerm[]> = {
 };
 
 export const ROLE_INFO: Record<AdminRole, { label: string; help: string }> = {
-  dueno: { label: 'Dueño', help: 'Todo el panel y el equipo (dar y quitar accesos).' },
-  socio: { label: 'Socio', help: 'Todo el panel: decide reclamos, aprueba profesionales y marca pagos. No gestiona el equipo.' },
+  dueno: { label: 'Socio 1', help: 'Todo el panel y el equipo (dar y quitar accesos).' },
+  socio: { label: 'Socio 2', help: 'Todo el panel: decide reclamos, aprueba profesionales y marca pagos. No gestiona el equipo.' },
   contabilidad: { label: 'Contabilidad', help: 'Resumen, Contabilidad y Proveedores (facturas y RUC). Exporta y marca liquidaciones pagadas.' },
   cumplimiento: { label: 'Oficial de cumplimiento (UAFE)', help: 'Solo lectura: reservas, clientes, proveedores, contabilidad y alertas de cumplimiento. Sin reclamos ni chats.' },
 };
@@ -371,6 +377,7 @@ export const KIND_LABEL: Record<string, string> = {
   adicional: 'Factura del profesional (adicional)', adicional_comision: 'Comisión del adicional', adicional_comision_iva: 'IVA comisión adicional',
   cargo_cancelacion: 'Cancelación / ausente (profesional)', cargo_cancelacion_hulul: 'Cancelación / ausente (HULUL)', multa: 'Multa al profesional',
   credito_cliente: 'Crédito al cliente', retencion_renta: 'Retención de renta', retencion_iva: 'Retención de IVA',
+  abono_profesional: 'Pago recibido del profesional (deuda de efectivo)',
 };
 
 export interface Accounting {
@@ -443,6 +450,8 @@ export function accounting(data: Pick<DashData, 'ledger' | 'payouts' | 'bookings
 export interface ProviderInvoice {
   bookingId: string; code: string; date: string; category: string; clientName: string;
   base: number; iva: number; total: number; commission: number; commissionIva: number; reversed: boolean;
+  /** Calculada desde la reserva porque no tiene movimientos (reserva de prueba o anterior al libro). */
+  estimated?: boolean;
 }
 
 export interface ProviderStats {
@@ -475,6 +484,16 @@ export function providerInvoices(uid: string, data: Pick<DashData, 'ledger' | 'b
       commission: sum(['comision', 'adicional_comision'], (e) => e.amount), commissionIva: sum(['comision_iva', 'adicional_comision_iva'], (e) => e.amount),
       reversed: total === 0,
     });
+  }
+  // Reservas completadas sin movimientos en el libro (pruebas o anteriores al libro): se estiman.
+  const withLedger = new Set(out.map((i) => i.bookingId));
+  for (const b of data.bookings) {
+    if (b.proId !== uid || b.status !== 'completada' || withLedger.has(b.id) || (range && !inRange(b.date, range))) continue;
+    const extra = b.extra && ['por_cobrar', 'pagado', 'pagado_tarjeta', 'pagado_efectivo'].includes(b.extra.status) ? b.extra.amount : 0;
+    const base = r2(b.visit + b.surcharge + extra);
+    const iva = b.taxRegime === 'rimpe_popular' ? 0 : r2(base * 0.15);
+    const commission = r2(base * COMMISSION);
+    out.push({ bookingId: b.id, code: b.code, date: b.date, category: b.category, clientName: b.clientName, base, iva, total: r2(base + iva), commission, commissionIva: r2(commission * 0.15), reversed: false, estimated: true });
   }
   return out.sort((a, b) => b.date.localeCompare(a.date));
 }
@@ -843,7 +862,10 @@ export function journal(data: Pick<DashData, 'ledger' | 'payouts' | 'bookings' |
     const payer: AccountKey = e.proDelta < 0 ? 'terceros' : 'cxcClientes';
     const payerName = e.proDelta < 0 ? proName : (b?.clientName || 'Cliente');
     switch (e.bucket) {
-      case 'recaudo': push(date, entry, 'bancos', 'cxcClientes', e.amount, b?.clientName || 'Cliente', label); break;
+      case 'recaudo':
+        if (e.kind === 'abono_profesional') push(date, entry, 'bancos', 'terceros', e.amount, proName, label);
+        else push(date, entry, 'bancos', 'cxcClientes', e.amount, b?.clientName || 'Cliente', label);
+        break;
       case 'terceros':
         // Si el profesional cobró en efectivo, HULUL no recibe ese dinero: no hay asiento.
         if (e.proDelta) push(date, entry, 'cxcClientes', 'terceros', e.proDelta, proName, label);
@@ -893,4 +915,105 @@ export function hululSales(data: Pick<DashData, 'ledger' | 'bookings' | 'provide
     rows.set(key, r);
   }
   return [...rows.values()].filter((r) => r.base || r.iva).map((r) => ({ ...r, total: r2(r.base + r.iva) })).sort((a, z) => a.date.localeCompare(z.date));
+}
+
+/* ------------------------------ Flujo de dinero (periodo) ------------------------------ */
+
+export const PAY_LABEL: Record<string, string> = { tarjeta: 'Tarjeta', efectivo: 'Efectivo', deuna: 'DeUna', transferencia: 'Transferencia' };
+const payKey = (m: string) => (PAY_LABEL[m] ? m : 'otro');
+
+/** Lo cobrado al cliente por una reserva ya cerrada (completada o con cargo de cancelación). */
+const collectedOf = (b: DashBooking) => (b.status === 'completada' || b.status === 'en_disputa' ? bookingMoney(b).gross : b.status === 'cancelada' ? r2(b.cancelFee) : 0);
+/** Lo que sale: la parte del profesional más el crédito que se devuelve al cliente. */
+const outOf = (b: DashBooking) => (b.status === 'completada' || b.status === 'en_disputa' || (b.status === 'cancelada' && b.cancelFee > 0) ? Math.max(0, bookingMoney(b).pro) : 0) + r2(b.clientCredit);
+const isOpen = (b: DashBooking) => ['programada', 'ejecucion'].includes(stageOf(b));
+
+/** Con tarjeta el dinero entra a la cuenta de HULUL (pasarela); con otros medios lo recibe el profesional. */
+export const BANK_METHODS = ['tarjeta'];
+const toBank = (b: DashBooking) => BANK_METHODS.includes(b.paymentMethod);
+
+export interface MoneyFlow {
+  /** Todo lo cobrado a clientes, por cualquier medio (incluye el dinero de los profesionales). */
+  inflow: { total: number; ids: string[] };
+  /** Entró a la cuenta de HULUL (debe cuadrar con el banco y la pasarela). */
+  bank: { total: number; ids: string[] };
+  /** Lo cobró el profesional en mano; de eso HULUL debe recibir su parte (se descuenta el lunes). */
+  direct: { total: number; hululShare: number; byMethod: { method: string; label: string; amount: number; ids: string[] }[]; ids: string[] };
+  receivable: { total: number; count: number; ids: string[] };
+  /** Salida: la parte de los profesionales (todos los medios) y los créditos a clientes. */
+  outflow: { total: number; toPros: number; credits: number; ids: string[] };
+  net: { total: number; projected: number };
+}
+
+export function moneyFlow(all: DashBooking[], range: DateRange): MoneyFlow {
+  const rows = all.filter((b) => inRange(b.date, range));
+  const methods = new Map<string, { amount: number; ids: string[] }>();
+  let bank = 0, direct = 0, hululShare = 0, toPros = 0, credits = 0, receivable = 0, net = 0, projected = 0;
+  const bankIds: string[] = [], directIds: string[] = [], recIds: string[] = [], outIds: string[] = [];
+  for (const b of rows) {
+    const got = collectedOf(b);
+    if (got > 0) {
+      const m = bookingMoney(b);
+      net = r2(net + m.hulul);
+      toPros = r2(toPros + Math.max(0, m.pro)); outIds.push(b.id);
+      if (toBank(b)) { bank = r2(bank + got); bankIds.push(b.id); }
+      else {
+        direct = r2(direct + got); hululShare = r2(hululShare + m.hulul); directIds.push(b.id);
+        const k = payKey(b.paymentMethod); const x = methods.get(k) ?? { amount: 0, ids: [] }; x.amount = r2(x.amount + got); x.ids.push(b.id); methods.set(k, x);
+      }
+    }
+    if (b.clientCredit > 0) { credits = r2(credits + b.clientCredit); net = r2(net - b.clientCredit); if (!outIds.includes(b.id)) outIds.push(b.id); }
+    if (isOpen(b)) { const m = bookingMoney(b); receivable = r2(receivable + m.gross); projected = r2(projected + m.hulul); recIds.push(b.id); }
+  }
+  return {
+    inflow: { total: r2(bank + direct), ids: [...bankIds, ...directIds] },
+    bank: { total: bank, ids: bankIds },
+    direct: { total: direct, hululShare, ids: directIds, byMethod: [...methods.entries()].map(([method, v]) => ({ method, label: PAY_LABEL[method] ?? 'Otro', ...v })).sort((a, z) => z.amount - a.amount) },
+    receivable: { total: receivable, count: recIds.length, ids: recIds },
+    outflow: { total: r2(toPros + credits), toPros, credits, ids: outIds },
+    net: { total: net, projected },
+  };
+}
+
+export type Granularity = 'dia' | 'semana' | 'mes';
+export interface FlowPoint { key: string; from: string; to: string; inflow: number; card: number; outflow: number; net: number; projected: number; ids: string[] }
+
+/** Serie para la curva: entradas, salidas y neto ya cerrados, y proyección de lo programado. */
+export function cashSeries(all: DashBooking[], range: DateRange, gran: Granularity): FlowPoint[] {
+  const keyOf = (d: string) => (gran === 'dia' ? d : gran === 'semana' ? mondayOf(d) : `${d.slice(0, 7)}-01`);
+  const next = (k: string) => (gran === 'dia' ? addDays(k, 1) : gran === 'semana' ? addDays(k, 7) : (() => { const [y, m] = k.split('-').map(Number); return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`; })());
+  const rows = all.filter((b) => inRange(b.date, range));
+  if (!rows.length && !(range.from > '1900' && range.to < '9000')) return [];
+  const dates = rows.map((b) => b.date).sort();
+  const start = keyOf(range.from > '1900' ? range.from : dates[0]);
+  if (!start) return [];
+  const endDate = range.to < '9000' ? range.to : dates[dates.length - 1];
+  const pts = new Map<string, FlowPoint>();
+  for (let k = start, i = 0; k <= endDate && i < 400; k = next(k), i++) pts.set(k, { key: k, from: k, to: addDays(next(k), -1), inflow: 0, card: 0, outflow: 0, net: 0, projected: 0, ids: [] });
+  for (const b of rows) {
+    const p = pts.get(keyOf(b.date)); if (!p) continue;
+    const got = collectedOf(b);
+    if (got > 0 || b.clientCredit > 0) {
+      p.inflow = r2(p.inflow + got); p.outflow = r2(p.outflow + outOf(b));
+      if (toBank(b)) p.card = r2(p.card + got);
+      p.net = r2(p.net + (got > 0 ? bookingMoney(b).hulul : 0) - b.clientCredit); p.ids.push(b.id);
+    }
+    if (isOpen(b)) { p.projected = r2(p.projected + bookingMoney(b).gross); p.ids.push(b.id); }
+  }
+  return [...pts.values()];
+}
+
+/** Serie para proveedores: cobrado por sus servicios, parte de HULUL, parte del profesional y lo programado. */
+export function providerSeries(all: DashBooking[], range: DateRange, gran: Granularity): FlowPoint[] {
+  const base = cashSeries([], range, gran);
+  const keyOf = (d: string) => (gran === 'dia' ? d : gran === 'semana' ? mondayOf(d) : `${d.slice(0, 7)}-01`);
+  const rows = all.filter((b) => inRange(b.date, range));
+  const pts = new Map((base.length ? base : cashSeries(rows, range, gran)).map((p) => [p.key, { ...p, inflow: 0, card: 0, outflow: 0, net: 0, projected: 0, ids: [] as string[] }]));
+  for (const b of rows) {
+    const p = pts.get(keyOf(b.date)); if (!p) continue;
+    const got = collectedOf(b);
+    if (got > 0) { const m = bookingMoney(b); p.inflow = r2(p.inflow + got); if (toBank(b)) p.card = r2(p.card + got); p.outflow = r2(p.outflow + m.hulul); p.net = r2(p.net + Math.max(0, m.pro)); p.ids.push(b.id); }
+    if (isOpen(b)) { p.projected = r2(p.projected + bookingMoney(b).gross); p.ids.push(b.id); }
+  }
+  return [...pts.values()];
 }

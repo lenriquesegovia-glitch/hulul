@@ -288,6 +288,17 @@ export async function clientBookings(uid: string): Promise<ClientBooking[]> {
   return list.sort((a, b) => (a.date + a.slot < b.date + b.slot ? 1 : -1));
 }
 
+/**
+ * Reserva terminada que el cliente aún no calificó (la más reciente). Mientras
+ * exista, no puede hacer otra reserva: la app y la web le piden calificar primero
+ * y el servidor anula una reserva nueva si llega sin esa calificación.
+ */
+export function pendingRating(list: ClientBooking[]): ClientBooking | null {
+  return list
+    .filter((b) => ['completada', 'por_aprobar'].includes(b.status) && !b.rating && b.extra?.status !== 'propuesto')
+    .sort((a, b) => (a.date + a.slot < b.date + b.slot ? 1 : -1))[0] ?? null;
+}
+
 export const BOOKING_STATUS_LABEL: Record<string, string> = {
   pendiente: 'Por confirmar', confirmada: 'Confirmada', en_camino: 'En camino', en_curso: 'En curso',
   por_aprobar: 'Por aprobar', completada: 'Completada', cancelada: 'Cancelada', en_disputa: 'En revisión',
@@ -888,4 +899,19 @@ export async function adminBankFile(week: string): Promise<BankFileResult> {
 /** Marca pagado el lote de una semana con la referencia u orden del banco. */
 export async function adminMarkBatchPaid(week: string, reference: string): Promise<number> {
   return (await callable<{ week: string; reference: string }, { ok: boolean; count: number }>('marcarLotePagado')({ week, reference })).data.count;
+}
+
+/* ------------------------ Estado de cuenta y deudas de profesionales ------------------------ */
+
+/** PDF del estado de cuenta de un profesional (base64). Fechas AAAA-MM-DD; por defecto últimos 30 días. */
+export async function adminStatementPdf(proId: string, range?: { desde?: string; hasta?: string }): Promise<{ fileName: string; content: string }> {
+  return (await callable<{ proId: string; desde?: string; hasta?: string }, { fileName: string; content: string }>('estadoCuentaPdf')({ proId, ...range })).data;
+}
+/** Envía ahora el estado de cuenta (PDF) al correo del profesional. */
+export async function adminSendStatement(proId: string): Promise<string> {
+  return (await callable<{ proId: string }, { ok: boolean; email: string }>('enviarEstadoCuenta')({ proId })).data.email;
+}
+/** Registra que el profesional pagó a HULUL su deuda (transferencia o DeUna). Devuelve lo que aún debe. */
+export async function adminRegisterProPayment(proId: string, amount: number, reference: string): Promise<number> {
+  return (await callable<{ proId: string; amount: number; reference: string }, { ok: boolean; debt: number }>('registrarAbono')({ proId, amount, reference })).data.debt;
 }

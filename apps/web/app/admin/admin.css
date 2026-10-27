@@ -245,3 +245,32 @@ body:has(.adm) .cookie-banner { display: none; }
 .adm-meter { height: 10px; border-radius: 999px; background: #EEF1F0; overflow: hidden; display: flex; }
 .adm-meter span { height: 100%; }
 .adm-help { background: var(--info-soft); color: var(--info); border-radius: 12px; padding: 12px 14px; font-size: 13.5px; display: grid; gap: 4px; }
+.adm-gantt { display: grid; gap: 6px; overflow-x: auto; }
+.adm-gantt-row { display: grid; grid-template-columns: 110px minmax(520px, 1fr); gap: 10px; align-items: center; font-size: 13px; }
+.adm-gantt-track { position: relative; height: 30px; background: repeating-linear-gradient(90deg, #EEF1F0 0 1px, transparent 1px calc(100% / 8.5)); border-radius: 8px; }
+.adm-gantt-axis .adm-gantt-track { height: 18px; background: none; }
+.adm-gantt-axis i { position: absolute; font-style: normal; font-size: 11px; color: var(--muted); transform: translateX(-50%); }
+.adm-gantt-bar { position: absolute; top: 3px; height: 24px; border: none; border-radius: 6px; color: #fff; font: inherit; font-size: 11.5px; font-weight: 700; padding: 0 6px; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; }
+.adm-gantt-bar:hover { filter: brightness(1.15); }
+.adm-photos { display: flex; flex-wrap: wrap; gap: 8px; }
+.adm-photos img { width: 96px; height: 96px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
+.adm-link-btn { background: none; border: none; padding: 0; font: inherit; font-weight: 800; cursor: pointer; text-decoration: underline; }
+.adm-flowchart { display: grid; gap: 8px; }
+.adm-legend-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12.5px; cursor: pointer; color: var(--text); }
+.adm-legend-btn i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.adm-legend-btn[aria-pressed="false"] { color: var(--muted); }
+.adm-flowtip { position: absolute; top: 6px; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; display: grid; gap: 3px; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.08); min-width: 190px; z-index: 2; }
+.adm-flowtip span { display: flex; align-items: center; gap: 6px; }
+.adm-flowtip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.adm-flowtip small { color: var(--muted); }
+.adm-stack { display: grid; gap: 16px; align-content: start; }
+
+.adm-catrow { display: grid; grid-template-columns: minmax(100px, 170px) minmax(0, 1fr) 56px; gap: 10px; align-items: center; font-size: 13.5px; }
+.adm-catrow b { text-align: right; font-variant-numeric: tabular-nums; }
+.adm-catbar { display: flex; height: 26px; border-radius: 7px; overflow: hidden; min-width: 36px; }
+.adm-catbar button { border: none; color: #fff; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; min-width: 18px; padding: 0 4px; }
+.adm-catbar button:hover { filter: brightness(1.12); }
+
+.adm-kpi.selected { box-shadow: 0 0 0 2px var(--primary); }
+.adm-kpi.accent.selected { box-shadow: 0 0 0 3px #7FB6A6; }
+.adm-kpi-link { background: none; border: none; padding: 0; font: inherit; font-size: 11.5px; font-weight: 800; color: inherit; text-decoration: underline; cursor: pointer; }
