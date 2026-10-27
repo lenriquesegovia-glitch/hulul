@@ -316,6 +316,8 @@ export function executive(all: DashBooking[], range: DateRange): Executive {
     cl.count += 1;
     if (st === 'programada' || st === 'ejecucion') projected = r2(projected + m.gross);
     if (b.status === 'completada') { gross = r2(gross + m.gross); hulul = r2(hulul + m.hulul); pro = r2(pro + m.pro); done += 1; c.gross = r2(c.gross + m.gross); p.done += 1; }
+    // En reclamo: el cliente ya pagó; el dinero está retenido, pero entró.
+    else if (b.status === 'en_disputa') { gross = r2(gross + m.gross); hulul = r2(hulul + m.hulul); pro = r2(pro + m.pro); }
     else if (b.status === 'cancelada') { gross = r2(gross + m.gross); hulul = r2(hulul + m.hulul); pro = r2(pro + m.pro); }
     if (b.rating !== null) { ratingSum += b.rating; rated += 1; p.rating.push(b.rating); }
     if (f.lateMin !== null && f.lateMin > LATE_TOLERANCE_MIN) { lateSum += f.lateMin; lateN += 1; }
@@ -942,14 +944,14 @@ export interface MoneyFlow {
   receivable: { total: number; count: number; ids: string[] };
   /** Salida: la parte de los profesionales (todos los medios) y los créditos a clientes. */
   outflow: { total: number; toPros: number; credits: number; ids: string[] };
-  net: { total: number; projected: number };
+  net: { total: number; projected: number; ids: string[] };
 }
 
 export function moneyFlow(all: DashBooking[], range: DateRange): MoneyFlow {
   const rows = all.filter((b) => inRange(b.date, range));
   const methods = new Map<string, { amount: number; ids: string[] }>();
   let bank = 0, direct = 0, hululShare = 0, toPros = 0, credits = 0, receivable = 0, net = 0, projected = 0;
-  const bankIds: string[] = [], directIds: string[] = [], recIds: string[] = [], outIds: string[] = [];
+  const bankIds: string[] = [], directIds: string[] = [], recIds: string[] = [], outIds: string[] = [], fineIds: string[] = [];
   for (const b of rows) {
     const got = collectedOf(b);
     if (got > 0) {
@@ -962,6 +964,8 @@ export function moneyFlow(all: DashBooking[], range: DateRange): MoneyFlow {
         const k = payKey(b.paymentMethod); const x = methods.get(k) ?? { amount: 0, ids: [] }; x.amount = r2(x.amount + got); x.ids.push(b.id); methods.set(k, x);
       }
     }
+    // Multa al profesional sin cargo al cliente (no llegó, muy tarde): es ingreso de HULUL, se descuenta de su pago.
+    if (b.status === 'cancelada' && got === 0 && b.proFine > 0) { net = r2(net + b.proFine); fineIds.push(b.id); }
     if (b.clientCredit > 0) { credits = r2(credits + b.clientCredit); net = r2(net - b.clientCredit); if (!outIds.includes(b.id)) outIds.push(b.id); }
     if (isOpen(b)) { const m = bookingMoney(b); receivable = r2(receivable + m.gross); projected = r2(projected + m.hulul); recIds.push(b.id); }
   }
@@ -971,7 +975,7 @@ export function moneyFlow(all: DashBooking[], range: DateRange): MoneyFlow {
     direct: { total: direct, hululShare, ids: directIds, byMethod: [...methods.entries()].map(([method, v]) => ({ method, label: PAY_LABEL[method] ?? 'Otro', ...v })).sort((a, z) => z.amount - a.amount) },
     receivable: { total: receivable, count: recIds.length, ids: recIds },
     outflow: { total: r2(toPros + credits), toPros, credits, ids: outIds },
-    net: { total: net, projected },
+    net: { total: net, projected, ids: [...bankIds, ...directIds, ...fineIds] },
   };
 }
 
@@ -997,6 +1001,8 @@ export function cashSeries(all: DashBooking[], range: DateRange, gran: Granulari
       p.inflow = r2(p.inflow + got); p.outflow = r2(p.outflow + outOf(b));
       if (toBank(b)) p.card = r2(p.card + got);
       p.net = r2(p.net + (got > 0 ? bookingMoney(b).hulul : 0) - b.clientCredit); p.ids.push(b.id);
+    } else if (b.status === 'cancelada' && b.proFine > 0) {
+      p.net = r2(p.net + b.proFine); p.ids.push(b.id);
     }
     if (isOpen(b)) { p.projected = r2(p.projected + bookingMoney(b).gross); p.ids.push(b.id); }
   }

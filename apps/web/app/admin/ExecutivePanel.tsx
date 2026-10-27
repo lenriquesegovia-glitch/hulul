@@ -47,11 +47,11 @@ export function ExecutivePanel() {
                 </div>
               </div>
               <div className="adm-kpis" style={{ marginTop: 12 }}>
-                <Kpi accent label="Ingreso (todos los medios)" value={money(flow.inflow.total)} hint="Lo cobrado a clientes; incluye la parte de los profesionales" selected={only?.includes('inflow')} onClick={() => pickLine('inflow')} detail={() => open('Ingreso (todos los medios)', flow.inflow.ids)} />
+                <Kpi accent label="Ingreso (todos los medios)" value={money(flow.inflow.total)} hint={`${n(flow.inflow.ids.length, 'reserva cobrada', 'reservas cobradas')} de ${rows.length} en el periodo; incluye la parte de los profesionales`} selected={only?.includes('inflow')} onClick={() => pickLine('inflow')} detail={() => open('Ingreso (todos los medios)', flow.inflow.ids)} />
                 <Kpi label="Ingreso por tarjeta" value={money(flow.bank.total)} hint={`Entra al banco: debe cuadrar con el estado de cuenta. Efectivo, DeUna y transferencia ${money(flow.direct.total)} (los cobra el profesional)`} selected={only?.includes('card')} onClick={() => pickLine('card')} detail={() => open('Ingreso por tarjeta', flow.bank.ids)} />
                 <Kpi label="Por cobrar (proyección)" value={money(flow.receivable.total)} hint={n(flow.receivable.count, 'reserva programada', 'reservas programadas')} selected={only?.includes('projected')} onClick={() => pickLine('projected')} detail={() => open('Por cobrar: reservas programadas', flow.receivable.ids)} />
                 <Kpi label="Salida" value={money(flow.outflow.total)} hint={`Para profesionales ${money(flow.outflow.toPros)} · créditos a clientes ${money(flow.outflow.credits)}`} selected={only?.includes('outflow')} onClick={() => pickLine('outflow')} detail={() => open('Salida', flow.outflow.ids)} />
-                <Kpi label="Queda para HULUL" value={money(flow.net.total)} hint={`${flow.inflow.total ? percent(flow.net.total / flow.inflow.total) : '—'} del ingreso (cargo $1,99 + comisión 15 %) · + ${money(flow.net.projected)} programado`} selected={only?.includes('net')} onClick={() => pickLine('net')} detail={() => open('Queda para HULUL', flow.inflow.ids)} />
+                <Kpi label="Queda para HULUL" value={money(flow.net.total)} hint={`${flow.inflow.total ? percent(flow.net.total / flow.inflow.total) : '—'} del ingreso: cargo $1,99 + comisión 15 % + multas · + ${money(flow.net.projected)} programado`} selected={only?.includes('net')} onClick={() => pickLine('net')} detail={() => open('Queda para HULUL', flow.net.ids)} />
               </div>
               <div style={{ marginTop: 14 }}><FlowChart points={series} gran={g} onPick={open} only={only} onOnly={setOnly} /></div>
               {wm && <p className="muted" style={{ fontSize: 12.5, margin: '10px 0 0' }}>
@@ -61,12 +61,12 @@ export function ExecutivePanel() {
           )}
 
           <div className="adm-kpis">
-            <Kpi accent label="Reservas en el periodo" value={ex.total} hint={`${ex.closed} terminadas · ${ex.open} por atender`} onClick={() => open('Reservas del periodo', rows.map((b) => b.id))} />
+            <Kpi accent label="Reservas en el periodo" value={ex.total} hint={`${flow ? `${flow.inflow.ids.length} con cobro · ${ex.closed - flow.inflow.ids.length} canceladas sin cobro` : `${ex.closed} terminadas`} · ${ex.open} por atender`} onClick={() => open('Reservas del periodo', rows.map((b) => b.id))} />
             <Kpi label="Casos de éxito" value={ex.closed ? percent(ex.rates.success) : '—'} hint={`${ex.counts.success} de ${ex.closed} terminadas`} onClick={() => open('Casos de éxito', ids((_, f) => f.success))} />
             <Kpi label="Calificación promedio" value={stars(q.avgRating)} hint={`${q.rated} calificaciones`} onClick={() => open('Reservas calificadas', ids((b) => b.rating !== null))} />
             <Kpi label="Llegaron a tiempo" value={q.punctuality.arrived ? percent(q.punctuality.onTime.count / q.punctuality.arrived) : '—'} hint={q.punctuality.avgLateMin ? `Los tardes, ${q.punctuality.avgLateMin} min en promedio` : 'Tolerancia 15 min'} onClick={() => open('Llegaron tarde', q.punctuality.late.ids)} />
             <Kpi label="Clientes que vuelven" value={q.loyalty.clients ? percent(q.loyalty.returning.count / q.loyalty.clients) : '—'} hint={`${q.loyalty.returning.count} de ${q.loyalty.clients} clientes`} onClick={() => open('Clientes que vuelven a reservar', q.loyalty.returning.ids)} />
-            <Kpi label="Ventas del periodo" value={money(ex.gross)} hint={`Ingreso HULUL ${money(ex.hulul)}`} onClick={() => open('Reservas cobradas', ids((b) => b.status === 'completada' || (b.status === 'cancelada' && b.cancelFee > 0)))} />
+            <Kpi label="Canceladas" value={ex.counts.cancelled} hint={`${ex.closed ? percent(ex.counts.cancelled / ex.closed) : '—'} de lo terminado · ${ex.counts.proFault} por el profesional`} onClick={() => open('Canceladas', ids((b) => b.status === 'cancelada'))} />
           </div>
 
           <div className="adm-grid g-21">

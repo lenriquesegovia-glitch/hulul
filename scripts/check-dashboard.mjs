@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { bookingRow, ledgerRow, payoutRow, providerRow } from '../functions/tablero-core.js';
 import { ledgerEntriesFor } from '../functions/money.js';
 import {
-  accounting, canDo, caseFlags, complianceAlerts, hululSales, journal, ledgerByAccount, quality, weekMoney, caseOutcome, clientStats, executive, periodRange, providerInvoices, providerStats, stageOf, toCsv,
+  accounting, moneyFlow, canDo, caseFlags, complianceAlerts, hululSales, journal, ledgerByAccount, quality, weekMoney, caseOutcome, clientStats, executive, periodRange, providerInvoices, providerStats, stageOf, toCsv,
 } from '../packages/shared/src/dashboard.ts';
 
 const now = Date.UTC(2026, 9, 26, 3); // domingo 25-oct-2026, 22:00 en Ecuador
@@ -142,6 +142,14 @@ assert.equal(complianceAlerts({ bookings, payouts: [], providers: [] }, { from: 
   assert.equal(q.stars.reduce((t, s) => t + s.count, 0), q.rated);
   const wm = weekMoney({ ledger: lg, payouts: [], bookings: [card, cash] }, now);
   assert.equal(typeof wm.nextPayout.estimate, 'number');
+}
+
+// El ingreso del resumen y el de «Dinero del periodo» cuadran (incluye reservas en reclamo).
+{
+  const R = { from: '2026-10-01', to: '2026-10-31' };
+  const ex = executive(bookings, R); const fl = moneyFlow(bookings, R);
+  assert.equal(ex.gross, fl.inflow.total, 'mismo ingreso en las dos vistas');
+  assert.equal(fl.inflow.total, Math.round((fl.bank.total + fl.direct.total) * 100) / 100);
 }
 
 console.log('Tablero: OK');
