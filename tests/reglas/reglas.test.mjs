@@ -71,6 +71,9 @@ const intruso = env.authenticatedContext('x', { email: 'conta@correo.com', email
 await no('nadie se da un rol desde la app', setDoc(doc(intruso, 'adminRoles/conta@correo.com'), { role: 'socio' }));
 await no('nadie lee los roles desde la app', getDoc(doc(intruso, 'adminRoles/conta@correo.com')));
 await no('nadie lee el registro de accesos del panel', getDoc(doc(intruso, 'adminAccesos/a1')));
+await no('nadie lee los estados de cuenta preparados', getDoc(doc(intruso, 'estadosCuenta/2026-10-26')));
+await no('nadie lee la clave de la IA', getDoc(doc(intruso, 'adminConfig/ia')));
+await no('nadie lee el análisis de IA de un reclamo', getDoc(doc(cli1, 'reclamos/b1/privado/ia')));
 
 await env.cleanup();
 console.log(`\nReglas: ${n} comprobaciones correctas.`);

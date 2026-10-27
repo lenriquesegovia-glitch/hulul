@@ -1,5 +1,17 @@
 # HULUL — Estado y registro de entregas
 
+## En PR — Asistente de reclamos y decisión prellenada, 26 de octubre de 2026 (Claude)
+- Misma rama, además: **menú** Gestión (Resumen, Reservas, Reclamos, Aprobar profesionales) · Finanzas (Contabilidad, Proveedores, Clientes) · Control (Cumplimiento UAFE, **Cumplimiento SRI** nuevo) · Administración (Equipo, roles y permisos).
+- **Estados de cuenta semanales con aprobación**: el lunes `liquidacionSemanal` ya no envía PDFs; prepara `estadosCuenta/{semana}` en borrador (`prepareStatementsBatch`) y avisa a HULUL. En Proveedores → «Estados de cuenta de la semana» se revisan, se desmarcan y se aprueban (`adminEstadosSemana`, `aprobarEstadosSemana`). El correo de liquidación sigue saliendo sin adjunto.
+- **Clientes**: pestaña Facturas (dos comprobantes por reserva cobrada: profesional por la visita y HULUL por el cargo de plataforma; `bookingInvoices`), estado de cuenta en PDF y por correo (`estadoCuentaClientePdf`, `enviarEstadoCuentaCliente`, `clientStatementPdf`). El detalle de cada reserva muestra sus comprobantes.
+- **Enviar a la contadora** (Contabilidad): manda el Excel contable y el de ventas a quienes tengan el rol Contabilidad (`enviarContadora`; el destinatario no se escribe a mano).
+- **Cumplimiento SRI** (`/admin/sri`): próximo vencimiento por noveno dígito del RUC (6 → día 20), ventas gravadas e IVA de HULUL, facturas de profesionales (terceros), retenciones y Excel.
+- Todas las tarjetas del panel abren su detalle o filtran (Clientes, Cumplimiento, Proveedores).
+- **Claude (IA) en reclamos**: clave en Administración → «Conexión con Claude» (`guardarClaveIA`, se prueba y queda en `adminConfig/ia`, solo servidor). En cada reclamo «Analizar con IA» (`analizarReclamoIA`, `functions/ia-reclamos.js`, modelo claude-sonnet-5-5): envía versiones, chat (sin teléfonos ni correos), hasta 8 fotos y la evidencia; guarda el resultado en `reclamos/{id}/privado/ia`; «Usar la recomendación» llena la decisión. **Pendiente legal:** sumar el análisis por proveedor de IA a la política de privacidad.
+- Rama `claude/reclamos-asistente`. Publicar con **backend** (android no).
+- `claimAdvice` (functions/reclamos-core.js, con pruebas): lee la evidencia (llegada y distancia GPS, atraso, timbres, código de inicio, fotos, resultado marcado, duración, respuesta en plazo, calificaciones, reclamos y faltas previas) y sugiere lado, confianza y razones. `adminReclamo` lo devuelve como `advice`; `adminReclamos` agrega `suggestion` a los abiertos.
+- Panel: al elegir «A favor del cliente/profesional» se llenan multa, crédito, faltas y motivo (editables). Por defecto: a favor del cliente que reclama → crédito $5, falta al profesional y multa $10 («no vino», «sí estaba») o $5 (otros); a favor del profesional → se cobra y se libera el pago; falta al cliente si el reclamo era del profesional o si el del cliente era claramente infundado.
+
 ## En PR — Calificación obligatoria, proveedor como mini CRM y curva de dinero, 26 de octubre de 2026 (Claude)
 - Rama `claude/proveedor-crm-calificacion`. **Toca la app: publicar con backend y android.**
 - **Calificar antes de reservar otra vez**: si el cliente tiene un servicio completado sin calificar, la web y la app le piden calificarlo antes del formulario de reserva (`pendingRating` en `packages/shared/src/firebase.ts`, `RateFirst` en `reservar/[id]`); el servidor (`avisoReserva` → `unratedBookingOf`) anula una reserva nueva que llegue sin esa calificación.

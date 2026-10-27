@@ -119,6 +119,8 @@ export function TeamPanel() {
         </section>
       </div>
 
+      <IAConnection muestra={muestra} />
+
       <section className="adm-card">
         <h2>Personas con acceso</h2>
         <div className="adm-table-wrap" style={{ border: 'none' }}>
@@ -153,5 +155,52 @@ export function TeamPanel() {
         )}
       </section>
     </>
+  );
+}
+
+/** Conexión con Claude (IA) para analizar reclamos: la clave se guarda solo en el servidor. */
+function IAConnection({ muestra }: { muestra: boolean }) {
+  const [st, setSt] = useState<{ connected: boolean; last4: string; setBy: string; model: string } | null>(null);
+  const [key, setKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const load = useCallback(async () => {
+    if (muestra) { setSt({ connected: false, last4: '', setBy: '', model: 'claude-sonnet-5-5' }); return; }
+    try { const { adminIAStatus } = await import('@hulul/shared/firebase'); setSt(await adminIAStatus()); } catch { setSt(null); }
+  }, [muestra]);
+  useEffect(() => { load(); }, [load]);
+  const save = async (remove = false) => {
+    setBusy(true); setMsg(null);
+    try {
+      const { adminSaveIAKey } = await import('@hulul/shared/firebase');
+      const r = await adminSaveIAKey(key.trim(), remove);
+      setMsg({ ok: true, text: r.connected ? 'Claude quedó conectado. Ya puedes usar «Analizar con IA» en cada reclamo.' : 'Se desconectó Claude.' });
+      setKey(''); load();
+    } catch (e) { setMsg({ ok: false, text: errMsg(e) }); } finally { setBusy(false); }
+  };
+  return (
+    <section className="adm-card adm-grid" style={{ gap: 10 }}>
+      <h2 style={{ margin: 0 }}>Conexión con Claude (IA)</h2>
+      <p className="sub" style={{ margin: 0 }}>Para que la IA lea los reclamos (chat, fotos y evidencia) y recomiende una decisión. Se configura una sola vez.</p>
+      {st?.connected ? (
+        <div className="adm-bar" style={{ justifyContent: 'space-between' }}>
+          <span><Badge tone="t-ok">Conectado</Badge> <span className="muted" style={{ fontSize: 13 }}>Clave terminada en {st.last4} · guardó {st.setBy} · modelo {st.model}</span></span>
+          <button type="button" className="adm-btn danger" disabled={busy || muestra} onClick={() => save(true)}>Desconectar</button>
+        </div>
+      ) : (
+        <>
+          <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, display: 'grid', gap: 3 }}>
+            <li>Entra a console.anthropic.com con el correo de HULUL y agrega un método de pago.</li>
+            <li>En «API Keys» crea una clave llamada «HULUL panel» y cópiala (empieza con sk-ant-).</li>
+            <li>Pégala aquí y guarda. Se comprueba que funcione y queda guardada solo en el servidor.</li>
+          </ol>
+          <div className="adm-bar">
+            <input className="adm-input" style={{ flex: 1, minWidth: 220 }} type="password" autoComplete="off" placeholder="sk-ant-…" value={key} onChange={(e) => setKey(e.target.value)} />
+            <button type="button" className="adm-btn solid" disabled={busy || muestra || key.trim().length < 20} onClick={() => save(false)}>{busy ? 'Comprobando…' : 'Guardar y conectar'}</button>
+          </div>
+        </>
+      )}
+      {msg && <div className={msg.ok ? 'adm-note' : 'adm-err'} role="status">{msg.text}</div>}
+    </section>
   );
 }

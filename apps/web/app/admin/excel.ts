@@ -14,7 +14,8 @@ export interface SheetSpec {
   totals?: string[];
 }
 
-export async function downloadXlsx(fileName: string, sheets: SheetSpec[]) {
+/** Arma el libro de Excel y devuelve sus bytes. */
+export async function buildXlsx(sheets: SheetSpec[]): Promise<ArrayBuffer> {
   const ExcelJS = (await import('exceljs')).default;
   const wb = new ExcelJS.Workbook();
   wb.creator = 'HULUL'; wb.created = new Date();
@@ -54,7 +55,11 @@ export async function downloadXlsx(fileName: string, sheets: SheetSpec[]) {
     }
     ws.views = [{ state: 'frozen', ySplit: first - 1 }];
   }
-  const buf = await wb.xlsx.writeBuffer();
+  return (await wb.xlsx.writeBuffer()) as ArrayBuffer;
+}
+
+export async function downloadXlsx(fileName: string, sheets: SheetSpec[]) {
+  const buf = await buildXlsx(sheets);
   const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
   const a = document.createElement('a');
   a.href = url; a.download = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`; a.click();
@@ -68,4 +73,11 @@ export function xlsxFromRows(fileName: string, sheet: string, rows: Record<strin
     columns: columns.map((c) => ({ key: c.key, header: c.label, money: opts?.money?.includes(c.key), text: opts?.text?.includes(c.key) })),
     rows, totals: opts?.money,
   }]);
+}
+
+/** Bytes → base64 (para enviar el archivo por correo desde el servidor). */
+export function toBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf); let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
 }

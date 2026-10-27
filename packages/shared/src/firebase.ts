@@ -583,6 +583,8 @@ export interface ClaimListItem {
   id: string; code: string; openedBy: 'cliente' | 'profesional'; kindLabel: string; status: Claim['status']; openedAt: number;
   responseDueAt: number; resolveDueAt: number; hasResponse: boolean; decision: 'cliente' | 'profesional' | null;
   clientName: string; proName: string; category: string; date: string; slot: string; moneyHeld: boolean;
+  /** Sugerencia del asistente para reclamos abiertos. */
+  suggestion?: { side: 'cliente' | 'profesional' | null; confidence: string } | null;
 }
 
 export interface ClaimFile {
@@ -597,6 +599,16 @@ export interface ClaimFile {
   timeline: { at: number; who: string; what: string; detail: string }[];
   accesses: { email: string; action: string; at: number }[];
   revealed: boolean;
+  advice?: ClaimAdvice;
+  ia?: ClaimAI | null;
+}
+
+export interface ClaimDecisionDraft { outcome: 'cliente' | 'profesional'; multaPro: number; creditoCliente: number; faltaPro: boolean; faltaCliente: boolean; note: string }
+/** Lectura del asistente de reclamos (reglas sobre la evidencia; HULUL decide). */
+export interface ClaimAdvice {
+  side: 'cliente' | 'profesional' | null; confidence: 'alta' | 'media' | 'baja' | 'sin_datos'; score: number; summary: string;
+  reasons: { side: 'cliente' | 'profesional'; weight: number; text: string }[];
+  decisions: { cliente: ClaimDecisionDraft; profesional: ClaimDecisionDraft };
 }
 
 export async function adminListClaims(): Promise<ClaimListItem[]> {
@@ -914,4 +926,50 @@ export async function adminSendStatement(proId: string): Promise<string> {
 /** Registra que el profesional pagó a HULUL su deuda (transferencia o DeUna). Devuelve lo que aún debe. */
 export async function adminRegisterProPayment(proId: string, amount: number, reference: string): Promise<number> {
   return (await callable<{ proId: string; amount: number; reference: string }, { ok: boolean; debt: number }>('registrarAbono')({ proId, amount, reference })).data.debt;
+}
+
+/* ------------------------- Estados de cuenta semanales (aprobación) ------------------------- */
+
+export interface StatementBatchItem { proId: string; name: string; email: string; hasEmail: boolean; earned: number; fees: number; fines: number; paid: number; toPay: number; pending: number; include: boolean; sentOk?: boolean }
+export interface StatementBatch { week: string; status: 'borrador' | 'enviado'; items: StatementBatchItem[]; preparedAt: number | null; approvedBy: string; approvedAt: number | null; sent: number }
+
+/** Lote de la semana (se prepara el lunes; si no existe, se prepara ahora). rebuild = volver a calcularlo. */
+export async function adminStatementBatch(week?: string, rebuild = false): Promise<StatementBatch> {
+  return (await callable<{ week?: string; rebuild?: boolean }, StatementBatch>('adminEstadosSemana')({ week, rebuild })).data;
+}
+/** Aprueba y envía los estados de cuenta a los profesionales marcados. */
+export async function adminApproveStatements(week: string, include: string[]): Promise<{ sent: number; failed: string[] }> {
+  return (await callable<{ week: string; include: string[] }, { ok: boolean; sent: number; failed: string[] }>('aprobarEstadosSemana')({ week, include })).data;
+}
+
+/* ------------------------------ Estado de cuenta del cliente ------------------------------ */
+
+export async function adminClientStatementPdf(clientId: string, range?: { desde?: string; hasta?: string }): Promise<{ fileName: string; content: string }> {
+  return (await callable<{ clientId: string; desde?: string; hasta?: string }, { fileName: string; content: string }>('estadoCuentaClientePdf')({ clientId, ...range })).data;
+}
+export async function adminSendClientStatement(clientId: string): Promise<string> {
+  return (await callable<{ clientId: string }, { ok: boolean; email: string }>('enviarEstadoCuentaCliente')({ clientId })).data.email;
+}
+
+/** Envía archivos (Excel) por correo a las personas con rol Contabilidad del equipo. */
+export async function adminSendToAccountant(input: { subject: string; message: string; files: { fileName: string; content: string }[] }): Promise<string[]> {
+  return (await callable<typeof input, { ok: boolean; to: string[] }>('enviarContadora')(input)).data.to;
+}
+
+/* ------------------------------ Claude (IA) para reclamos ------------------------------ */
+
+export interface ClaimAI {
+  lado: 'cliente' | 'profesional' | 'indeterminado'; confianza: 'alta' | 'media' | 'baja'; resumen: string;
+  version_cliente: string; version_profesional: string; hechos: string[]; contradicciones: string[]; riesgos: string[];
+  decision: { multaPro: number; creditoCliente: number; faltaPro: boolean; faltaCliente: boolean }; motivo: string;
+  model: string; photosSent: number; at: number; by: string;
+}
+export async function adminAnalyzeClaim(id: string): Promise<ClaimAI> {
+  return (await callable<{ id: string }, ClaimAI>('analizarReclamoIA')({ id })).data;
+}
+export async function adminIAStatus(): Promise<{ connected: boolean; last4: string; setBy: string; model: string }> {
+  return (await callable<Record<string, never>, { connected: boolean; last4: string; setBy: string; model: string }>('estadoIA')({})).data;
+}
+export async function adminSaveIAKey(key: string, remove = false): Promise<{ connected: boolean; last4?: string }> {
+  return (await callable<{ key: string; remove: boolean }, { ok: boolean; connected: boolean; last4?: string }>('guardarClaveIA')({ key, remove })).data;
 }

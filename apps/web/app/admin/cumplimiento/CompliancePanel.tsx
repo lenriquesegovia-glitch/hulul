@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { bookingMoney, COMPLIANCE_LIMITS, complianceAlerts, inRange, toCsv, type ComplianceAlert } from '@hulul/shared/dashboard';
 import { useAdmin } from '../AdminShell';
-import { Badge, catName, downloadCsv, fmtDay, Kpi, Loading, money, PageHead, percent, PeriodBar } from '../ui';
+import { Badge, BookingListDrawer, catName, downloadCsv, fmtDay, Kpi, Loading, money, PageHead, percent, PeriodBar } from '../ui';
 
 const KIND_LABEL: Record<string, string> = {
   operacion: 'Operación alta', acumulado: 'Acumulado del mes', efectivo: 'Efectivo', repetido: 'Repetición', liquidaciones: 'Liquidaciones',
@@ -17,6 +17,7 @@ const KIND_LABEL: Record<string, string> = {
 export function CompliancePanel() {
   const { view, range, can } = useAdmin();
   const [level, setLevel] = useState<'todas' | 'alta' | 'media'>('todas');
+  const [drill, setDrill] = useState<{ title: string; ids: string[] } | null>(null);
 
   const ops = useMemo(() => (view?.bookings ?? []).filter((b) => inRange(b.date, range) && (b.status === 'completada' || b.status === 'en_disputa' || (b.status === 'cancelada' && b.cancelFee > 0))), [view, range]);
   const alerts = useMemo(() => (view ? complianceAlerts(view, range) : []), [view, range]);
@@ -51,10 +52,10 @@ export function CompliancePanel() {
       {!view ? <Loading /> : (
         <>
           <div className="adm-kpis">
-            <Kpi accent label="Alertas altas" value={alerts.filter((a) => a.level === 'alta').length} hint="Revisar primero" />
-            <Kpi label="Alertas medias" value={alerts.filter((a) => a.level === 'media').length} />
-            <Kpi label="Operaciones cobradas" value={ops.length} hint={money(totals.total)} />
-            <Kpi label="Pagado en efectivo" value={money(totals.cash)} hint={totals.total ? `${percent(totals.cash / totals.total)} del total` : '—'} />
+            <Kpi accent label="Alertas altas" value={alerts.filter((a) => a.level === 'alta').length} hint="Revisar primero" onClick={() => setLevel('alta')} />
+            <Kpi label="Alertas medias" value={alerts.filter((a) => a.level === 'media').length} onClick={() => setLevel('media')} />
+            <Kpi label="Operaciones cobradas" value={ops.length} hint={money(totals.total)} onClick={() => setDrill({ title: 'Operaciones cobradas', ids: ops.map((b) => b.id) })} />
+            <Kpi label="Pagado en efectivo" value={money(totals.cash)} hint={totals.total ? `${percent(totals.cash / totals.total)} del total` : '—'} onClick={() => setDrill({ title: 'Pagado en efectivo', ids: ops.filter((b) => b.paymentMethod === 'efectivo').map((b) => b.id) })} />
           </div>
 
           <div className="adm-bar" style={{ justifyContent: 'space-between' }}>
@@ -70,7 +71,7 @@ export function CompliancePanel() {
           {shown.length === 0 ? <div className="adm-card adm-empty">Sin alertas en este periodo.</div> : (
             <div className="adm-cards">
               {shown.map((a) => (
-                <article key={a.key} className="adm-card" style={{ borderLeft: `5px solid ${a.level === 'alta' ? 'var(--bad)' : 'var(--warn)'}`, padding: 14, display: 'grid', gap: 6 }}>
+                <article key={a.key} className="adm-card adm-clickrow" role="button" tabIndex={0} onClick={() => setDrill({ title: a.title, ids: (view?.bookings ?? []).filter((b) => a.bookings.includes(b.code)).map((b) => b.id) })} style={{ borderLeft: `5px solid ${a.level === 'alta' ? 'var(--bad)' : 'var(--warn)'}`, padding: 14, display: 'grid', gap: 6 }}>
                   <div className="flags"><Badge tone={a.level === 'alta' ? 't-bad' : 't-warn'}>{a.level === 'alta' ? 'Alta' : 'Media'}</Badge><Badge tone="t-mute">{KIND_LABEL[a.kind] ?? a.kind}</Badge></div>
                   <b style={{ fontSize: 15 }}>{a.title}</b>
                   <span style={{ fontSize: 13.5 }}>{a.who.type === 'cliente' ? 'Cliente' : 'Profesional'}: {whoLink(a)}</span>
@@ -89,7 +90,7 @@ export function CompliancePanel() {
                 <thead><tr><th>Fecha</th><th>Código</th><th>Cliente</th><th>Profesional</th><th>RUC</th><th>Pago</th><th className="num">Monto</th></tr></thead>
                 <tbody>
                   {ops.length ? ops.slice().sort((a, b) => bookingMoney(b).gross - bookingMoney(a).gross).slice(0, 300).map((b) => (
-                    <tr key={b.id}>
+                    <tr key={b.id} className="click" onClick={() => setDrill({ title: `Reserva ${b.code}`, ids: [b.id] })}>
                       <td style={{ whiteSpace: 'nowrap' }}>{fmtDay(b.date)}</td><td>{b.code}</td><td>{b.clientName}</td><td>{b.proName}</td>
                       <td style={{ fontSize: 12.5 }}>{rucOf.get(b.proId) || '—'}</td><td>{b.paymentMethod}</td><td className="num">{money(bookingMoney(b).gross)}</td>
                     </tr>
@@ -104,6 +105,7 @@ export function CompliancePanel() {
           </div>
         </>
       )}
+      {drill && <BookingListDrawer title={drill.title} ids={drill.ids} onClose={() => setDrill(null)} />}
     </>
   );
 }

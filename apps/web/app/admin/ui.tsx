@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { getCategory } from '@hulul/shared';
 import {
-  bookingMoney, caseFlags, caseOutcome, money, OUTCOMES, PERIOD_LABEL, percent, stageOf, STATUS_LABEL,
+  bookingInvoices, bookingMoney, caseFlags, caseOutcome, money, OUTCOMES, PERIOD_LABEL, percent, stageOf, STATUS_LABEL,
   type DashBooking, type PeriodKey, type Stage,
 } from '@hulul/shared/dashboard';
 import { useAdmin } from './AdminShell';
@@ -336,6 +336,7 @@ export function BookingDetail({ b, onClose }: { b: DashBooking; onClose: () => v
           <dt>Forma de pago</dt><dd>{b.paymentMethod || '—'}</dd>
         </dl>
       </div>
+      <InvoicesCard b={b} />
       {b.claim && (
         <div className="adm-card" style={{ borderLeft: '5px solid #6A3A8C' }}>
           <h3 style={{ marginBottom: 10 }}>Reclamo</h3>
@@ -567,4 +568,39 @@ export function FlowChart({ points, gran, onPick, labels, only, onOnly }: { labe
       </div>
     </div>
   );
+}
+
+/** Los comprobantes que recibe el cliente por esta reserva (profesional y HULUL). */
+export function InvoicesCard({ b }: { b: DashBooking }) {
+  const { view } = useAdmin();
+  const ruc = view?.providers.find((p) => p.uid === b.proId)?.ruc ?? '';
+  const inv = bookingInvoices(b, ruc);
+  if (!inv.length) return null;
+  return (
+    <div className="adm-card">
+      <h3 style={{ marginBottom: 10 }}>Comprobantes para el cliente ({inv.length})</h3>
+      <div className="adm-grid" style={{ gap: 8 }}>
+        {inv.map((i, k) => (
+          <div key={k} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10, display: 'grid', gap: 3, opacity: i.status === 'anulada' ? .55 : 1 }}>
+            <div className="row gap-8" style={{ justifyContent: 'space-between' }}>
+              <b style={{ fontSize: 13.5 }}>{i.issuer === 'hulul' ? 'Factura de HULUL' : 'Factura del profesional'}</b>
+              <Badge tone={i.status === 'anulada' ? 't-mute' : 't-warn'}>{i.status === 'anulada' ? 'Anulada (reclamo)' : 'Por emitir'}</Badge>
+            </div>
+            <span className="muted" style={{ fontSize: 12.5 }}>{i.issuerName}{i.issuerRuc ? ` · RUC ${i.issuerRuc}` : ''}</span>
+            <span style={{ fontSize: 13 }}>{i.concept}: base {money(i.base)} · IVA {money(i.iva)} · <b>total {money(i.total)}</b></span>
+          </div>
+        ))}
+      </div>
+      <p className="muted" style={{ fontSize: 12, margin: '8px 0 0' }}>«Por emitir»: la facturación electrónica aún no está conectada; estos son los comprobantes que corresponden.</p>
+    </div>
+  );
+}
+
+/** Descarga un PDF que llega en base64 desde el servidor. */
+export function downloadPdf(fileName: string, base64: string) {
+  const bin = atob(base64); const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  const a = document.createElement('a'); a.href = url; a.download = fileName; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }

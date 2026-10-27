@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { TAX_REGIME_LABEL, type TaxRegime } from '@hulul/shared';
 import { caseFlags, caseOutcome, inRange, OUTCOMES, percent, providerSeries, providerStats, toCsv, type DashBooking, type Granularity, type ProviderStats } from '@hulul/shared/dashboard';
+import type { StatementBatch } from '@hulul/shared/firebase';
 import { useAdmin } from '../AdminShell';
-import { Badge, BookingListDrawer, BookingsCrm, catName, Donut, downloadCsv, FlowChart, fmtDay, fmtWeek, fmtWhen, HBars, initials, Kpi, Loading, money, PageHead, PeriodBar } from '../ui';
+import { Badge, BookingListDrawer, BookingsCrm, catName, Donut, downloadCsv, Drawer, FlowChart, fmtDay, fmtWeek, fmtWhen, HBars, initials, Kpi, Loading, money, PageHead, PeriodBar } from '../ui';
 
 type Sort = 'facturado' | 'trabajos' | 'calificacion' | 'problemas' | 'saldo' | 'nombre';
 const STATUS: Record<string, [string, string]> = {
@@ -38,6 +39,103 @@ function ProviderTrend({ bookings, title }: { bookings: DashBooking[]; title: st
   );
 }
 
+/** Estados de cuenta de la semana: se revisan, se marcan y se aprueban; antes no sale nada. */
+function WeeklyStatements() {
+  const { data, can } = useAdmin();
+  const [batch, setBatch] = useState<StatementBatch | null>(null);
+  const [open, setOpen] = useState(false);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState('');
+  const muestra = data?.viewer?.email === 'muestra@hululec.com';
+
+  const load = async (rebuild = false) => {
+    setBusy(rebuild ? 'rebuild' : 'load'); setMsg('');
+    try {
+      let b: StatementBatch;
+      if (muestra) {
+        b = { week: '2026-10-26', status: 'borrador', preparedAt: Date.now(), approvedBy: '', approvedAt: null, sent: 0,
+          items: (data?.providers ?? []).slice(0, 6).map((p, i) => ({ proId: p.uid, name: p.name, email: p.email, hasEmail: i !== 4, earned: 120 + i * 31, fees: 18 + i * 4, fines: i === 2 ? 5 : 0, paid: 80 + i * 20, toPay: i % 2 ? 40 : 0, pending: 12 - i * 3, include: i !== 4 })) };
+      } else {
+        const { adminStatementBatch } = await import('@hulul/shared/firebase');
+        b = await adminStatementBatch(undefined, rebuild);
+      }
+      setBatch(b); setChecked(new Set(b.items.filter((i) => i.include).map((i) => i.proId)));
+    } catch (e) { setMsg((e as { message?: string }).message || 'No se pudo cargar.'); } finally { setBusy(''); }
+  };
+  useEffect(() => {
+    if (data) load();
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('estados')) setOpen(true);
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const approve = async () => {
+    if (!batch) return;
+    if (!window.confirm(`Se enviará el estado de cuenta en PDF a ${checked.size} profesionales. ¿Continuar?`)) return;
+    setBusy('send'); setMsg('');
+    try {
+      if (muestra) { setMsg(`(Muestra) Se enviarían ${checked.size} estados de cuenta.`); return; }
+      const { adminApproveStatements } = await import('@hulul/shared/firebase');
+      const r = await adminApproveStatements(batch.week, [...checked]);
+      setMsg(`Enviados ${r.sent}.${r.failed.length ? ` No se pudo enviar a: ${r.failed.join(', ')}.` : ''}`);
+      load();
+    } catch (e) { setMsg((e as { message?: string }).message || 'No se pudo enviar.'); } finally { setBusy(''); }
+  };
+  const pdf = async (proId: string) => {
+    if (muestra) return;
+    setBusy(proId);
+    try {
+      const { adminStatementPdf } = await import('@hulul/shared/firebase');
+      const f = await adminStatementPdf(proId);
+      const bin = atob(f.content); const bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      window.open(URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })), '_blank');
+    } catch (e) { setMsg((e as { message?: string }).message || 'No se pudo abrir el PDF.'); } finally { setBusy(''); }
+  };
+
+  const sentState = batch?.status === 'enviado';
+  return (
+    <>
+      <Kpi label="Estados de cuenta de la semana" value={!batch ? (busy ? '…' : '—') : sentState ? `Enviados ${batch.sent}` : `${batch.items.length} por aprobar`}
+        hint={!batch ? 'Se preparan el lunes a las 06:00' : sentState ? `Aprobó ${batch.approvedBy}` : 'No sale nada hasta que los apruebes'} onClick={() => setOpen(true)} />
+      {open && (
+        <Drawer title="Estados de cuenta de la semana" sub={batch ? `Semana del ${fmtWeek(batch.week)} · últimos 30 días de cada profesional` : ''} onClose={() => setOpen(false)}>
+          {msg && <div className="adm-note" role="status">{msg}</div>}
+          {!batch ? <div className="adm-empty">{busy ? 'Preparando…' : 'Sin datos.'}</div> : (
+            <>
+              <div className="adm-help">
+                <b>{sentState ? 'Ya se enviaron' : 'Revisa y aprueba'}</b>
+                <span>{sentState ? `Se enviaron ${batch.sent} estados de cuenta en PDF.` : 'Quita el check a quien no quieras enviar (por ejemplo, si tiene un reclamo abierto). Toca «PDF» para ver exactamente lo que recibirá. Al aprobar, cada uno recibe su PDF por correo.'}</span>
+              </div>
+              <div className="adm-table-wrap" style={{ border: 'none' }}>
+                <table className="adm-table">
+                  <thead><tr><th /><th>Profesional</th><th className="num">Ganado</th><th className="num">Comisión</th><th className="num">Depositado</th><th className="num">Saldo</th><th /></tr></thead>
+                  <tbody>
+                    {batch.items.map((i) => (
+                      <tr key={i.proId}>
+                        <td><input type="checkbox" aria-label={`Enviar a ${i.name}`} disabled={sentState || !i.hasEmail} checked={sentState ? !!i.sentOk : checked.has(i.proId)}
+                          onChange={(e) => setChecked((c) => { const n = new Set(c); if (e.target.checked) n.add(i.proId); else n.delete(i.proId); return n; })} /></td>
+                        <td><b>{i.name || '—'}</b><div className="muted" style={{ fontSize: 12 }}>{i.hasEmail ? i.email : 'Sin correo'}{i.fines ? ` · multas ${money(i.fines)}` : ''}</div></td>
+                        <td className="num">{money(i.earned)}</td><td className="num">{money(i.fees)}</td><td className="num">{money(i.paid)}</td>
+                        <td className="num" style={{ color: i.pending < 0 ? 'var(--bad)' : undefined }}>{money(i.pending)}</td>
+                        <td><button type="button" className="adm-btn" disabled={busy === i.proId} onClick={() => pdf(i.proId)}>PDF</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!sentState && can('pagos') && (
+                <div className="adm-bar">
+                  <button type="button" className="adm-btn solid" disabled={!!busy || !checked.size} onClick={approve}>{busy === 'send' ? 'Enviando…' : `Aprobar y enviar (${checked.size})`}</button>
+                  <button type="button" className="adm-btn" disabled={!!busy} onClick={() => load(true)}>{busy === 'rebuild' ? 'Recalculando…' : 'Recalcular'}</button>
+                </div>
+              )}
+            </>
+          )}
+        </Drawer>
+      )}
+    </>
+  );
+}
+
 export function ProvidersPanel() {
   const { view, range, now } = useAdmin();
   const [q, setQ] = useState('');
@@ -45,6 +143,7 @@ export function ProvidersPanel() {
   const [cat, setCat] = useState('');
   const [sort, setSort] = useState<Sort>('facturado');
   const [sel, setSel] = useState('');
+  const [drill, setDrill] = useState<{ title: string; ids: string[] } | null>(null);
 
   useEffect(() => { const id = new URLSearchParams(window.location.search).get('id'); if (id) setSel(id); }, []);
   const pick = (id: string) => { setSel(id); window.history.replaceState(null, '', id ? `/admin/proveedores?id=${encodeURIComponent(id)}` : '/admin/proveedores'); window.scrollTo({ top: 0 }); };
@@ -80,10 +179,11 @@ export function ProvidersPanel() {
       {!view ? <Loading /> : (
         <>
           <div className="adm-kpis">
-            <Kpi accent label="Proveedores en la vista" value={rows.length} hint={`${rows.filter((p) => p.done > 0).length} con trabajos en el periodo`} />
-            <Kpi label="Facturado por ellos" value={money(totals.billed)} hint={`${totals.done} visitas completadas`} />
-            <Kpi label="Comisión de HULUL" value={money(totals.commission)} />
-            <Kpi label="Por transferirles" value={money(totals.toPay)} hint="Liquidaciones por pagar" />
+            <Kpi accent label="Proveedores en la vista" value={rows.length} hint={`${rows.filter((p) => p.done > 0).length} con trabajos en el periodo`} onClick={() => document.getElementById('lista-proveedores')?.scrollIntoView({ behavior: 'smooth' })} />
+            <Kpi label="Facturado por ellos" value={money(totals.billed)} hint={`${totals.done} visitas completadas`} onClick={() => setDrill({ title: 'Visitas completadas de los proveedores', ids: (view.bookings ?? []).filter((b) => b.status === 'completada' && inRange(b.date, range) && rows.some((p) => p.provider.uid === b.proId)).map((b) => b.id) })} />
+            <Kpi label="Comisión de HULUL" value={money(totals.commission)} hint="15 % de lo facturado" href="/admin/contabilidad" />
+            <Kpi label="Por transferirles" value={money(totals.toPay)} hint="Liquidaciones por pagar" href="/admin/contabilidad?vista=pagar" />
+            <WeeklyStatements />
           </div>
           <ProviderTrend title="Cómo van los proveedores" bookings={(view.bookings ?? []).filter((b) => rows.some((p) => p.provider.uid === b.proId))} />
           <div className="adm-bar">
@@ -101,7 +201,7 @@ export function ProvidersPanel() {
             <button type="button" className="adm-btn" onClick={exportCsv} disabled={!rows.length}>Exportar CSV</button>
           </div>
           {rows.length === 0 ? <div className="adm-card adm-empty">No hay proveedores con estos filtros.</div> : (
-            <div className="adm-table-wrap">
+            <div className="adm-table-wrap" id="lista-proveedores">
               <table className="adm-table">
                 <thead><tr><th>Proveedor</th><th>Actividad</th><th className="num">Trabajos</th><th className="num">Éxito</th><th className="num">★</th><th className="num">Facturado</th><th className="num">Comisión</th><th className="num">Saldo</th><th>Señales</th></tr></thead>
                 <tbody>
@@ -131,6 +231,7 @@ export function ProvidersPanel() {
           )}
         </>
       )}
+      {drill && <BookingListDrawer title={drill.title} ids={drill.ids} onClose={() => setDrill(null)} />}
     </>
   );
 }

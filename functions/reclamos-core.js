@@ -185,3 +185,102 @@ export function isAdminToken(token, adminEmails) {
   if (!email || token?.email_verified !== true) return false;
   return String(adminEmails ?? '').toLowerCase().split(/[,;\s]+/).filter(Boolean).includes(email);
 }
+
+/* ------------------------------ Asistente de reclamos ------------------------------ */
+
+/** Montos por defecto (los mismos de las reglas automáticas de retrasos y faltas). */
+export const ADVICE_AMOUNTS = { creditoCliente: 5, multaLeve: 5, multaGrave: 10 };
+const ARRIVAL_RADIUS = 250;
+const LATE_MIN = 15;
+
+/**
+ * Lee la evidencia del expediente y sugiere a favor de quién decidir, con razones,
+ * confianza y la decisión completa para cada lado (montos, faltas y motivo).
+ * Es una ayuda: HULUL decide. Entrada = lo que devuelve adminReclamo.
+ */
+export function claimAdvice({ claim, booking: b, parties, appointmentMs }) {
+  const reasons = [];
+  let score = 0; // > 0 a favor del cliente; < 0 a favor del profesional
+  const add = (side, weight, text) => { score += side === 'cliente' ? weight : -weight; reasons.push({ side, weight, text }); };
+  const opener = claim.openedBy === 'profesional' ? 'profesional' : 'cliente';
+  const other = opener === 'cliente' ? 'profesional' : 'cliente';
+  const rings = Array.isArray(b.rings) ? b.rings.length : Number(b.rings || 0);
+  const dist = Number(b.arrivedPos?.distance);
+  const lateMin = b.arrivedAt && appointmentMs ? Math.round((b.arrivedAt - appointmentMs) / 60_000) : null;
+  const workMin = b.startedAt && b.finishedAt ? Math.round((b.finishedAt - b.startedAt) / 60_000) : null;
+  const photos = (b.diagnosisPhotos?.length ?? 0);
+
+  // Llegada (pesa en «no vino», «sí estaba» y cualquier reclamo del cliente).
+  if (b.arrivedAt) {
+    if (Number.isFinite(dist) && dist > ARRIVAL_RADIUS) add('cliente', 2, `Marcó la llegada a ${Math.round(dist)} m de la dirección (más de ${ARRIVAL_RADIUS} m).`);
+    else if (Number.isFinite(dist)) add('profesional', 1, `Llegó a la dirección (GPS a ${Math.round(dist)} m).`);
+    if (lateMin !== null && lateMin > LATE_MIN) add('cliente', 1, `Llegó ${lateMin} min tarde.`);
+    else if (lateMin !== null) add('profesional', 1, 'Llegó a tiempo.');
+  } else if (claim.kind === 'no_vino' || claim.kind === 'si_estaba') add('cliente', 3, 'No hay registro de llegada a la dirección.');
+
+  switch (claim.kind) {
+    case 'si_estaba': // el profesional marcó «cliente ausente»
+      if (rings >= 3) add('profesional', 2, `Timbró ${rings} veces antes de marcar ausente.`);
+      else add('cliente', 2, `Solo timbró ${rings} ${rings === 1 ? 'vez' : 'veces'} (se piden 3).`);
+      break;
+    case 'no_vino':
+      if (b.startedAt) add('profesional', 3, 'El trabajo empezó con el código de 4 dígitos que da el cliente.');
+      if (photos) add('profesional', 1, `Subió ${photos} ${photos === 1 ? 'foto' : 'fotos'} del trabajo.`);
+      break;
+    case 'incompleto':
+      if (b.outcome && b.outcome !== 'resuelto') add('cliente', 2, 'El mismo profesional marcó que no quedó resuelto.');
+      else if (b.outcome === 'resuelto' && photos) add('profesional', 1, 'Marcó resuelto y subió fotos del trabajo.');
+      if (workMin !== null && workMin < 20) add('cliente', 1, `El trabajo duró solo ${workMin} min.`);
+      break;
+    case 'cobro':
+      if (b.extra && ['pagado_efectivo', 'pagado', 'por_cobrar'].includes(b.extra.status)) add('cliente', 1, 'Hubo un cobro adicional en esta reserva.');
+      break;
+    case 'no_pago': case 'no_dejo': case 'agresion': case 'dano': case 'adicional':
+      if (opener === 'profesional' && b.startedAt) add('profesional', 1, 'El trabajo sí empezó con el código del cliente.');
+      break;
+    default: break;
+  }
+
+  // Lo que dijo cada parte.
+  if (claim.responseMissed || (claim.status !== 'esperando_respuesta' && !claim.response)) add(opener, 1, `La otra parte (${other}) no respondió en el plazo.`);
+  if ((claim.photos?.length ?? 0) > 0) add(opener, 1, `Quien reclama adjuntó ${claim.photos.length} ${claim.photos.length === 1 ? 'foto' : 'fotos'}.`);
+  if (b.rating && b.rating <= 2 && opener === 'cliente') add('cliente', 1, `El cliente calificó con ${b.rating} ★.`);
+  if (b.clientRating?.stars && b.clientRating.stars <= 2) add('profesional', 1, `El profesional calificó al cliente con ${b.clientRating.stars} ★.`);
+
+  // Antecedentes (detectar abusos de cualquiera de los dos).
+  const proPrev = Math.max(0, Number(parties?.pro?.reclamos ?? 0) - 1);
+  const cliPrev = Math.max(0, Number(parties?.client?.reclamos ?? 0) - 1);
+  if (proPrev >= 2) add('cliente', 1, `El profesional tiene ${proPrev} reclamos anteriores.`);
+  if (Number(parties?.pro?.strikes ?? 0) >= 2) add('cliente', 1, `El profesional tiene ${parties.pro.strikes} faltas.`);
+  if (cliPrev >= 2) add('profesional', 1, `El cliente tiene ${cliPrev} reclamos anteriores.`);
+  if (Number(parties?.client?.strikes ?? 0) >= 1) add('profesional', 1, `El cliente tiene ${parties.client.strikes} ${Number(parties.client.strikes) === 1 ? 'falta' : 'faltas'}.`);
+
+  const side = score > 0 ? 'cliente' : score < 0 ? 'profesional' : null;
+  const abs = Math.abs(score);
+  const confidence = !side ? 'sin_datos' : abs >= 4 ? 'alta' : abs >= 2 ? 'media' : 'baja';
+  const visit = Number(b.visit ?? b.subtotal ?? 0);
+  const grave = ['no_vino', 'si_estaba'].includes(claim.kind);
+  const top = (s) => reasons.filter((r) => r.side === s).sort((a, z) => z.weight - a.weight).slice(0, 3).map((r) => r.text.replace(/\.$/, '')).join('; ');
+
+  const forClient = {
+    outcome: 'cliente',
+    multaPro: opener === 'cliente' && claim.kind !== 'otro' ? (grave ? ADVICE_AMOUNTS.multaGrave : ADVICE_AMOUNTS.multaLeve) : 0,
+    creditoCliente: opener === 'cliente' ? ADVICE_AMOUNTS.creditoCliente : 0,
+    faltaPro: opener === 'cliente' && claim.kind !== 'otro',
+    faltaCliente: false,
+  };
+  forClient.note = `A favor del cliente. ${top('cliente') || 'La evidencia del profesional no alcanza'}. No se cobra la visita${visit ? ` ($${visit.toFixed(2)})` : ''}${forClient.creditoCliente ? ` y el cliente recibe $${forClient.creditoCliente.toFixed(2)} de crédito` : ''}${forClient.multaPro ? `; multa de $${forClient.multaPro.toFixed(2)} al profesional` : ''}.`;
+  const forPro = {
+    outcome: 'profesional', multaPro: 0, creditoCliente: 0, faltaPro: false,
+    // Falta al cliente si él causó el problema (reclamo del profesional) o si su reclamo fue claramente infundado.
+    faltaCliente: opener === 'profesional' || (side === 'profesional' && confidence === 'alta'),
+  };
+  forPro.note = `A favor del profesional. ${top('profesional') || 'No hay evidencia contra el profesional'}. Se cobra la visita${visit ? ` ($${visit.toFixed(2)})` : ''} y se libera su pago${forPro.faltaCliente ? '; se registra una falta al cliente' : ''}.`;
+
+  return {
+    side, confidence, score, reasons,
+    summary: !side ? 'La evidencia está pareja: revisa el chat y las fotos antes de decidir.'
+      : `Sugerencia: a favor del ${side} (confianza ${confidence}). ${top(side)}.`,
+    decisions: { cliente: forClient, profesional: forPro },
+  };
+}
