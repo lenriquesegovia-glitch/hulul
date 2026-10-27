@@ -583,6 +583,8 @@ export interface ClaimListItem {
   id: string; code: string; openedBy: 'cliente' | 'profesional'; kindLabel: string; status: Claim['status']; openedAt: number;
   responseDueAt: number; resolveDueAt: number; hasResponse: boolean; decision: 'cliente' | 'profesional' | null;
   clientName: string; proName: string; category: string; date: string; slot: string; moneyHeld: boolean;
+  /** Sugerencia del asistente para reclamos abiertos. */
+  suggestion?: { side: 'cliente' | 'profesional' | null; confidence: string } | null;
 }
 
 export interface ClaimFile {
@@ -597,6 +599,15 @@ export interface ClaimFile {
   timeline: { at: number; who: string; what: string; detail: string }[];
   accesses: { email: string; action: string; at: number }[];
   revealed: boolean;
+  advice?: ClaimAdvice;
+}
+
+export interface ClaimDecisionDraft { outcome: 'cliente' | 'profesional'; multaPro: number; creditoCliente: number; faltaPro: boolean; faltaCliente: boolean; note: string }
+/** Lectura del asistente de reclamos (reglas sobre la evidencia; HULUL decide). */
+export interface ClaimAdvice {
+  side: 'cliente' | 'profesional' | null; confidence: 'alta' | 'media' | 'baja' | 'sin_datos'; score: number; summary: string;
+  reasons: { side: 'cliente' | 'profesional'; weight: number; text: string }[];
+  decisions: { cliente: ClaimDecisionDraft; profesional: ClaimDecisionDraft };
 }
 
 export async function adminListClaims(): Promise<ClaimListItem[]> {

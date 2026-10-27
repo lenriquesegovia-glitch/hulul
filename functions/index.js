@@ -27,13 +27,13 @@ import { buildRanking } from './home-ranking-core.js';
 import { normalizeRankingBooking } from './home-ranking.js';
 import { hasProfanity, maskProfanity, PROFANITY_MESSAGE } from './profanity.js';
 import { safeMessage } from './mail-safety.js';
-import { CLAIM_STATUS, CLIENT_KINDS, PRO_KINDS, RESOLVE_HOURS, RESPONSE_HOURS, REMIND_BEFORE_HOURS, claimBlocked, cleanClaimPhotos, decisionPatch, deadlines, dueActions, isAdminToken, maskContact, responseStats, timeline } from './reclamos-core.js';
+import { claimAdvice, CLAIM_STATUS, CLIENT_KINDS, PRO_KINDS, RESOLVE_HOURS, RESPONSE_HOURS, REMIND_BEFORE_HOURS, claimBlocked, cleanClaimPhotos, decisionPatch, deadlines, dueActions, isAdminToken, maskContact, responseStats, timeline } from './reclamos-core.js';
 import { VERIFIED_DOCS, expectOf, submissionCheck, verifySelfie, verifyText } from './doc-verify.js';
 import { MAX_FILE_BYTES, PRO_UID, REVIEW_LIST_STATUSES, maskBank, providerFiles, reviewMessage, reviewPatch } from './pro-review.js';
 import { can, dashForRole, normEmail, roleFor, roleInput } from './roles-core.js';
 import { statementData, statementPdf } from './statement-pdf.js';
 import { bankFile, BANK_FORMATS, DEFAULT_BANK_FORMAT, paymentLines } from './bank-files.js';
-import { bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
+import { appointmentAt, bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
 
 /** Debe coincidir con la ubicación de la base de datos Firestore. */
@@ -1908,10 +1908,20 @@ export const adminReclamos = onCall({ region: REGION }, async (req) => {
   await requireAdmin(req, 'reclamos');
   await migrateLegacyDisputes().catch((e) => logger.warn('No se pudieron pasar reclamos antiguos', { e: String(e) }));
   const snap = await db().collection('reclamos').orderBy('openedAt', 'desc').limit(200).get();
+  // Sugerencia rápida para los abiertos (para ordenar y decidir en bloque).
+  const open = snap.docs.filter((d) => d.data().status !== 'resuelto');
+  const bks = open.length ? await db().getAll(...open.map((d) => db().doc(`bookings/${d.id}`))) : [];
+  const bkById = new Map(bks.map((x) => [x.id, x.data() ?? {}]));
+  const countBy = (k) => { const m = new Map(); for (const d of snap.docs) { const v = d.data()[k]; m.set(v, (m.get(v) ?? 0) + 1); } return m; };
+  const byClient = countBy('clientId'); const byPro = countBy('proId');
+  const tsMs = (b) => Object.fromEntries(['arrivedAt', 'startedAt', 'finishedAt'].map((k) => [k, b[k]?.toMillis?.() ?? null]));
   return {
     items: snap.docs.map((d) => {
       const c = d.data();
+      const bk = bkById.get(d.id);
+      const adv = bk ? claimAdvice({ claim: c, booking: { ...bk, ...tsMs(bk) }, appointmentMs: appointmentAt(bk.date, bk.slot), parties: { client: { reclamos: byClient.get(c.clientId) ?? 1 }, pro: { reclamos: byPro.get(c.proId) ?? 1 } } }) : null;
       return {
+        suggestion: adv ? { side: adv.side, confidence: adv.confidence } : null,
         id: d.id, code: c.code, openedBy: c.openedBy, kindLabel: c.kindLabel, status: c.status, openedAt: c.openedAt,
         responseDueAt: c.responseDueAt, resolveDueAt: c.resolveDueAt, hasResponse: !!c.response, decision: c.decision?.outcome ?? null,
         clientName: c.clientName, proName: c.proName, category: c.category, date: c.date, slot: c.slot, moneyHeld: !!c.moneyHeld,
@@ -1966,6 +1976,12 @@ export const adminReclamo = onCall({ region: REGION }, async (req) => {
     timeline: timeline({ ...b, ...Object.fromEntries(tsKeys.map((k) => [k, times[k]])) }, c, messages),
     accesses: acc.docs.map((d) => ({ email: d.data().email, action: d.data().action, at: d.data().at?.toMillis?.() ?? 0 })),
     revealed: reveal,
+    // Asistente: lectura rápida de la evidencia y decisión sugerida para cada lado.
+    advice: claimAdvice({
+      claim: c, appointmentMs: appointmentAt(b.date, b.slot),
+      booking: { ...b, ...times, arrivedPos: b.arrivedPos ?? null },
+      parties: { client: { reclamos: others.size, strikes: Number(cl.data()?.strikes ?? 0) }, pro: { reclamos: proOthers.size, strikes: Number(pr.data()?.strikes ?? 0) } },
+    }),
   };
 });
 

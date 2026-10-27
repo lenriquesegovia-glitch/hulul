@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getCategory } from '@hulul/shared';
-import { CLAIM_STATUS_LABEL, type ClaimFile, type ClaimListItem } from '@hulul/shared/firebase';
+import { CLAIM_STATUS_LABEL, type ClaimAdvice, type ClaimFile, type ClaimListItem } from '@hulul/shared/firebase';
 import { SignIn } from '@/components/SignIn';
 import { logout, useUser } from '@/lib/auth';
 import { whenEc } from '@/components/Claim';
@@ -113,6 +113,11 @@ export function ClaimsPanel() {
                 <span style={{ fontSize: 13.5 }}>
                   Cliente: {c.clientName || '—'} · Profesional: {c.proName || '—'} · {CLAIM_STATUS_LABEL[c.status]}{c.status !== 'resuelto' ? (c.hasResponse ? ' · ya respondió' : ` · respuesta ${left(c.responseDueAt, now)}`) : ''}{c.moneyHeld && c.status !== 'resuelto' ? ' · pago retenido' : ''}
                 </span>
+                {c.status !== 'resuelto' && c.suggestion?.side && (
+                  <span style={{ fontSize: 13, fontWeight: 700, color: c.suggestion.side === 'cliente' ? '#1F4E79' : '#206344' }}>
+                    Asistente: a favor del {c.suggestion.side} ({c.suggestion.confidence})
+                  </span>
+                )}
               </button>
             );
           })}
@@ -269,7 +274,7 @@ function ClaimDetail({ id, now, onBack }: { id: string; now: number; onBack: () 
           <Row k="Medidas" v={[c.decision.multaPro ? `multa ${usd(c.decision.multaPro)}` : '', c.decision.creditoCliente ? `crédito ${usd(c.decision.creditoCliente)}` : '', c.decision.faltaPro ? 'falta al profesional' : '', c.decision.faltaCliente ? 'falta al cliente' : ''].filter(Boolean).join(' · ') || 'Ninguna'} />
           <Row k="Fecha" v={whenEc(c.decision.at)} />
         </Section>
-      ) : <DecisionForm id={id} clientOpened={c.openedBy === 'cliente'} onDone={() => load()} />}
+      ) : <DecisionForm id={id} clientOpened={c.openedBy === 'cliente'} advice={f.advice} onDone={() => load()} />}
 
       <Section title="Registro de accesos a este expediente">
         {f.accesses.map((a, i) => <span key={i} className="muted" style={{ fontSize: 13 }}>{whenEc(a.at)} · {a.email} · {a.action}</span>)}
@@ -278,7 +283,9 @@ function ClaimDetail({ id, now, onBack }: { id: string; now: number; onBack: () 
   );
 }
 
-function DecisionForm({ id, clientOpened, onDone }: { id: string; clientOpened: boolean; onDone: () => void }) {
+const CONF_LABEL: Record<string, string> = { alta: 'confianza alta', media: 'confianza media', baja: 'confianza baja', sin_datos: 'sin evidencia clara' };
+
+function DecisionForm({ id, clientOpened, advice, onDone }: { id: string; clientOpened: boolean; advice?: ClaimAdvice; onDone: () => void }) {
   const [outcome, setOutcome] = useState<'' | 'cliente' | 'profesional'>('');
   const [note, setNote] = useState('');
   const [multaPro, setMultaPro] = useState('');
@@ -288,6 +295,15 @@ function DecisionForm({ id, clientOpened, onDone }: { id: string; clientOpened: 
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+
+  /** Al elegir un lado se llenan montos, faltas y motivo (se pueden cambiar). */
+  const pick = (side: 'cliente' | 'profesional') => {
+    setOutcome(side); setConfirm(false);
+    const d = advice?.decisions[side];
+    if (!d) return;
+    setMultaPro(d.multaPro ? String(d.multaPro) : ''); setCredito(d.creditoCliente ? String(d.creditoCliente) : '');
+    setFaltaPro(d.faltaPro); setFaltaCliente(d.faltaCliente); setNote(d.note);
+  };
 
   const effect = !outcome ? '' : clientOpened
     ? (outcome === 'cliente' ? 'No se cobra la visita al cliente (se anula el cargo y no se paga al profesional).' : 'Se mantiene el cobro y se libera el pago al profesional.')
@@ -308,9 +324,19 @@ function DecisionForm({ id, clientOpened, onDone }: { id: string; clientOpened: 
 
   return (
     <Section title="Decisión">
+      {advice && (
+        <div className="stack gap-8" style={{ background: 'var(--surface-warm, #F4F1EA)', borderRadius: 12, padding: 14, borderLeft: `5px solid ${advice.side === 'cliente' ? '#1F4E79' : advice.side === 'profesional' ? '#206344' : '#9AA8A5'}` }}>
+          <strong>Asistente: {advice.side ? `a favor del ${advice.side}` : 'revisar a mano'} <span className="muted" style={{ fontWeight: 600, fontSize: 13 }}>· {CONF_LABEL[advice.confidence] ?? advice.confidence}</span></strong>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, display: 'grid', gap: 3 }}>
+            {advice.reasons.length ? advice.reasons.map((r, i) => <li key={i}><span style={{ fontWeight: 700, color: r.side === 'cliente' ? '#1F4E79' : '#206344' }}>{r.side === 'cliente' ? 'Cliente' : 'Profesional'}:</span> {r.text}</li>) : <li>No hay evidencia automática (llegada, timbres, fotos). Revisa el chat.</li>}
+          </ul>
+          {advice.side && <button type="button" className="btn btn-secondary" style={{ alignSelf: 'flex-start' }} onClick={() => pick(advice.side!)}>Usar la sugerencia (llena todo)</button>}
+          <span className="muted" style={{ fontSize: 12.5 }}>Es una ayuda basada en la evidencia registrada; la decisión es tuya. Puedes cambiar cualquier dato antes de resolver.</span>
+        </div>
+      )}
       <div className="row gap-16" style={{ flexWrap: 'wrap' }}>
-        <label className="check"><input type="radio" name="outcome" checked={outcome === 'cliente'} onChange={() => { setOutcome('cliente'); setConfirm(false); }} /><span>A favor del cliente</span></label>
-        <label className="check"><input type="radio" name="outcome" checked={outcome === 'profesional'} onChange={() => { setOutcome('profesional'); setConfirm(false); }} /><span>A favor del profesional</span></label>
+        <label className="check"><input type="radio" name="outcome" checked={outcome === 'cliente'} onChange={() => pick('cliente')} /><span>A favor del cliente</span></label>
+        <label className="check"><input type="radio" name="outcome" checked={outcome === 'profesional'} onChange={() => pick('profesional')} /><span>A favor del profesional</span></label>
       </div>
       {effect && <span style={{ fontSize: 13.5 }}>{effect}</span>}
       <div className="row gap-12" style={{ flexWrap: 'wrap' }}>

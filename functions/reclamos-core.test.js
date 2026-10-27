@@ -88,3 +88,28 @@ test('privacidad: contacto enmascarado, administradores verificados y fotos solo
   const other = `https://firebasestorage.googleapis.com/v0/b/hulul-59081.firebasestorage.app/o/${encodeURIComponent('reclamos/u2/b1/')}f.jpg`;
   assert.deepEqual(cleanClaimPhotos([ok, other, 'https://evil.com/x.jpg'], 'u1', 'b1'), [ok]);
 });
+
+import { claimAdvice } from './reclamos-core.js';
+
+test('asistente: cliente ausente con 3 timbres y llegada a tiempo → a favor del profesional', () => {
+  const at = Date.UTC(2026, 9, 20, 15);
+  const a = claimAdvice({ claim: { openedBy: 'cliente', kind: 'si_estaba', status: 'en_revision', response: { text: 'Timbré 3 veces' }, photos: [] },
+    booking: { arrivedAt: at + 5 * 60_000, arrivedPos: { distance: 40 }, rings: [1, 2, 3], visit: 20 }, parties: { client: { reclamos: 1, strikes: 0 }, pro: { reclamos: 1, strikes: 0 } }, appointmentMs: at });
+  assert.equal(a.side, 'profesional');
+  assert.equal(a.decisions.profesional.multaPro, 0);
+  assert.ok(a.decisions.profesional.note.includes('Se cobra la visita ($20.00)'));
+});
+
+test('asistente: no vino, sin llegada y sin respuesta → a favor del cliente con multa grave', () => {
+  const a = claimAdvice({ claim: { openedBy: 'cliente', kind: 'no_vino', status: 'en_revision', response: null, responseMissed: true, photos: ['x'] },
+    booking: { visit: 25 }, parties: { client: { reclamos: 1 }, pro: { reclamos: 3, strikes: 2 } }, appointmentMs: Date.now() });
+  assert.equal(a.side, 'cliente');
+  assert.equal(a.confidence, 'alta');
+  assert.deepEqual([a.decisions.cliente.multaPro, a.decisions.cliente.creditoCliente, a.decisions.cliente.faltaPro], [10, 5, true]);
+});
+
+test('asistente: reclamo del profesional → falta al cliente por defecto si gana el profesional', () => {
+  const a = claimAdvice({ claim: { openedBy: 'profesional', kind: 'agresion', status: 'en_revision', response: null }, booking: { startedAt: 1 }, parties: {}, appointmentMs: null });
+  assert.equal(a.decisions.profesional.faltaCliente, true);
+  assert.equal(a.decisions.cliente.creditoCliente, 0);
+});

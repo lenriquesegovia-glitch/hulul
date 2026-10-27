@@ -1,5 +1,10 @@
 # HULUL — Estado y registro de entregas
 
+## En PR — Asistente de reclamos y decisión prellenada, 26 de octubre de 2026 (Claude)
+- Rama `claude/reclamos-asistente`. Publicar con **backend** (android no).
+- `claimAdvice` (functions/reclamos-core.js, con pruebas): lee la evidencia (llegada y distancia GPS, atraso, timbres, código de inicio, fotos, resultado marcado, duración, respuesta en plazo, calificaciones, reclamos y faltas previas) y sugiere lado, confianza y razones. `adminReclamo` lo devuelve como `advice`; `adminReclamos` agrega `suggestion` a los abiertos.
+- Panel: al elegir «A favor del cliente/profesional» se llenan multa, crédito, faltas y motivo (editables). Por defecto: a favor del cliente que reclama → crédito $5, falta al profesional y multa $10 («no vino», «sí estaba») o $5 (otros); a favor del profesional → se cobra y se libera el pago; falta al cliente si el reclamo era del profesional o si el del cliente era claramente infundado.
+
 ## En PR — Calificación obligatoria, proveedor como mini CRM y curva de dinero, 26 de octubre de 2026 (Claude)
 - Rama `claude/proveedor-crm-calificacion`. **Toca la app: publicar con backend y android.**
 - **Calificar antes de reservar otra vez**: si el cliente tiene un servicio completado sin calificar, la web y la app le piden calificarlo antes del formulario de reserva (`pendingRating` en `packages/shared/src/firebase.ts`, `RateFirst` en `reservar/[id]`); el servidor (`avisoReserva` → `unratedBookingOf`) anula una reserva nueva que llegue sin esa calificación.
