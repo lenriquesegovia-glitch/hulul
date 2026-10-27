@@ -144,4 +144,38 @@ assert.equal(complianceAlerts({ bookings, payouts: [], providers: [] }, { from: 
   assert.equal(typeof wm.nextPayout.estimate, 'number');
 }
 
+// Gastos y nómina (deben coincidir con functions/gastos-core.js)
+{
+  const core = await import('../functions/gastos-core.js');
+  const sh = await import('../packages/shared/src/dashboard.ts');
+  for (const [k, v] of Object.entries(core.EXPENSE_CATEGORIES)) assert.equal(sh.EXPENSE_CATEGORIES[k]?.code, v.code, `categoría ${k}`);
+  assert.deepEqual(Object.keys(sh.EXPENSE_CATEGORIES).sort(), Object.keys(core.EXPENSE_CATEGORIES).sort());
+  const g1 = { id: 'g1', ...core.expenseInput({ fecha: '2026-10-05', categoria: 'honorarios', proveedor: 'Contadora', base: 200, iva: 30, retRenta: 20, retIva: 21 }), pagadoEl: null };
+  const g2 = { id: 'g2', ...core.expenseInput({ fecha: '2026-10-10', categoria: 'marketing', proveedor: 'Meta', base: 100, iva: 15, estado: 'por_pagar', vence: '2026-10-20' }), pagadoEl: null };
+  const emp = { id: 'e1', nombre: 'Ana', sueldo: 482, ingreso: '2025-01-01', decimosMensuales: false, fondoMensual: false };
+  const lines = [core.payrollLine(emp, { anticipos: 40 }, '2026-10')];
+  const totals = core.payrollTotals(lines);
+  const nom = core.payrollExpenses('2026-10', totals).map((g) => ({ ...g, pagadoEl: null }));
+  const gastos = [g1, g2, ...nom];
+  const range = { from: '2026-10-01', to: '2026-10-31' };
+  const s = sh.expenseSummary(gastos, range, now);
+  assert.equal(s.vencidos.total, 115, 'factura de Meta vencida');
+  assert.equal(s.total, sh.r2(300 + nom.reduce((t, g) => t + g.base, 0)));
+  assert.deepEqual(s.byGroup.map((g) => g.key), ['administrativos', 'nomina', 'marketing']);
+  const lg = [{ id: 'l1', bucket: 'ingreso_hulul', kind: 'comision', amount: 1000, createdAt: Date.UTC(2026, 9, 12, 15) }, { id: 'l2', bucket: 'ingreso_hulul', kind: 'multa', amount: 10, createdAt: Date.UTC(2026, 9, 12, 15) }];
+  const is = sh.incomeStatement(lg, gastos, range, now);
+  assert.equal(is.ingresos.total, 1010);
+  assert.equal(is.utilidad, sh.r2(1010 - s.total));
+  const j = sh.expenseJournal(gastos, [{ mes: '2026-10', status: 'aprobado', lines, totals }], range);
+  const dr = sh.r2(j.reduce((t, l) => t + l.debit, 0)); const cr = sh.r2(j.reduce((t, l) => t + l.credit, 0));
+  assert.equal(dr, cr, 'asientos de gastos y nómina cuadran');
+  for (const e of new Set(j.map((l) => l.entry))) {
+    const x = j.filter((l) => l.entry === e);
+    assert.equal(sh.r2(x.reduce((t, l) => t + l.debit, 0)), sh.r2(x.reduce((t, l) => t + l.credit, 0)), `asiento ${e} cuadra`);
+  }
+  assert.ok(!j.some((l) => l.entry.startsWith('FC') && l.detail.startsWith('Pago') && l.party === 'Meta'), 'lo pendiente no se paga en el diario');
+  const serie = sh.resultSeries(lg, gastos, range, 'mes');
+  assert.equal(serie.length, 1); assert.equal(serie[0].utilidad, is.utilidad);
+}
+
 console.log('Tablero: OK');

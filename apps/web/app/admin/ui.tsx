@@ -514,13 +514,13 @@ const FLOW_SERIES = [
 ] as const;
 
 /** Entradas, salidas, neto y proyección en el tiempo. Toca un punto para ver sus reservas. */
-export function FlowChart({ points, gran, onPick, labels, only, onOnly }: { labels?: Partial<Record<FlowKey, string>>; only?: FlowKey[] | null; onOnly?: (k: FlowKey[] | null) => void; points: { key: string; from: string; to: string; inflow: number; card: number; outflow: number; net: number; projected: number; ids: string[] }[]; gran: 'dia' | 'semana' | 'mes'; onPick: (title: string, ids: string[]) => void }) {
+export function FlowChart({ points, gran, onPick, labels, only, onOnly, keys, noun = 'reservas' }: { keys?: FlowKey[]; noun?: string; labels?: Partial<Record<FlowKey, string>>; only?: FlowKey[] | null; onOnly?: (k: FlowKey[] | null) => void; points: { key: string; from: string; to: string; inflow: number; card: number; outflow: number; net: number; projected: number; ids: string[] }[]; gran: 'dia' | 'semana' | 'mes'; onPick: (title: string, ids: string[]) => void }) {
   const SERIES = FLOW_SERIES.map((x) => ({ ...x, label: labels?.[x.key] ?? x.label }));
   const [hover, setHover] = useState<number | null>(null);
   const [ownHidden, setOwnHidden] = useState<string[]>([]);
   const hidden = only ? SERIES.map((x) => x.key as string).filter((k) => !only.includes(k as FlowKey)) : ownHidden;
   const setHidden = (f: (h: string[]) => string[]) => { if (only && onOnly) onOnly(null); setOwnHidden(f(hidden)); };
-  const series = SERIES.filter((x) => !labels || x.key !== 'card' || labels.card);
+  const series = SERIES.filter((x) => (keys ? keys.includes(x.key) : !labels || x.key !== 'card' || labels.card));
   if (!points.length) return <div className="adm-empty">Sin movimientos en este periodo.</div>;
   const W = 1000, H = 260, L = 74, R = 12, T = 12, B = 34;
   const vals = points.flatMap((p) => series.filter((s) => !hidden.includes(s.key)).map((s) => p[s.key]));
@@ -562,7 +562,7 @@ export function FlowChart({ points, gran, onPick, labels, only, onOnly }: { labe
           <div className="adm-flowtip" style={{ left: `${(x(hover!) / W) * 100}%` }}>
             <b>{gran === 'dia' ? fmtDay(h.from) : `${fmtWeek(h.from)} – ${fmtWeek(h.to)}`}</b>
             {series.map((s) => <span key={s.key}><i style={{ background: s.color }} />{s.label}: {money(h[s.key])}</span>)}
-            {h.ids.length > 0 && <small>Toca para ver {h.ids.length} reservas</small>}
+            {h.ids.length > 0 && <small>Toca para ver {h.ids.length} {noun}</small>}
           </div>
         )}
       </div>

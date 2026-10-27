@@ -1,5 +1,16 @@
 # HULUL — Estado y registro de entregas
 
+## En PR — Gastos de la empresa y nómina (/admin/gastos), 26 de octubre de 2026 (Claude)
+
+- Nueva página en Finanzas: «Gastos y nómina». La ven socios, contadora y UAFE; registran y aprueban socios y contadora (permiso pagos). La UAFE no ve cédulas, cuentas ni el detalle por empleado.
+- Gastos con categoría → cuenta Supercias (52xx), base, IVA (crédito tributario 1010501), retenciones, forma de pago, por pagar con vencimiento, gastos fijos que se copian al mes siguiente con un clic.
+- Rol de pagos mensual: SBU 2026 $482, aporte personal 9,45 %, patronal 11,15 % + IECE y SECAP 0,5 %, décimos, vacaciones y fondos de reserva desde el mes 13. Borrador → aprobar (registra los gastos de nómina) → reabrir.
+- Estado de resultados (ingresos HULUL − gastos = utilidad), curva ingresos vs. gastos, gastos por grupo, categoría y proveedor; todo tocable.
+- Excel para la contadora (estado de resultados, gastos, diario de gastos y nómina, compras para el ATS, roles) y botón «Enviar a la contadora».
+- Datos en `gastos`, `empleados`, `rolPagos` y `adminConfig/nomina` (solo servidor). Lógica en `functions/gastos-core.js` y `packages/shared/src/dashboard.ts`, con pruebas.
+- Pendiente: la contadora valida cuentas y parámetros; adjuntar foto/PDF del comprobante; archivo de pago masivo de sueldos al banco.
+- Necesita publicar con backend (funciones nuevas).
+
 ## En PR — Asistente de reclamos y decisión prellenada, 26 de octubre de 2026 (Claude)
 - Misma rama, además: **menú** Gestión (Resumen, Reservas, Reclamos, Aprobar profesionales) · Finanzas (Contabilidad, Proveedores, Clientes) · Control (Cumplimiento UAFE, **Cumplimiento SRI** nuevo) · Administración (Equipo, roles y permisos).
 - **Estados de cuenta semanales con aprobación**: el lunes `liquidacionSemanal` ya no envía PDFs; prepara `estadosCuenta/{semana}` en borrador (`prepareStatementsBatch`) y avisa a HULUL. En Proveedores → «Estados de cuenta de la semana» se revisan, se desmarcan y se aprueban (`adminEstadosSemana`, `aprobarEstadosSemana`). El correo de liquidación sigue saliendo sin adjunto.

@@ -18,6 +18,7 @@ import { sortPros, toProfessional, type PublicPro } from './demo-data';
 import type { JobOutcome } from './policy';
 import type { CategoryEvidence } from './provider';
 import type { TaxRegime } from './tax';
+import type { Employee, Expense, Payroll, PayrollLine, PayrollTotals } from './dashboard';
 import { featuredHomeServices, validateHomeDiscovery } from './home-discovery';
 
 /** Read-only aggregate; unavailable or stale recommendations never block booking. */
@@ -972,4 +973,38 @@ export async function adminIAStatus(): Promise<{ connected: boolean; last4: stri
 }
 export async function adminSaveIAKey(key: string, remove = false): Promise<{ connected: boolean; last4?: string }> {
   return (await callable<{ key: string; remove: boolean }, { ok: boolean; connected: boolean; last4?: string }>('guardarClaveIA')({ key, remove })).data;
+}
+
+/* ------------------------------ Gastos de la empresa y nómina ------------------------------ */
+
+
+export interface ExpensesData {
+  gastos: Expense[]; empleados: Employee[]; roles: Payroll[];
+  params: { sbu: number; aportePersonal: number; aportePatronal: number; iece: number; secap: number; fondoReserva: number };
+  canEdit: boolean; viewer: { role: string; email: string };
+}
+export type ExpenseInput = Omit<Expense, 'id' | 'total' | 'aPagar' | 'pagadoEl' | 'origen' | 'creadoPor'> & { id?: string; pagadoEl?: string | null };
+export type EmployeeInput = Omit<Employee, 'id' | 'bajoSbu'> & { id?: string };
+export interface PayrollAdjust { dias?: number; extras?: number; bonos?: number; anticipos?: number; otrosDescuentos?: number }
+
+export async function adminExpenses(): Promise<ExpensesData> {
+  return (await callable<Record<string, never>, ExpensesData>('adminGastos')({})).data;
+}
+export async function adminSaveExpense(input: ExpenseInput): Promise<string> {
+  return (await callable<ExpenseInput, { ok: boolean; id: string }>('guardarGasto')(input)).data.id;
+}
+export async function adminPayExpenses(ids: string[], fecha?: string): Promise<number> {
+  return (await callable<{ ids: string[]; fecha?: string }, { ok: boolean; count: number }>('pagarGasto')({ ids, fecha })).data.count;
+}
+export async function adminDeleteExpense(id: string): Promise<void> {
+  await callable<{ id: string }, { ok: boolean }>('borrarGasto')({ id });
+}
+export async function adminCopyRecurring(mes: string): Promise<number> {
+  return (await callable<{ mes: string }, { ok: boolean; count: number }>('copiarRecurrentes')({ mes })).data.count;
+}
+export async function adminSaveEmployee(input: EmployeeInput): Promise<string> {
+  return (await callable<EmployeeInput, { ok: boolean; id: string }>('guardarEmpleado')(input)).data.id;
+}
+export async function adminPayroll(mes: string, accion: 'calcular' | 'aprobar' | 'reabrir', ajustes?: Record<string, PayrollAdjust>) {
+  return (await callable<{ mes: string; accion: string; ajustes?: Record<string, PayrollAdjust> }, { ok: boolean; status: Payroll['status']; lines?: PayrollLine[]; totals?: PayrollTotals }>('rolPagos')({ mes, accion, ajustes })).data;
 }
