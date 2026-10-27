@@ -1017,3 +1017,39 @@ export function providerSeries(all: DashBooking[], range: DateRange, gran: Granu
   }
   return [...pts.values()];
 }
+
+/* ------------------------------ Comprobantes del cliente ------------------------------ */
+
+export interface ClientInvoice {
+  bookingId: string; code: string; date: string;
+  issuer: 'profesional' | 'hulul'; issuerName: string; issuerRuc: string; concept: string;
+  base: number; iva: number; total: number; status: 'por_emitir' | 'anulada';
+}
+
+/** Empresa que factura el cargo de plataforma. */
+export const HULUL_ISSUER = { name: 'Corporación Coffeeport Cía. Ltda. (HULUL)', ruc: '0993265160001' };
+const PLATFORM_FEE = 1.99;
+const IVA_RATE = 0.15;
+
+/**
+ * Los dos comprobantes que recibe el cliente por cada reserva cobrada:
+ * 1) el profesional factura la visita (más recargo y adicional; IVA según su régimen),
+ * 2) HULUL factura el cargo de plataforma con IVA.
+ * Una cancelación con cargo genera solo el comprobante del profesional (su parte del cargo, sin IVA).
+ */
+export function bookingInvoices(b: DashBooking, proRuc = ''): ClientInvoice[] {
+  const charged = b.status === 'completada' || b.status === 'en_disputa' || b.status === 'por_aprobar';
+  const lost = b.claim?.outcome === 'cliente';
+  const status: ClientInvoice['status'] = lost ? 'anulada' : 'por_emitir';
+  const out: ClientInvoice[] = [];
+  if (charged) {
+    const extra = b.extra && ['por_cobrar', 'pagado', 'pagado_tarjeta', 'pagado_efectivo'].includes(b.extra.status) ? b.extra.amount : 0;
+    const base = r2(b.visit + b.surcharge + extra);
+    const iva = b.taxRegime === 'rimpe_popular' ? 0 : r2(base * IVA_RATE);
+    out.push({ bookingId: b.id, code: b.code, date: b.date, issuer: 'profesional', issuerName: b.proName, issuerRuc: proRuc, concept: `Visita${b.surcharge ? ' con recargo' : ''}${extra ? ' y cobro adicional' : ''}`, base, iva, total: r2(base + iva), status });
+    out.push({ bookingId: b.id, code: b.code, date: b.date, issuer: 'hulul', issuerName: HULUL_ISSUER.name, issuerRuc: HULUL_ISSUER.ruc, concept: 'Cargo de plataforma', base: PLATFORM_FEE, iva: r2(PLATFORM_FEE * IVA_RATE), total: r2(PLATFORM_FEE * (1 + IVA_RATE)), status });
+  } else if (b.status === 'cancelada' && b.cancelFee > 0) {
+    out.push({ bookingId: b.id, code: b.code, date: b.date, issuer: 'profesional', issuerName: b.proName, issuerRuc: proRuc, concept: b.cancelledBy === 'cliente_ausente' ? 'Visita (cliente ausente)' : 'Cargo por cancelación tardía', base: r2(b.cancelFee), iva: 0, total: r2(b.cancelFee), status });
+  }
+  return out;
+}

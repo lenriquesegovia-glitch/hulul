@@ -53,6 +53,7 @@ const I = {
   profesionales: 'M9 12l2 2 4-4M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6l7-3Z',
   cumplimiento: 'M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3ZM9 12h6M12 9v6',
   equipo: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1',
+  sri: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6M9 9h2',
 };
 function Ico({ d }: { d: string }) {
   return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
@@ -62,17 +63,20 @@ const NAV: { group: string; items: { href: string; label: string; icon: keyof ty
   { group: 'Gestión', items: [
     { href: '/admin', label: 'Resumen ejecutivo', icon: 'resumen', perm: 'tablero' },
     { href: '/admin/reservas', label: 'Reservas (CRM)', icon: 'reservas', perm: 'reservas' },
-    { href: '/admin/clientes', label: 'Clientes', icon: 'clientes', perm: 'clientes' },
+    { href: '/admin/reclamos', label: 'Reclamos', icon: 'reclamos', perm: 'reclamos', count: 'claims' },
+    { href: '/admin/profesionales', label: 'Aprobar profesionales', icon: 'profesionales', perm: 'profesionales', count: 'pros' },
   ] },
   { group: 'Finanzas', items: [
     { href: '/admin/contabilidad', label: 'Contabilidad', icon: 'contabilidad', perm: 'contabilidad' },
     { href: '/admin/proveedores', label: 'Proveedores', icon: 'proveedores', perm: 'proveedores' },
+    { href: '/admin/clientes', label: 'Clientes', icon: 'clientes', perm: 'clientes' },
   ] },
   { group: 'Control', items: [
-    { href: '/admin/cumplimiento', label: 'Cumplimiento (UAFE)', icon: 'cumplimiento', perm: 'cumplimiento', count: 'alerts' },
-    { href: '/admin/reclamos', label: 'Reclamos', icon: 'reclamos', perm: 'reclamos', count: 'claims' },
-    { href: '/admin/profesionales', label: 'Aprobar profesionales', icon: 'profesionales', perm: 'profesionales', count: 'pros' },
-    { href: '/admin/equipo', label: 'Equipo y roles', icon: 'equipo', perm: 'equipo' },
+    { href: '/admin/cumplimiento', label: 'Cumplimiento UAFE', icon: 'cumplimiento', perm: 'cumplimiento', count: 'alerts' },
+    { href: '/admin/sri', label: 'Cumplimiento SRI', icon: 'sri', perm: 'contabilidad' },
+  ] },
+  { group: 'Administración', items: [
+    { href: '/admin/equipo', label: 'Equipo, roles y permisos', icon: 'equipo', perm: 'equipo' },
   ] },
 ];
 

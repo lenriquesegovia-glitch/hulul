@@ -926,3 +926,31 @@ export async function adminSendStatement(proId: string): Promise<string> {
 export async function adminRegisterProPayment(proId: string, amount: number, reference: string): Promise<number> {
   return (await callable<{ proId: string; amount: number; reference: string }, { ok: boolean; debt: number }>('registrarAbono')({ proId, amount, reference })).data.debt;
 }
+
+/* ------------------------- Estados de cuenta semanales (aprobación) ------------------------- */
+
+export interface StatementBatchItem { proId: string; name: string; email: string; hasEmail: boolean; earned: number; fees: number; fines: number; paid: number; toPay: number; pending: number; include: boolean; sentOk?: boolean }
+export interface StatementBatch { week: string; status: 'borrador' | 'enviado'; items: StatementBatchItem[]; preparedAt: number | null; approvedBy: string; approvedAt: number | null; sent: number }
+
+/** Lote de la semana (se prepara el lunes; si no existe, se prepara ahora). rebuild = volver a calcularlo. */
+export async function adminStatementBatch(week?: string, rebuild = false): Promise<StatementBatch> {
+  return (await callable<{ week?: string; rebuild?: boolean }, StatementBatch>('adminEstadosSemana')({ week, rebuild })).data;
+}
+/** Aprueba y envía los estados de cuenta a los profesionales marcados. */
+export async function adminApproveStatements(week: string, include: string[]): Promise<{ sent: number; failed: string[] }> {
+  return (await callable<{ week: string; include: string[] }, { ok: boolean; sent: number; failed: string[] }>('aprobarEstadosSemana')({ week, include })).data;
+}
+
+/* ------------------------------ Estado de cuenta del cliente ------------------------------ */
+
+export async function adminClientStatementPdf(clientId: string, range?: { desde?: string; hasta?: string }): Promise<{ fileName: string; content: string }> {
+  return (await callable<{ clientId: string; desde?: string; hasta?: string }, { fileName: string; content: string }>('estadoCuentaClientePdf')({ clientId, ...range })).data;
+}
+export async function adminSendClientStatement(clientId: string): Promise<string> {
+  return (await callable<{ clientId: string }, { ok: boolean; email: string }>('enviarEstadoCuentaCliente')({ clientId })).data.email;
+}
+
+/** Envía archivos (Excel) por correo a las personas con rol Contabilidad del equipo. */
+export async function adminSendToAccountant(input: { subject: string; message: string; files: { fileName: string; content: string }[] }): Promise<string[]> {
+  return (await callable<typeof input, { ok: boolean; to: string[] }>('enviarContadora')(input)).data.to;
+}

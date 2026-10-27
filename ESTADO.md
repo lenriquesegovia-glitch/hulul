@@ -1,6 +1,12 @@
 # HULUL — Estado y registro de entregas
 
 ## En PR — Asistente de reclamos y decisión prellenada, 26 de octubre de 2026 (Claude)
+- Misma rama, además: **menú** Gestión (Resumen, Reservas, Reclamos, Aprobar profesionales) · Finanzas (Contabilidad, Proveedores, Clientes) · Control (Cumplimiento UAFE, **Cumplimiento SRI** nuevo) · Administración (Equipo, roles y permisos).
+- **Estados de cuenta semanales con aprobación**: el lunes `liquidacionSemanal` ya no envía PDFs; prepara `estadosCuenta/{semana}` en borrador (`prepareStatementsBatch`) y avisa a HULUL. En Proveedores → «Estados de cuenta de la semana» se revisan, se desmarcan y se aprueban (`adminEstadosSemana`, `aprobarEstadosSemana`). El correo de liquidación sigue saliendo sin adjunto.
+- **Clientes**: pestaña Facturas (dos comprobantes por reserva cobrada: profesional por la visita y HULUL por el cargo de plataforma; `bookingInvoices`), estado de cuenta en PDF y por correo (`estadoCuentaClientePdf`, `enviarEstadoCuentaCliente`, `clientStatementPdf`). El detalle de cada reserva muestra sus comprobantes.
+- **Enviar a la contadora** (Contabilidad): manda el Excel contable y el de ventas a quienes tengan el rol Contabilidad (`enviarContadora`; el destinatario no se escribe a mano).
+- **Cumplimiento SRI** (`/admin/sri`): próximo vencimiento por noveno dígito del RUC (6 → día 20), ventas gravadas e IVA de HULUL, facturas de profesionales (terceros), retenciones y Excel.
+- Todas las tarjetas del panel abren su detalle o filtran (Clientes, Cumplimiento, Proveedores).
 - Rama `claude/reclamos-asistente`. Publicar con **backend** (android no).
 - `claimAdvice` (functions/reclamos-core.js, con pruebas): lee la evidencia (llegada y distancia GPS, atraso, timbres, código de inicio, fotos, resultado marcado, duración, respuesta en plazo, calificaciones, reclamos y faltas previas) y sugiere lado, confianza y razones. `adminReclamo` lo devuelve como `advice`; `adminReclamos` agrega `suggestion` a los abiertos.
 - Panel: al elegir «A favor del cliente/profesional» se llenan multa, crédito, faltas y motivo (editables). Por defecto: a favor del cliente que reclama → crédito $5, falta al profesional y multa $10 («no vino», «sí estaba») o $5 (otros); a favor del profesional → se cobra y se libera el pago; falta al cliente si el reclamo era del profesional o si el del cliente era claramente infundado.

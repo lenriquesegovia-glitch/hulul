@@ -31,7 +31,7 @@ import { claimAdvice, CLAIM_STATUS, CLIENT_KINDS, PRO_KINDS, RESOLVE_HOURS, RESP
 import { VERIFIED_DOCS, expectOf, submissionCheck, verifySelfie, verifyText } from './doc-verify.js';
 import { MAX_FILE_BYTES, PRO_UID, REVIEW_LIST_STATUSES, maskBank, providerFiles, reviewMessage, reviewPatch } from './pro-review.js';
 import { can, dashForRole, normEmail, roleFor, roleInput } from './roles-core.js';
-import { statementData, statementPdf } from './statement-pdf.js';
+import { clientStatementPdf, statementData, statementPdf } from './statement-pdf.js';
 import { bankFile, BANK_FORMATS, DEFAULT_BANK_FORMAT, paymentLines } from './bank-files.js';
 import { appointmentAt, bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
@@ -2177,11 +2177,8 @@ export const liquidacionSemanal = onSchedule({ schedule: 'every monday 06:00', r
     summary.push({ proId, name: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim(), net: liq.net, email: p.email, liq, bank });
     if (p.email) {
       const { from, notifyTo } = senders();
-      // Estado de cuenta en PDF (últimos 30 días) como respaldo del depósito.
-      const st = await proStatementPdf(proId, now - 30 * 86_400_000, now).catch((e) => { logger.warn('PDF de estado de cuenta', { proId, e: String(e) }); return null; });
       emailed.add(proId);
       await transport().sendMail({
-        ...(st ? { attachments: [{ filename: `HULUL-estado-de-cuenta-${week}.pdf`, content: st.pdf, contentType: 'application/pdf' }] } : {}),
         from, to: p.email, replyTo: notifyTo, subject: `Tu liquidación HULUL de la semana ${week}`,
         html: layout('Tu liquidación semanal', `<p style="font-size:15px">Hola ${esc(p.firstName ?? '')}, este es el resumen de lo que te depositamos esta semana.</p>` + rows([
           ['Cobrado por tus servicios', usd(liq.gross)],
@@ -2193,15 +2190,8 @@ export const liquidacionSemanal = onSchedule({ schedule: 'every monday 06:00', r
       }).catch((e) => logger.warn('No se pudo enviar la liquidación', { proId, e: String(e) }));
     }
   }
-  // Estado de cuenta semanal a los demás profesionales con movimientos en los últimos 7 días.
-  const recent = await db().collection('ledger').where('createdAt', '>=', Timestamp.fromMillis(now - 7 * 86_400_000)).get();
-  for (const proId of new Set(recent.docs.map((d) => d.data().proId).filter(Boolean))) {
-    if (emailed.has(proId)) continue;
-    try {
-      const st = await proStatementPdf(proId, now - 30 * 86_400_000, now);
-      if (st.email) await sendStatementMail(st, `Tu estado de cuenta HULUL · semana ${week}`);
-    } catch (e) { logger.warn('No se pudo enviar el estado de cuenta', { proId, e: String(e) }); }
-  }
+  // Estados de cuenta de la semana: quedan en borrador hasta que un socio los apruebe en el panel.
+  await prepareStatementsBatch(week, now).catch((e) => logger.warn('No se pudo preparar los estados de cuenta', { e: String(e) }));
   const { from, notifyTo } = senders();
   const toPay = summary.filter((s) => !s.carried);
   await transport().sendMail({
@@ -2369,7 +2359,7 @@ export const registrarAbono = onCall({ region: REGION }, async (req) => {
 });
 
 /** Datos y PDF del estado de cuenta de un profesional (panel y correo de los lunes). */
-async function proStatementPdf(proId, from, to) {
+async function proStatementPdf(proId, from, to, { pdf: wantPdf = true } = {}) {
   const [p, bank, lg, po] = await Promise.all([
     db().doc(`providers/${proId}`).get(), db().doc(`providers/${proId}/private/banco`).get(),
     db().collection('ledger').where('proId', '==', proId).get(), db().collection('payouts').where('proId', '==', proId).get(),
@@ -2382,9 +2372,156 @@ async function proStatementPdf(proId, from, to) {
   const b = bank.data();
   const name = pd.kind === 'empresa' && pd.businessName ? pd.businessName : `${pd.firstName ?? ''} ${pd.lastName ?? ''}`.trim();
   const REG = { general: 'Régimen general', rimpe_emprendedor: 'RIMPE emprendedor', rimpe_popular: 'RIMPE negocio popular' };
-  const pdf = await statementPdf({ pro: { name, ruc: pd.ruc ?? '', regime: REG[pd.taxRegime] ?? 'Régimen general', bank: b ? `${b.bank} •••• ${String(b.number ?? '').replace(/\D/g, '').slice(-4)}` : '' }, from, to, data });
+  const pdf = wantPdf ? await statementPdf({ pro: { name, ruc: pd.ruc ?? '', regime: REG[pd.taxRegime] ?? 'Régimen general', bank: b ? `${b.bank} •••• ${String(b.number ?? '').replace(/\D/g, '').slice(-4)}` : '' }, from, to, data }) : null;
   return { pdf, data, name, email: pd.email, firstName: pd.firstName ?? '' };
 }
+
+/**
+ * Lote semanal de estados de cuenta (estadosCuenta/{semana}): profesionales con
+ * movimientos en los últimos 7 días o con liquidación esa semana. Queda en borrador;
+ * nadie recibe nada hasta que un socio lo aprueba en el panel.
+ */
+async function prepareStatementsBatch(week, now = Date.now()) {
+  const ref = db().doc(`estadosCuenta/${week}`);
+  const cur = await ref.get();
+  if (cur.exists && cur.data().status === 'enviado') return cur.data();
+  const [recent, pays] = await Promise.all([
+    db().collection('ledger').where('createdAt', '>=', Timestamp.fromMillis(now - 7 * 86_400_000)).get(),
+    db().collection('payouts').where('week', '==', week).get(),
+  ]);
+  const ids = [...new Set([...recent.docs.map((d) => d.data().proId), ...pays.docs.map((d) => d.data().proId)].filter((x) => typeof x === 'string' && PRO_UID.test(x)))];
+  const from = now - 30 * 86_400_000;
+  const items = [];
+  for (const proId of ids) {
+    try {
+      const st = await proStatementPdf(proId, from, now, { pdf: false });
+      items.push({ proId, name: st.name, email: maskContact(st.email ?? ''), hasEmail: !!st.email, earned: st.data.earned, fees: st.data.fees, fines: st.data.fines, paid: st.data.paid, toPay: st.data.toPay, pending: st.data.pending, include: !!st.email });
+    } catch (e) { logger.warn('Estado de cuenta (borrador)', { proId, e: String(e) }); }
+  }
+  items.sort((a, b) => a.name.localeCompare(b.name));
+  const doc = { week, status: 'borrador', from, to: now, items, preparedAt: FieldValue.serverTimestamp() };
+  await ref.set(doc);
+  if (!cur.exists && items.length) {
+    const { from: sender, notifyTo } = senders();
+    await transport().sendMail({ from: sender, to: notifyTo, subject: `Estados de cuenta de la semana ${week}: ${items.length} para revisar`,
+      html: layout('Estados de cuenta listos para revisar', `<p>Se prepararon ${items.length} estados de cuenta. No se envía nada hasta que los apruebes.</p>${button('https://hululec.com/admin/proveedores?estados=1', 'Revisar y aprobar')}`) }).catch(() => {});
+  }
+  return doc;
+}
+
+/** Panel: lote de la semana (lo prepara si aún no existe). */
+export const adminEstadosSemana = onCall({ region: REGION, memory: '512MiB', timeoutSeconds: 300 }, async (req) => {
+  await requireAdmin(req, 'proveedores');
+  const week = /^\d{4}-\d{2}-\d{2}$/.test(String(req.data?.week ?? '')) ? req.data.week : payoutWeek(Date.now());
+  const ref = db().doc(`estadosCuenta/${week}`);
+  let snap = await ref.get();
+  if (!snap.exists || req.data?.rebuild === true) { await prepareStatementsBatch(week); snap = await ref.get(); }
+  const d = snap.data() ?? {};
+  const ms = (t) => t?.toMillis?.() ?? null;
+  return { week, status: d.status ?? 'borrador', items: d.items ?? [], preparedAt: ms(d.preparedAt), approvedBy: d.approvedBy ?? '', approvedAt: ms(d.approvedAt), sent: d.sent ?? 0 };
+});
+
+/** Panel: aprueba el lote y envía el PDF a cada profesional marcado. */
+export const aprobarEstadosSemana = onCall({ region: REGION, memory: '1GiB', timeoutSeconds: 540, secrets: [MAIL_PASSWORD] }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const week = String(req.data?.week ?? '');
+  const include = new Set(Array.isArray(req.data?.include) ? req.data.include.map(String) : []);
+  const ref = db().doc(`estadosCuenta/${week}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'No hay estados de cuenta preparados para esa semana.');
+  const d = snap.data();
+  if (d.status === 'enviado') throw new HttpsError('failed-precondition', 'Esa semana ya se envió.');
+  const now = Date.now();
+  let sent = 0; const failed = [];
+  const items = [];
+  for (const it of d.items ?? []) {
+    const go = include.has(it.proId) && it.hasEmail;
+    let ok = false;
+    if (go) {
+      try { await sendStatementMail(await proStatementPdf(it.proId, now - 30 * 86_400_000, now), `Tu estado de cuenta HULUL · semana ${week}`); ok = true; sent += 1; }
+      catch (e) { failed.push(it.name); logger.warn('Estado de cuenta no enviado', { proId: it.proId, e: String(e) }); }
+    }
+    items.push({ ...it, include: go, sentOk: ok });
+  }
+  await ref.update({ status: 'enviado', items, sent, approvedBy: admin.email, approvedAt: FieldValue.serverTimestamp() });
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, role: admin.role, action: 'estados_cuenta_aprobados', week, sent, at: FieldValue.serverTimestamp() });
+  return { ok: true, sent, failed };
+});
+
+/** Estado de cuenta del cliente: sus reservas con los dos comprobantes de cada una. */
+async function clientStatement(clientId, from, to) {
+  const [c, bs] = await Promise.all([db().doc(`clients/${clientId}`).get(), db().collection('bookings').where('clientId', '==', clientId).get()]);
+  const cd = c.data() ?? {};
+  const docs = bs.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const proIds = [...new Set(docs.map((b) => b.professionalId).filter((x) => typeof x === 'string' && PRO_UID.test(x)))];
+  const pros = proIds.length ? await db().getAll(...proIds.map((id) => db().doc(`providers/${id}`))) : [];
+  const proRucs = Object.fromEntries(pros.map((p) => [p.id, p.data()?.ruc ?? '']));
+  const latest = docs.slice().sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+  const email = cd.email || latest?.contactEmail || '';
+  const name = cd.name || latest?.contactName || 'Cliente';
+  const bookings = docs.map((b) => ({ ...b, dateMs: Date.parse(`${b.date}T17:00:00Z`) || 0, categoryName: CATEGORIES[b.category] ?? b.category ?? 'Servicio' }));
+  const pdf = await clientStatementPdf({ client: { name, email: maskContact(email), balance: Number(cd.balance ?? 0) }, from, to, bookings, proRucs });
+  return { pdf, name, email, firstName: String(name).split(' ')[0] };
+}
+
+const CLIENT_ID = /^[A-Za-z0-9]{10,40}$/;
+
+/** Panel: estado de cuenta del cliente en PDF. */
+export const estadoCuentaClientePdf = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
+  const admin = await requireAdmin(req, 'clientes');
+  const clientId = String(req.data?.clientId ?? '');
+  if (!CLIENT_ID.test(clientId)) throw new HttpsError('invalid-argument', 'Cliente no válido.');
+  const d = (v, fb) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? Date.parse(`${v}T05:00:00Z`) : fb);
+  const to = d(req.data?.hasta, Date.now()) + (req.data?.hasta ? 86_400_000 - 1 : 0);
+  const from = d(req.data?.desde, to - 90 * 86_400_000);
+  const st = await clientStatement(clientId, from, to);
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, role: admin.role, action: 'estado_cuenta_cliente_pdf', clientId, at: FieldValue.serverTimestamp() });
+  return { fileName: `HULUL-estado-de-cuenta-${st.name.replace(/[^A-Za-z0-9]+/g, '-')}.pdf`, content: st.pdf.toString('base64') };
+});
+
+/** Panel: envía al cliente su estado de cuenta (últimos 90 días) en PDF. */
+export const enviarEstadoCuentaCliente = onCall({ region: REGION, memory: '512MiB', secrets: [MAIL_PASSWORD] }, async (req) => {
+  const admin = await requireAdmin(req, 'clientes');
+  const clientId = String(req.data?.clientId ?? '');
+  if (!CLIENT_ID.test(clientId)) throw new HttpsError('invalid-argument', 'Cliente no válido.');
+  const now = Date.now();
+  const st = await clientStatement(clientId, now - 90 * 86_400_000, now);
+  if (!st.email) throw new HttpsError('failed-precondition', 'El cliente no tiene correo registrado.');
+  const { from, notifyTo } = senders();
+  await transport().sendMail({
+    from, to: st.email, replyTo: notifyTo, subject: 'Tu estado de cuenta HULUL',
+    html: layout('Tu estado de cuenta', `<p style="font-size:15px">Hola ${esc(st.firstName)}, adjuntamos tu estado de cuenta de los últimos 90 días con tus servicios y los comprobantes de cada uno (el del profesional y el de HULUL).</p>`),
+    attachments: [{ filename: `HULUL-estado-de-cuenta-${new Date().toISOString().slice(0, 10)}.pdf`, content: st.pdf, contentType: 'application/pdf' }],
+  });
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, role: admin.role, action: 'estado_cuenta_cliente_correo', clientId, at: FieldValue.serverTimestamp() });
+  return { ok: true, email: maskContact(st.email) };
+});
+
+/**
+ * Envía archivos contables (Excel) a las personas con rol Contabilidad del equipo.
+ * Solo a ellas: el destinatario no se escribe a mano, así no sale a un correo equivocado.
+ */
+export const enviarContadora = onCall({ region: REGION, memory: '512MiB', secrets: [MAIL_PASSWORD] }, async (req) => {
+  const admin = await requireAdmin(req, 'contabilidad');
+  const files = Array.isArray(req.data?.files) ? req.data.files.slice(0, 4) : [];
+  const subject = String(req.data?.subject ?? 'HULUL · archivos contables').slice(0, 120);
+  const message = String(req.data?.message ?? '').slice(0, 1000);
+  const attachments = files.map((f) => ({ filename: String(f.fileName ?? 'archivo.xlsx').replace(/[^\w.\-]+/g, '-').slice(0, 80), content: Buffer.from(String(f.content ?? ''), 'base64'),
+    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })).filter((a) => a.content.length > 0);
+  if (!attachments.length) throw new HttpsError('invalid-argument', 'No hay archivos para enviar.');
+  if (attachments.reduce((t, a) => t + a.content.length, 0) > 15 * 1024 * 1024) throw new HttpsError('invalid-argument', 'Los archivos pesan demasiado (máximo 15 MB); elige un periodo más corto.');
+  const roles = await db().collection('adminRoles').where('role', '==', 'contabilidad').get();
+  const to = roles.docs.filter((d) => d.data().active !== false).map((d) => d.id);
+  if (!to.length) throw new HttpsError('failed-precondition', 'Aún no hay nadie con el rol Contabilidad. Agrégala en Administración → Equipo, roles y permisos.');
+  const { from, notifyTo } = senders();
+  for (const email of to) {
+    await transport().sendMail({ from, to: email, replyTo: admin.email || notifyTo, subject,
+      html: layout('Archivos contables de HULUL', `<p style="font-size:15px">${esc(message)}</p><p style="font-size:13px;color:#6B6560">Enviado por ${esc(admin.email)} desde el panel de HULUL. También puedes descargarlos tú misma en hululec.com/admin → Contabilidad.</p>`),
+      attachments });
+  }
+  await db().collection('adminAccesos').add({ uid: admin.uid, email: admin.email, role: admin.role, action: 'envio_contadora', to, files: attachments.map((a) => a.filename), at: FieldValue.serverTimestamp() });
+  return { ok: true, to };
+});
 
 /** Panel: descarga el estado de cuenta en PDF (fechas AAAA-MM-DD, por defecto últimos 30 días). */
 export const estadoCuentaPdf = onCall({ region: REGION, memory: '512MiB' }, async (req) => {

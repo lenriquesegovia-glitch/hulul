@@ -32,3 +32,20 @@ test('genera un PDF', async () => {
   assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
   assert.ok(pdf.length > 2000);
 });
+
+import { clientInvoicesOf, clientStatementPdf } from './statement-pdf.js';
+
+test('cliente: dos comprobantes por reserva cobrada', () => {
+  const inv = clientInvoicesOf({ status: 'completada', visit: 20, taxRegime: 'general', professionalName: 'Ana' }, '0912345678001');
+  assert.equal(inv.length, 2);
+  assert.deepEqual(inv.map((i) => i.total), [23, 2.29]);
+  assert.equal(clientInvoicesOf({ status: 'cancelada', cancelFee: 3 }).length, 1);
+  assert.equal(clientInvoicesOf({ status: 'cancelada', cancelFee: 0 }).length, 0);
+});
+
+test('cliente: genera el PDF', async () => {
+  const now = Date.now();
+  const pdf = await clientStatementPdf({ client: { name: 'Ana Ruiz', email: 'a•••@correo.com', balance: 0 }, from: now - 30 * 864e5, to: now,
+    bookings: [{ id: 'abc123XYZ987', dateMs: now - 864e5, status: 'completada', visit: 20, categoryName: 'Plomería', professionalName: 'Juan', paymentMethod: 'tarjeta' }] });
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+});

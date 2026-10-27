@@ -96,11 +96,9 @@ export function AccountingPanel() {
   const HEAD = ['CORPORACIÓN COFFEEPORT CÍA. LTDA. — HULUL', `Periodo: ${period}`];
 
   /** Paquete para la contadora: diario, mayor, ventas, terceros, liquidaciones y plan de cuentas. */
-  const exportPackage = async () => {
-    if (!view) return;
-    setExporting('paquete');
-    try {
-      const { downloadXlsx } = await import('../excel');
+  const packageSheets = (): import('../excel').SheetSpec[] => {
+    if (!view) return [];
+    {
       const lines = journal(view, range);
       const mayor = ledgerByAccount(lines);
       const sales = hululSales(view, range);
@@ -108,7 +106,7 @@ export function AccountingPanel() {
       const thirdParty = view.ledger.filter((e) => msInRange(e.createdAt, range) && (e.kind === 'visita' || e.kind === 'adicional'))
         .map((e) => ({ fecha: ecDate(e.createdAt!), reserva: bookingCode.get(e.bookingId ?? '') ?? '', profesional: proName.get(e.proId) ?? e.proId, ruc: proRuc.get(e.proId) ?? '', concepto: KIND_LABEL[e.kind] ?? e.kind, base: e.base ?? 0, iva: e.iva ?? 0, total: e.amount, cobro: e.paymentMethod === 'efectivo' ? 'Efectivo (lo cobró el profesional)' : 'Tarjeta (recaudado por HULUL)' }));
       const liq = view.payouts.filter((p) => inRange(p.week, range) || p.status === 'por_pagar').map((p) => ({ semana: p.week, profesional: proName.get(p.proId) ?? p.proId, ruc: proRuc.get(p.proId) ?? '', estado: p.status === 'pagado' ? 'Pagado' : 'Por pagar', bruto: p.gross, descuentos: p.deductions, ret_renta: p.retentions.renta, ret_iva: p.retentions.iva, neto: p.net, cuenta: p.bank, pagado: p.paidAt ? ecDate(p.paidAt) : '' }));
-      await downloadXlsx(`hulul-contabilidad-${range.from}_${range.to}.xlsx`, [
+      return [
         { name: 'Libro diario', title: [...HEAD, 'Libro diario (NIIF para PYMES) con códigos del plan de cuentas de la Superintendencia de Compañías. Propuesta: validar con la contadora.'],
           columns: [{ key: 'date', header: 'Fecha', width: 12 }, { key: 'entry', header: 'Asiento / reserva', width: 16 }, { key: 'code', header: 'Código', width: 10, text: true }, { key: 'accountName', header: 'Cuenta', width: 46 }, { key: 'party', header: 'Auxiliar (cliente o profesional)', width: 28 }, { key: 'detail', header: 'Detalle', width: 34 }, { key: 'debit', header: 'Debe', money: true, width: 12 }, { key: 'credit', header: 'Haber', money: true, width: 12 }],
           rows: lines as unknown as Record<string, string | number>[], totals: ['debit', 'credit'] },
@@ -127,23 +125,41 @@ export function AccountingPanel() {
         { name: 'Plan de cuentas', title: [...HEAD, 'Cuentas de la Superintendencia de Compañías que usa HULUL (propuesta para validar).'],
           columns: [{ key: 'code', header: 'Código', text: true }, { key: 'name', header: 'Cuenta', width: 56 }, { key: 'aux', header: 'Uso en HULUL', width: 50 }],
           rows: Object.values(SUPERCIAS_ACCOUNTS).map((a) => ({ ...a })) },
-      ]);
-    } finally { setExporting(''); }
+      ];
+    }
+  };
+  const exportPackage = async () => {
+    setExporting('paquete');
+    try { const { downloadXlsx } = await import('../excel'); await downloadXlsx(`hulul-contabilidad-${range.from}_${range.to}.xlsx`, packageSheets()); }
+    finally { setExporting(''); }
+  };
+  /** Manda el Excel NIIF y el de ventas para el SRI a quienes tienen rol Contabilidad. */
+  const sendAccountant = async () => {
+    if (!window.confirm(`¿Enviar a la contadora el Excel contable y el de ventas del ${range.from} al ${range.to}?`)) return;
+    setExporting('mail'); setMsg('');
+    try {
+      const { buildXlsx, toBase64 } = await import('../excel');
+      const { adminSendToAccountant } = await import('@hulul/shared/firebase');
+      const files = [
+        { fileName: `hulul-contabilidad-${range.from}_${range.to}.xlsx`, content: toBase64(await buildXlsx(packageSheets())) },
+        { fileName: `hulul-ventas-sri-${range.from}_${range.to}.xlsx`, content: toBase64(await buildXlsx(sriSheets())) },
+      ];
+      const to = await adminSendToAccountant({ subject: `HULUL · contabilidad del ${range.from} al ${range.to}`, message: `Adjunto el libro diario (NIIF, plan de cuentas Supercias), mayor, ventas de HULUL, terceros y liquidaciones del ${range.from} al ${range.to}.`, files });
+      setMsg(`Enviado a ${to.join(', ')}.`);
+    } catch (e) { setMsg((e as { message?: string }).message || 'No se pudo enviar.'); } finally { setExporting(''); }
   };
 
   /** Solo las ventas de HULUL, para declarar IVA (formulario 104) y armar el ATS. */
-  const exportSri = async () => {
-    if (!view) return;
-    setExporting('sri');
-    try {
-      const { downloadXlsx } = await import('../excel');
+  const sriSheets = (): import('../excel').SheetSpec[] => {
+    if (!view) return [];
+    {
       const sales = hululSales(view, range);
-      await downloadXlsx(`hulul-ventas-sri-${range.from}_${range.to}.xlsx`, [{
+      return [{
         name: 'Ventas', title: [...HEAD, 'Ventas propias de HULUL con IVA 15 %. Los valores de terceros (visitas de los profesionales) no se incluyen.'],
         columns: [{ key: 'date', header: 'Fecha', width: 12 }, { key: 'idType', header: 'Tipo de identificación', width: 18 }, { key: 'id', header: 'Identificación', width: 16, text: true }, { key: 'name', header: 'Razón social / nombre', width: 30 }, { key: 'concept', header: 'Concepto', width: 34 }, { key: 'base', header: 'Base IVA 15 %', money: true }, { key: 'iva', header: 'IVA', money: true }, { key: 'total', header: 'Total', money: true }],
         rows: sales, totals: ['base', 'iva', 'total'],
-      }]);
-    } finally { setExporting(''); }
+      }];
+    }
   };
 
   /** El profesional pagó su deuda por transferencia o DeUna: se registra y deja de descontarse el lunes. */
@@ -189,8 +205,8 @@ export function AccountingPanel() {
   return (
     <>
       <PageHead title="Contabilidad" lead="El dinero de cada reserva antes, durante y después: lo que viene, lo retenido y lo liquidado.">
-        <button type="button" className="adm-btn solid" disabled={!view || !!exporting} onClick={exportPackage}>{exporting === 'paquete' ? 'Armando…' : 'Excel para la contadora (NIIF)'}</button>
-        <button type="button" className="adm-btn" disabled={!view || !!exporting} onClick={exportSri}>{exporting === 'sri' ? 'Armando…' : 'Ventas para el SRI'}</button>
+        <button type="button" className="adm-btn solid" disabled={!view || !!exporting} onClick={sendAccountant} title="Envía por correo el Excel contable y el de ventas a quien tenga el rol Contabilidad">{exporting === 'mail' ? 'Enviando…' : 'Enviar a la contadora'}</button>
+        <button type="button" className="adm-btn" disabled={!view || !!exporting} onClick={exportPackage} title="Libro diario, mayor, ventas, terceros, liquidaciones y plan de cuentas">{exporting === 'paquete' ? 'Armando…' : 'Descargar Excel contable'}</button>
       </PageHead>
       <PeriodBar />
       {!acc ? <Loading /> : (

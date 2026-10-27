@@ -163,3 +163,92 @@ export function statementPdf({ pro, from, to, data, company = 'Corporación Coff
     doc.end();
   });
 }
+
+/* ------------------------------ Estado de cuenta del cliente ------------------------------ */
+
+const HULUL_RUC = '0993265160001';
+const FEE = 1.99;
+
+/** Comprobantes de una reserva para el cliente (mismo criterio que el panel). */
+export function clientInvoicesOf(b, proRuc = '') {
+  const charged = ['completada', 'en_disputa', 'por_aprobar'].includes(b.status);
+  const out = [];
+  if (charged) {
+    const ex = b.extra && ['por_cobrar', 'pagado', 'pagado_tarjeta', 'pagado_efectivo'].includes(b.extra.status) ? Number(b.extra.amount || 0) : 0;
+    const base = r2(Number(b.visit ?? b.subtotal ?? 0) + Number(b.surcharge || 0) + ex);
+    const iva = b.taxRegime === 'rimpe_popular' ? 0 : r2(base * 0.15);
+    out.push({ issuer: `${b.professionalName ?? 'Profesional'}${proRuc ? ` (RUC ${proRuc})` : ''}`, concept: 'Visita', base, iva, total: r2(base + iva) });
+    out.push({ issuer: `HULUL (RUC ${HULUL_RUC})`, concept: 'Cargo de plataforma', base: FEE, iva: r2(FEE * 0.15), total: r2(FEE * 1.15) });
+  } else if (b.status === 'cancelada' && Number(b.cancelFee) > 0) {
+    out.push({ issuer: `${b.professionalName ?? 'Profesional'}${proRuc ? ` (RUC ${proRuc})` : ''}`, concept: b.cancelledBy === 'cliente_ausente' ? 'Visita (no estabas en casa)' : 'Cancelación tardía', base: r2(b.cancelFee), iva: 0, total: r2(b.cancelFee) });
+  }
+  return out;
+}
+
+/** PDF del estado de cuenta de un cliente: sus servicios, los dos comprobantes de cada uno, créditos y saldo. */
+export function clientStatementPdf({ client, from, to, bookings, proRucs = {} }) {
+  const rows = bookings.filter((b) => b.dateMs >= from && b.dateMs <= to).sort((a, b) => a.dateMs - b.dateMs);
+  const PAY = { tarjeta: 'Tarjeta', efectivo: 'Efectivo', deuna: 'DeUna', transferencia: 'Transferencia' };
+  let paid = 0; let credits = 0; let services = 0;
+  const lines = rows.map((b) => {
+    const inv = clientInvoicesOf(b, proRucs[b.professionalId] ?? '');
+    const total = r2(inv.reduce((t, i) => t + i.total, 0));
+    if (total) { paid = r2(paid + total); services += 1; }
+    credits = r2(credits + Number(b.clientCredit || 0));
+    return { b, inv, total };
+  });
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 42, bufferPages: true, info: { Title: `Estado de cuenta HULUL - ${client.name}`, Author: 'HULUL' } });
+    const chunks = [];
+    doc.on('data', (c) => chunks.push(c)); doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject);
+    const W = doc.page.width - 84; const X = 42;
+    doc.rect(0, 0, doc.page.width, 92).fill(C.brand);
+    doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(24).text('HULUL', X, 26, { characterSpacing: 3 });
+    doc.font('Helvetica').fontSize(9).fillColor('#BFD2CF').text('SERVICIOS DEL HOGAR', X, 54, { characterSpacing: 2 });
+    doc.font('Helvetica-Bold').fontSize(13).fillColor('#FFFFFF').text('Estado de cuenta del cliente', X, 28, { width: W, align: 'right' });
+    doc.font('Helvetica').fontSize(9.5).fillColor('#DCE7E5').text(`Del ${day(from)} al ${day(to)}`, X, 48, { width: W, align: 'right' }).text(`Emitido el ${day(Date.now())}`, X, 62, { width: W, align: 'right' });
+    let y = 112;
+    doc.fillColor(C.text).font('Helvetica-Bold').fontSize(14).text(client.name || 'Cliente', X, y); y += 20;
+    doc.font('Helvetica').fontSize(9.5).fillColor(C.muted).text(client.email || '', X, y); y += 22;
+    const cards = [['Servicios con cobro', String(services), C.brand], ['Total pagado', usd(paid), C.ok], ['Créditos a tu favor', usd(credits), C.text], ['Saldo pendiente', usd(client.balance || 0), (client.balance || 0) > 0 ? C.bad : C.text]];
+    const cw = (W - 18) / 4;
+    cards.forEach(([label, value, color], i) => {
+      const cx = X + i * (cw + 6);
+      doc.roundedRect(cx, y, cw, 58, 8).fill(C.soft);
+      doc.fillColor(C.muted).font('Helvetica').fontSize(8.5).text(label, cx + 10, y + 10, { width: cw - 20 });
+      doc.fillColor(color).font('Helvetica-Bold').fontSize(15).text(value, cx + 10, y + 28, { width: cw - 20 });
+    });
+    y += 74;
+    doc.fillColor(C.text).font('Helvetica-Bold').fontSize(11).text('Tus servicios y comprobantes', X, y); y = doc.y + 6;
+    const cols = [{ t: 'Fecha', w: 62 }, { t: 'Reserva', w: 58 }, { t: 'Servicio y comprobantes', w: W - 62 - 58 - 70 }, { t: 'Total', w: 70, right: true }];
+    const header = () => { doc.rect(X, y, W, 20).fill(C.brand); let cx = X; for (const c of cols) { doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(8.5).text(c.t.toUpperCase(), cx + 6, y + 6, { width: c.w - 12, align: c.right ? 'right' : 'left' }); cx += c.w; } y += 20; };
+    header();
+    if (!lines.length) { doc.fillColor(C.muted).font('Helvetica').fontSize(9.5).text('Sin servicios en el periodo.', X + 6, y + 8); y += 28; }
+    lines.forEach(({ b, inv, total }, i) => {
+      const status = b.status === 'cancelada' ? (total ? 'Cancelada con cargo' : 'Cancelada sin cobro') : b.status === 'completada' ? 'Completada' : b.status === 'en_disputa' ? 'En revisión' : 'Programada';
+      const detail = [`${b.categoryName} con ${b.professionalName ?? 'profesional'} · ${status}${b.paymentMethod ? ` · ${PAY[b.paymentMethod] ?? b.paymentMethod}` : ''}`,
+        ...inv.map((x) => `${x.issuer}: ${x.concept} ${usd(x.base)} + IVA ${usd(x.iva)} = ${usd(x.total)}`),
+        ...(Number(b.clientCredit) > 0 ? [`Crédito a tu favor: ${usd(b.clientCredit)}`] : [])].join('\n');
+      doc.font('Helvetica').fontSize(8.5);
+      const h = Math.max(18, doc.heightOfString(detail, { width: cols[2].w - 12 }) + 10);
+      if (y + h > doc.page.height - 70) { doc.addPage(); y = 42; header(); }
+      if (i % 2) doc.rect(X, y, W, h).fill('#F7FAF9');
+      let cx = X;
+      [day(b.dateMs), String(b.id).slice(-6).toUpperCase(), detail, total ? usd(total) : '—'].forEach((v, k) => {
+        doc.fillColor(k === 2 ? C.text : k === 3 ? C.brand : C.text).font(k === 3 ? 'Helvetica-Bold' : 'Helvetica').fontSize(k === 2 ? 8.5 : 9).text(v, cx + 6, y + 5, { width: cols[k].w - 12, align: cols[k].right ? 'right' : 'left' });
+        cx += cols[k].w;
+      });
+      y += h;
+    });
+    y += 12;
+    if (y > doc.page.height - 110) { doc.addPage(); y = 42; }
+    doc.fillColor(C.muted).font('Helvetica').fontSize(8).text('Por cada servicio recibes dos comprobantes: el del profesional por la visita y el de HULUL por el cargo de plataforma. Si algo no cuadra, escríbenos desde la app.', X, y, { width: W });
+    const range = doc.bufferedPageRange();
+    for (let i = range.start; i < range.start + range.count; i++) {
+      doc.switchToPage(i); const bm = doc.page.margins.bottom; doc.page.margins.bottom = 0;
+      doc.fillColor(C.muted).font('Helvetica').fontSize(8).text(`Corporación Coffeeport Cía. Ltda. · HULUL  ·  Página ${i + 1} de ${range.count}`, X, doc.page.height - 30, { width: W, align: 'center', lineBreak: false });
+      doc.page.margins.bottom = bm;
+    }
+    doc.end();
+  });
+}
