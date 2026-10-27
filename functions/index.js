@@ -2636,13 +2636,16 @@ async function payrollParams() {
 export const adminGastos = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
   const admin = await requireAdmin(req, 'contabilidad');
   const full = can(admin.role, 'pagos');
-  const [g, e, r, params, tc] = await Promise.all([db().collection('gastos').get(), full ? db().collection('empleados').get() : null, db().collection('rolPagos').get(), payrollParams(), db().collection('pagosTarjeta').get()]);
+  const [g, e, r, params, tc, lab, ut] = await Promise.all([db().collection('gastos').get(), full ? db().collection('empleados').get() : null, db().collection('rolPagos').get(), payrollParams(), db().collection('pagosTarjeta').get(),
+    full ? db().collection('laboral').get() : null, full ? db().collection('utilidades').get() : null]);
+  const laboral = Object.fromEntries((lab?.docs ?? []).map((d) => [d.id, d.data()]));
+  const utilidades = (ut?.docs ?? []).map((d) => ({ year: d.id, ...d.data(), aprobadoEl: tsMs(d.data().aprobadoEl), updatedAt: tsMs(d.data().updatedAt) }));
   const pagosTarjeta = tc.docs.map((d) => { const x = d.data(); return { id: d.id, fecha: x.fecha, monto: x.monto, tipo: x.tipo ?? 'tarjeta', socio: x.socio ?? '', tarjeta: x.tarjeta ?? '', referencia: x.referencia ?? '', creadoPor: x.creadoPor ?? '' }; });
   const gastos = g.docs.map((d) => { const x = d.data(); return { id: d.id, ...x, createdAt: tsMs(x.createdAt), updatedAt: tsMs(x.updatedAt) }; });
   const empleados = (e?.docs ?? []).map((d) => { const x = d.data(); return { id: d.id, ...x, createdAt: tsMs(x.createdAt), updatedAt: tsMs(x.updatedAt) }; });
   const roles = r.docs.map((d) => { const x = d.data(); return { mes: d.id, status: x.status, totals: x.totals, lines: full ? x.lines ?? [] : [], aprobadoPor: x.aprobadoPor ?? null, aprobadoEl: tsMs(x.aprobadoEl) }; });
   await logAdmin(admin, 'ver_gastos');
-  return { gastos, empleados, roles, params, pagosTarjeta, canEdit: full, viewer: { role: admin.role, email: admin.email } };
+  return { gastos, empleados, roles, params, pagosTarjeta, laboral, utilidades, canEdit: full, viewer: { role: admin.role, email: admin.email } };
 });
 
 /** Crea o actualiza un gasto manual. */
@@ -2762,6 +2765,82 @@ export const borrarPagoTarjeta = onCall({ region: REGION }, async (req) => {
   const snap = await db().doc(`pagosTarjeta/${id}`).get();
   if (snap.exists) { await snap.ref.delete(); await logAdmin(admin, 'pago_tarjeta_borrado', { pagoId: id, monto: snap.data().monto }); }
   return { ok: true };
+});
+
+/* ---------------------------- Laboral: documentos, utilidades y finiquito ---------------------------- */
+
+const LAB_OWNER = /^[A-Za-z0-9_-]{2,60}$/;
+const LAB_KEY = /^[a-z0-9_]{2,30}$/;
+const LAB_TYPES = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' };
+
+/** Marca una obligación laboral como hecha (fecha, referencia) y guarda su archivo (PDF o foto, máx. 8 MB). */
+export const guardarDocLaboral = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const owner = String(req.data?.owner ?? ''); const key = String(req.data?.key ?? '');
+  if (!LAB_OWNER.test(owner) || !LAB_KEY.test(key)) throw new HttpsError('invalid-argument', 'Documento no válido.');
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(req.data?.fecha ?? '')) ? req.data.fecha : null;
+  const state = { hecho: req.data?.hecho !== false, fecha, ref: String(req.data?.ref ?? '').trim().slice(0, 120), por: admin.email, at: Date.now() };
+  const ref = db().doc(`laboral/${owner}`);
+  const prev = (await ref.get()).data()?.[key] ?? {};
+  let archivo = prev.archivo ?? null;
+  const f = req.data?.archivo;
+  if (f?.content) {
+    const type = String(f.contentType ?? '');
+    if (!LAB_TYPES[type]) throw new HttpsError('invalid-argument', 'Sube un PDF o una foto (JPG o PNG).');
+    const buf = Buffer.from(String(f.content), 'base64');
+    if (buf.length > 8 * 1024 * 1024) throw new HttpsError('invalid-argument', 'El archivo pesa más de 8 MB.');
+    const path = `laboral/${owner}/${key}-${Date.now()}.${LAB_TYPES[type]}`;
+    await getStorage().bucket().file(path).save(buf, { contentType: type, resumable: false });
+    archivo = { path, name: String(f.fileName ?? `${key}.${LAB_TYPES[type]}`).replace(/[^\w.\- ]+/g, '').slice(0, 80) };
+  }
+  await ref.set({ [key]: { ...state, archivo } }, { merge: true });
+  await logAdmin(admin, 'doc_laboral', { owner, key, hecho: state.hecho, archivo: !!archivo });
+  return { ok: true, state: { ...state, archivo } };
+});
+
+/** Descarga el archivo guardado de una obligación laboral. */
+export const verDocLaboral = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const owner = String(req.data?.owner ?? ''); const key = String(req.data?.key ?? '');
+  if (!LAB_OWNER.test(owner) || !LAB_KEY.test(key)) throw new HttpsError('invalid-argument', 'Documento no válido.');
+  const a = (await db().doc(`laboral/${owner}`).get()).data()?.[key]?.archivo;
+  if (!a?.path) throw new HttpsError('not-found', 'Ese documento no tiene archivo.');
+  const file = getStorage().bucket().file(a.path);
+  const [buf] = await file.download(); const [meta] = await file.getMetadata();
+  await logAdmin(admin, 'doc_laboral_visto', { owner, key });
+  return { fileName: a.name, contentType: meta.contentType ?? 'application/pdf', content: buf.toString('base64') };
+});
+
+/** Guarda (y opcionalmente aprueba) el cálculo de utilidades de un año. */
+export const guardarUtilidades = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const year = String(req.data?.year ?? '');
+  if (!/^\d{4}$/.test(year)) throw new HttpsError('invalid-argument', 'Año no válido.');
+  const utilidad = Math.round(Number(req.data?.utilidad ?? 0) * 100) / 100;
+  const lines = Array.isArray(req.data?.lines) ? req.data.lines.slice(0, 500).map((l) => ({
+    empleadoId: String(l.empleadoId ?? '').slice(0, 60), nombre: String(l.nombre ?? '').slice(0, 100), cedula: String(l.cedula ?? '').slice(0, 13),
+    dias: Number(l.dias) || 0, cargas: Number(l.cargas) || 0, parte10: Number(l.parte10) || 0, parte5: Number(l.parte5) || 0, total: Number(l.total) || 0, excedente: Number(l.excedente) || 0, aPagar: Number(l.aPagar) || 0,
+  })) : [];
+  const ref = db().doc(`utilidades/${year}`);
+  if ((await ref.get()).data()?.status === 'aprobado' && req.data?.reabrir !== true) throw new HttpsError('failed-precondition', 'Las utilidades de ese año ya están aprobadas.');
+  const status = req.data?.reabrir === true ? 'borrador' : req.data?.aprobar === true ? 'aprobado' : 'borrador';
+  await ref.set({ year, utilidad, lines, status, aprobadoPor: status === 'aprobado' ? admin.email : null, aprobadoEl: status === 'aprobado' ? FieldValue.serverTimestamp() : null, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await logAdmin(admin, `utilidades_${status}`, { year, utilidad });
+  return { ok: true, status };
+});
+
+/** Guarda el cálculo del finiquito en la ficha del empleado. */
+export const guardarFiniquito = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const id = String(req.data?.id ?? '');
+  if (!GASTO_ID.test(id)) throw new HttpsError('invalid-argument', 'Empleado no válido.');
+  const f = req.data?.finiquito ?? {};
+  const lines = (l) => (Array.isArray(l) ? l.slice(0, 20).map((x) => ({ concepto: String(x.concepto ?? '').slice(0, 120), valor: Number(x.valor) || 0, nota: String(x.nota ?? '').slice(0, 160) })) : []);
+  const snap = { salida: String(f.salida ?? '').slice(0, 10), motivo: String(f.motivo ?? '').slice(0, 30), anios: Number(f.anios) || 0, ingresos: lines(f.ingresos), descuentos: lines(f.descuentos),
+    totalIngresos: Number(f.totalIngresos) || 0, totalDescuentos: Number(f.totalDescuentos) || 0, neto: Number(f.neto) || 0, calculadoEl: new Date().toISOString().slice(0, 10), por: admin.email };
+  await db().doc(`empleados/${id}`).set({ finiquito: snap, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await logAdmin(admin, 'finiquito', { empleadoId: id, neto: snap.neto });
+  return { ok: true, finiquito: snap };
 });
 
 /** Crea o actualiza un empleado en relación de dependencia. */

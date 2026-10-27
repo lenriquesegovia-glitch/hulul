@@ -43,7 +43,7 @@ export function Novedades({ onOpen }: { onOpen: (title: string, ids: string[]) =
       try {
         if (canGastos) {
           const g = MUESTRA ? await (await fetch('/muestra-gastos.json')).json() : await (await import('@hulul/shared/firebase')).adminExpenses();
-          next.gastos = { gastos: g.gastos, roles: g.roles, pagosTarjeta: g.pagosTarjeta ?? [] };
+          next.gastos = { gastos: g.gastos, roles: g.roles, pagosTarjeta: g.pagosTarjeta ?? [], empleados: g.empleados ?? [], laboral: g.laboral ?? {} };
         }
       } catch { /* sin gastos: la bandeja sigue con lo demás */ }
       try {

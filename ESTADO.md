@@ -1,5 +1,15 @@
 # HULUL — Estado y registro de entregas
 
+## En PR — Laboral: impuesto a la renta, utilidades, finiquito y documentos del Ministerio del Trabajo, 27 de octubre de 2026 (Claude)
+
+- Rol de pagos con retención mensual de impuesto a la renta (tabla 2026 Res. NAC-DGERCGC25-00000043; rebaja 18 % de gastos personales con tope por canastas, CFB enero 2026 $821,80).
+- Empleados con cargas (utilidades e IR), gastos personales proyectados, región (décimo cuarto Costa o Sierra) y salida con finiquito: sueldo del mes, décimos proporcionales, vacaciones no gozadas, desahucio 25 % por año e indemnización por despido intempestivo; Excel de la liquidación.
+- Utilidades del 15 % (10 % por días, 5 % por días y cargas, tope 24 salarios básicos con excedente al IESS), borrador y aprobación (`utilidades/{año}`).
+- Documentos laborales: contrato y registro en el SUT, avisos de entrada y salida al IESS, finiquito y su registro, pagos y registros de décimos y utilidades, formulario 107, RDEP, reglamento interno y SST; con fecha, referencia y archivo (`laboral/{dueño}`, archivos en Storage `laboral/`). Avisos de vencidos y próximos en Novedades.
+- Mensajes de error sin el código técnico al final.
+- Validar con la contadora: tope de utilidades, plazos de aviso de salida y cronogramas anuales del Ministerio.
+- Necesita publicar con backend.
+
 ## En PR — Gastos de la empresa y nómina (/admin/gastos), 26 de octubre de 2026 (Claude)
 
 - Nueva página en Finanzas: «Gastos y nómina». La ven socios, contadora y UAFE; registran y aprueban socios y contadora (permiso pagos). La UAFE no ve cédulas, cuentas ni el detalle por empleado.

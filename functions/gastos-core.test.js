@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { accrualMonths, cardPaymentInput, employeeInput, expenseInput, monthsWorked, payrollExpenses, payrollLine, payrollTotals } from './gastos-core.js';
+import { incomeTaxAnnual, incomeTaxRetention, accrualMonths, cardPaymentInput, employeeInput, expenseInput, monthsWorked, payrollExpenses, payrollLine, payrollTotals } from './gastos-core.js';
 
 test('gasto: valida y calcula lo que se paga', () => {
   const g = expenseInput({ fecha: '2026-10-20', categoria: 'honorarios', proveedor: 'Contadora', base: 200, iva: 30, retRenta: 20, retIva: 21, estado: 'pagado' });
@@ -52,4 +52,20 @@ test('tarjeta, exterior y devengado', () => {
   assert.deepEqual(accrualMonths(nov), [{ mes: '2026-10', monto: 40 }], 'la factura de octubre cobrada en noviembre se devenga en octubre');
   assert.ok(expenseInput({ fecha: '2026-10-03', categoria: 'otros', proveedor: 'X', base: 100, isd: 20 }).error);
   assert.ok(cardPaymentInput({ fecha: '2026-10-25', monto: 0 }).error);
+});
+
+test('impuesto a la renta 2026 en relación de dependencia', () => {
+  assert.equal(incomeTaxAnnual(12000), 0);
+  assert.equal(incomeTaxAnnual(15549), 167.05);
+  assert.equal(incomeTaxAnnual(20188), 630.9);
+  const sb = incomeTaxRetention({ sueldo: 482 }, 482);
+  assert.equal(sb.mensual, 0, 'con el básico no hay retención');
+  const alto = incomeTaxRetention({ sueldo: 2500, cargasIr: 0, gastosPersonales: 4000 }, 2500);
+  // base = 30.000 × 0,9055 = 27.165 → 1.412 + 465 × 15 % = 1.481,75; rebaja 18 % × 4.000 = 720
+  assert.equal(alto.base, 27165);
+  assert.equal(alto.impuesto, 1481.75);
+  assert.equal(alto.rebaja, 720);
+  assert.equal(alto.mensual, 63.48);
+  const tope = incomeTaxRetention({ sueldo: 2500, cargasIr: 0, gastosPersonales: 20000 }, 2500);
+  assert.equal(tope.rebaja, 1035.47, 'tope: 7 canastas × 821,80 × 18 %');
 });

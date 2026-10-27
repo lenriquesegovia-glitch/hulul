@@ -18,7 +18,7 @@ import { sortPros, toProfessional, type PublicPro } from './demo-data';
 import type { JobOutcome } from './policy';
 import type { CategoryEvidence } from './provider';
 import type { TaxRegime } from './tax';
-import type { CardPayment, Employee, Expense, Payroll, PayrollLine, PayrollTotals, StatementMove } from './dashboard';
+import type { CardPayment, Employee, Expense, LaborDocState, Payroll, PayrollLine, PayrollTotals, ProfitLine, Settlement, StatementMove } from './dashboard';
 import { featuredHomeServices, validateHomeDiscovery } from './home-discovery';
 
 /** Read-only aggregate; unavailable or stale recommendations never block booking. */
@@ -986,11 +986,13 @@ export async function adminSaveIAKey(key: string, remove = false): Promise<{ con
 
 export interface ExpensesData {
   gastos: Expense[]; empleados: Employee[]; roles: Payroll[]; pagosTarjeta: CardPayment[];
-  params: { sbu: number; aportePersonal: number; aportePatronal: number; iece: number; secap: number; fondoReserva: number };
+  laboral?: Record<string, Record<string, LaborDocState>>;
+  utilidades?: { year: string; utilidad: number; lines: ProfitLine[]; status: 'borrador' | 'aprobado'; aprobadoPor?: string | null; aprobadoEl?: number | null }[];
+  params: { cfb?: number; sbu: number; aportePersonal: number; aportePatronal: number; iece: number; secap: number; fondoReserva: number };
   canEdit: boolean; viewer: { role: string; email: string };
 }
 export type ExpenseInput = Omit<Expense, 'id' | 'total' | 'aPagar' | 'pagadoEl' | 'origen' | 'creadoPor'> & { id?: string; pagadoEl?: string | null };
-export type EmployeeInput = Omit<Employee, 'id' | 'bajoSbu'> & { id?: string };
+export type EmployeeInput = Omit<Employee, 'id' | 'bajoSbu' | 'finiquito'> & { id?: string };
 export interface PayrollAdjust { dias?: number; extras?: number; bonos?: number; anticipos?: number; otrosDescuentos?: number }
 
 export async function adminExpenses(): Promise<ExpensesData> {
@@ -1026,4 +1028,17 @@ export async function adminSaveEmployee(input: EmployeeInput): Promise<string> {
 }
 export async function adminPayroll(mes: string, accion: 'calcular' | 'aprobar' | 'reabrir', ajustes?: Record<string, PayrollAdjust>) {
   return (await callable<{ mes: string; accion: string; ajustes?: Record<string, PayrollAdjust> }, { ok: boolean; status: Payroll['status']; lines?: PayrollLine[]; totals?: PayrollTotals }>('rolPagos')({ mes, accion, ajustes })).data;
+}
+
+export async function adminSaveLaborDoc(input: { owner: string; key: string; hecho: boolean; fecha?: string | null; ref?: string; archivo?: { fileName: string; contentType: string; content: string } | null }): Promise<LaborDocState> {
+  return (await callable<typeof input, { ok: boolean; state: LaborDocState }>('guardarDocLaboral', 120_000)(input)).data.state;
+}
+export async function adminLaborDocFile(owner: string, key: string): Promise<{ fileName: string; contentType: string; content: string }> {
+  return (await callable<{ owner: string; key: string }, { fileName: string; contentType: string; content: string }>('verDocLaboral')({ owner, key })).data;
+}
+export async function adminSaveProfitSharing(input: { year: string; utilidad: number; lines: ProfitLine[]; aprobar?: boolean; reabrir?: boolean }): Promise<string> {
+  return (await callable<typeof input, { ok: boolean; status: string }>('guardarUtilidades')(input)).data.status;
+}
+export async function adminSaveSettlement(id: string, finiquito: Settlement): Promise<void> {
+  await callable<{ id: string; finiquito: Settlement }, { ok: boolean }>('guardarFiniquito')({ id, finiquito });
 }

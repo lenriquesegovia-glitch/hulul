@@ -1140,14 +1140,19 @@ export interface Expense {
 export interface CardPayment { id: string; fecha: string; monto: number; tipo?: 'tarjeta' | 'reembolso'; socio?: string; tarjeta: string; referencia: string; creadoPor?: string }
 export interface PayrollLine {
   empleadoId: string; nombre: string; cedula: string; cargo: string; dias: number; sueldo: number; proporcional: number; extras: number; bonos: number; ingresos: number;
-  aportePersonal: number; anticipos: number; otrosDescuentos: number; decimo13: number; decimo14: number; decimosEnRol: number; fondo: number; fondoEnRol: number; vacaciones: number;
+  aportePersonal: number; retencionIr?: number; anticipos: number; otrosDescuentos: number; decimo13: number; decimo14: number; decimosEnRol: number; fondo: number; fondoEnRol: number; vacaciones: number;
   patronal: number; iece: number; secap: number; neto: number; costo: number; alIess: number;
 }
-export type PayrollTotals = Pick<PayrollLine, 'ingresos' | 'aportePersonal' | 'anticipos' | 'otrosDescuentos' | 'decimo13' | 'decimo14' | 'decimosEnRol' | 'fondo' | 'fondoEnRol' | 'vacaciones' | 'patronal' | 'iece' | 'secap' | 'neto' | 'costo' | 'alIess'>;
+export type PayrollTotals = Pick<PayrollLine, 'ingresos' | 'aportePersonal' | 'retencionIr' | 'anticipos' | 'otrosDescuentos' | 'decimo13' | 'decimo14' | 'decimosEnRol' | 'fondo' | 'fondoEnRol' | 'vacaciones' | 'patronal' | 'iece' | 'secap' | 'neto' | 'costo' | 'alIess'>;
 export interface Payroll { mes: string; status: 'borrador' | 'aprobado'; lines: PayrollLine[]; totals: PayrollTotals; aprobadoPor?: string | null; aprobadoEl?: number | null }
 export interface Employee {
   id: string; nombre: string; cedula: string; cargo: string; correo: string; cuenta: string; sueldo: number; ingreso: string;
   activo: boolean; decimosMensuales: boolean; fondoMensual: boolean; bajoSbu?: boolean;
+  /** Cargas para utilidades (cónyuge o conviviente, hijos menores o con discapacidad) y para el IR. */
+  cargasUtilidades?: number; cargasIr?: number; gastosPersonales?: number; region?: 'costa' | 'sierra';
+  /** Salida: fecha, motivo y días de vacaciones pendientes (para el finiquito). */
+  salida?: string | null; motivoSalida?: ExitReason | null; vacacionesPendientes?: number;
+  finiquito?: Settlement | null;
 }
 
 export const expenseGroupOf = (g: Pick<Expense, 'categoria'>): ExpenseGroup => EXPENSE_CATEGORIES[g.categoria]?.group ?? 'administrativos';
@@ -1422,6 +1427,7 @@ export function expenseJournal(gastos: Expense[], payrolls: Payroll[], range: Da
     line(date, entry, { code: C.nomina_aportes.code, name: 'APORTES A LA SEGURIDAD SOCIAL (incluido fondo de reserva)' }, party, 'Aporte patronal, IECE, SECAP y fondos de reserva', r2(t.patronal + t.iece + t.secap + t.fondo), 0);
     line(date, entry, { code: C.nomina_beneficios.code, name: 'BENEFICIOS SOCIALES E INDEMNIZACIONES' }, party, 'Décimo tercero, décimo cuarto y vacaciones', r2(t.decimo13 + t.decimo14 + t.vacaciones), 0);
     line(date, entry, A.iess, 'IESS', 'Planilla de aportes y fondos de reserva', 0, t.alIess);
+    line(date, entry, A.sri, 'SRI', 'Retención de impuesto a la renta en relación de dependencia', 0, t.retencionIr ?? 0);
     line(date, entry, A.beneficios, party, 'Décimos y vacaciones provisionados', 0, r2(t.decimo13 + t.decimo14 - t.decimosEnRol + t.vacaciones));
     line(date, entry, A.anticipos, party, 'Anticipos descontados', 0, t.anticipos);
     line(date, entry, A.otrosPasivos, party, 'Otros descuentos', 0, t.otrosDescuentos);
@@ -1450,7 +1456,7 @@ export interface InboxItem {
   href?: string; ids?: string[];
 }
 export interface InboxExtras {
-  gastos?: { gastos: Expense[]; roles: Payroll[]; pagosTarjeta: CardPayment[] } | null;
+  gastos?: { gastos: Expense[]; roles: Payroll[]; pagosTarjeta: CardPayment[]; empleados?: Employee[]; laboral?: Record<string, Record<string, LaborDocState>> } | null;
   statements?: { week: string; status: string; count: number } | null;
 }
 
@@ -1518,6 +1524,12 @@ export function inboxItems(data: DashData, can: (p: AdminPerm) => boolean, now: 
       const cs = cardStatus(g.gastos, g.pagosTarjeta, now);
       if (cs.sinLiquidacion.ids.length) add({ id: 'liquidaciones', sig: cs.sinLiquidacion.ids.join(','), level: 'media', area: 'SRI', title: `${plural(cs.sinLiquidacion.ids.length, 'cargo del exterior sin liquidación de compra', 'cargos del exterior sin liquidación de compra')}`, detail: `${money(cs.sinLiquidacion.total)}: sin ella no se sustenta el gasto ni el crédito de IVA.`, href: '/admin/gastos?vista=plataformas' });
       if (cs.exteriorAnio > ISD_EXEMPT_2026 * 0.8) add({ id: `isd-${today.slice(0, 4)}`, sig: String(Math.floor(cs.exteriorAnio / 500)), level: 'info', area: 'SRI', title: `Consumos en el exterior del año: ${money(cs.exteriorAnio)}`, detail: `Sobre ${money(ISD_EXEMPT_2026)} al año se paga ISD del 5 %. Revisa el estado de cuenta de la tarjeta.`, href: '/admin/gastos?vista=plataformas' });
+      if (g.empleados?.length) {
+        const lab = laborChecklist(g.empleados, g.laboral ?? {}, now);
+        const late = lab.filter((i) => i.overdue); const soon = lab.filter((i) => i.soon);
+        if (late.length) add({ id: 'laboral-vencido', sig: late.map((i) => `${i.owner}:${i.key}`).join(','), level: 'alta', area: 'Laboral', title: `${plural(late.length, 'obligación laboral vencida', 'obligaciones laborales vencidas')}`, detail: late.slice(0, 3).map((i) => `${i.label} (${i.ownerName})`).join(' · '), href: '/admin/gastos?vista=laboral' });
+        if (soon.length) add({ id: 'laboral-proximo', sig: soon.map((i) => `${i.owner}:${i.key}`).join(','), level: 'media', area: 'Laboral', title: `${plural(soon.length, 'obligación laboral vence', 'obligaciones laborales vencen')} en 15 días`, detail: soon.slice(0, 3).map((i) => `${i.label} · ${fmtShort(i.due!)}`).join(' · '), href: '/admin/gastos?vista=laboral' });
+      }
       for (const so of cs.socios.filter((x) => x.total > 0)) add({ id: `socio-${so.nombre}`, sig: `${so.total}`, level: 'info', area: 'Socios', title: `La empresa le debe ${money(so.total)} a ${so.nombre}`, detail: 'Gastos pagados con su tarjeta o dinero personal (reembolso pendiente).', href: '/admin/gastos?vista=tarjeta' });
     }
   }
@@ -1588,4 +1600,160 @@ export function statementDrafts(moves: StatementMove[], existing: Expense[]): St
       exterior: m.exterior || !!p?.exterior, cubreDesde: consumo ? addMonthsYm(mes, -1) : mes, cubreMeses: p?.billing === 'anual' ? 12 : 1,
     };
   });
+}
+
+
+/* ------------------------------ Laboral: utilidades, finiquito y documentos ------------------------------ */
+
+/** Tope de utilidades por trabajador: 24 salarios básicos; el excedente va al IESS (validar con la contadora). */
+export const PROFIT_CAP_SBU = 24;
+const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / DAY) + 1;
+
+export interface ProfitLine { empleadoId: string; nombre: string; cedula: string; dias: number; cargas: number; parte10: number; parte5: number; total: number; tope: number; excedente: number; aPagar: number }
+export interface ProfitSharing { year: string; utilidad: number; quince: number; diez: number; cinco: number; lines: ProfitLine[]; excedenteIess: number; sinCargas: boolean }
+
+/**
+ * Participación de los trabajadores (15 % de la utilidad del año): 10 % en proporción a los días
+ * trabajados y 5 % en proporción a días × cargas familiares. Si nadie tiene cargas, el 5 % se reparte
+ * como el 10 %. Tope de 24 salarios básicos por persona. Incluye a quienes salieron durante el año.
+ */
+export function profitSharing(empleados: Employee[], year: string, utilidad: number, sbu: number): ProfitSharing {
+  const from = `${year}-01-01`; const to = `${year}-12-31`;
+  const rows = empleados.map((e) => {
+    const start = e.ingreso > from ? e.ingreso : from;
+    const end = e.salida && e.salida < to ? e.salida : to;
+    // Año comercial de 360 días: el año completo cuenta 360.
+    return { e, dias: start <= end ? Math.min(360, Math.round((daysBetween(start, end) * 360) / 365)) : 0, cargas: Number(e.cargasUtilidades || 0) };
+  }).filter((r) => r.dias > 0);
+  const quince = r2(Math.max(0, utilidad) * 0.15); const diez = r2(Math.max(0, utilidad) * 0.10); const cinco = r2(quince - diez);
+  const sumDias = rows.reduce((t, r) => t + r.dias, 0);
+  const sumCargas = rows.reduce((t, r) => t + r.dias * r.cargas, 0);
+  const sinCargas = sumCargas === 0;
+  const tope = r2(sbu * PROFIT_CAP_SBU);
+  const lines = rows.map((r) => {
+    const parte10 = sumDias ? r2((diez * r.dias) / sumDias) : 0;
+    const parte5 = sinCargas ? (sumDias ? r2((cinco * r.dias) / sumDias) : 0) : r2((cinco * r.dias * r.cargas) / sumCargas);
+    const total = r2(parte10 + parte5);
+    const excedente = r2(Math.max(0, total - tope));
+    return { empleadoId: r.e.id, nombre: r.e.nombre, cedula: r.e.cedula, dias: r.dias, cargas: r.cargas, parte10, parte5, total, tope, excedente, aPagar: r2(total - excedente) };
+  });
+  return { year, utilidad: r2(utilidad), quince, diez, cinco, lines, excedenteIess: r2(lines.reduce((t, l) => t + l.excedente, 0)), sinCargas };
+}
+
+export type ExitReason = 'renuncia' | 'mutuo_acuerdo' | 'despido_intempestivo' | 'desahucio' | 'visto_bueno' | 'periodo_prueba' | 'fin_obra';
+export const EXIT_LABEL: Record<ExitReason, string> = {
+  renuncia: 'Renuncia voluntaria', mutuo_acuerdo: 'Mutuo acuerdo', despido_intempestivo: 'Despido intempestivo', desahucio: 'Desahucio',
+  visto_bueno: 'Visto bueno (causa justa del empleador)', periodo_prueba: 'Fin del periodo de prueba', fin_obra: 'Fin de la obra o servicio',
+};
+export interface SettlementLine { concepto: string; valor: number; nota?: string }
+export interface Settlement { salida: string; motivo: ExitReason; anios: number; ingresos: SettlementLine[]; descuentos: SettlementLine[]; totalIngresos: number; totalDescuentos: number; neto: number; calculadoEl: string }
+
+/**
+ * Finiquito: sueldo de los días del último mes, décimos proporcionales (si no se pagaban cada mes),
+ * vacaciones no gozadas, bonificación por desahucio (25 % del último sueldo por año de servicio) e
+ * indemnización por despido intempestivo (3 sueldos hasta 3 años; 1 por año después, máximo 25).
+ */
+export function settlement(e: Employee, salida: string, motivo: ExitReason, sbu: number, opts: { sueldoMesPagado?: boolean; vacaciones?: number } = {}): Settlement {
+  const sueldo = Number(e.sueldo || 0);
+  const diasServicio = Math.max(1, daysBetween(e.ingreso, salida));
+  const anios = Math.round((diasServicio / 365) * 100) / 100;
+  const ing: SettlementLine[] = []; const desc: SettlementLine[] = [];
+  const day = Number(salida.slice(8, 10));
+  const sueldoMes = opts.sueldoMesPagado ? 0 : r2((sueldo * Math.min(30, day)) / 30);
+  if (sueldoMes) ing.push({ concepto: `Sueldo de ${Math.min(30, day)} días del último mes`, valor: sueldoMes });
+  if (!e.decimosMensuales) {
+    const y = Number(salida.slice(0, 4));
+    const d13From = salida.slice(5) >= '12-01' ? `${y}-12-01` : `${y - 1}-12-01`;
+    const d13Days = daysBetween(e.ingreso > d13From ? e.ingreso : d13From, salida);
+    ing.push({ concepto: 'Décimo tercero proporcional', valor: r2((sueldo * Math.min(360, d13Days)) / 360), nota: `${d13Days} días desde el ${d13From}` });
+    const startMd = e.region === 'sierra' ? '08-01' : '03-01';
+    const d14From = salida.slice(5) >= startMd ? `${y}-${startMd}` : `${y - 1}-${startMd}`;
+    const d14Days = daysBetween(e.ingreso > d14From ? e.ingreso : d14From, salida);
+    ing.push({ concepto: 'Décimo cuarto proporcional', valor: r2((sbu * Math.min(360, d14Days)) / 360), nota: `${d14Days} días desde el ${d14From} (${e.region === 'sierra' ? 'Sierra' : 'Costa'})` });
+  }
+  const vac = opts.vacaciones ?? Number(e.vacacionesPendientes || 0);
+  if (vac > 0) ing.push({ concepto: `Vacaciones no gozadas (${vac} días)`, valor: r2((sueldo / 30) * vac) });
+  if (['renuncia', 'desahucio', 'despido_intempestivo', 'mutuo_acuerdo'].includes(motivo)) {
+    ing.push({ concepto: 'Bonificación por desahucio (25 % por año)', valor: r2(sueldo * 0.25 * anios), nota: `${anios} años de servicio` });
+  }
+  if (motivo === 'despido_intempestivo') {
+    const meses = anios <= 3 ? 3 : Math.min(25, Math.ceil(anios));
+    ing.push({ concepto: `Indemnización por despido intempestivo (${meses} sueldos)`, valor: r2(sueldo * meses), nota: 'Hasta 3 años: 3 sueldos; después, 1 por año (fracción = año), máximo 25' });
+  }
+  if (sueldoMes) desc.push({ concepto: 'Aporte personal IESS 9,45 % del último mes', valor: r2(sueldoMes * 0.0945) });
+  const totalIngresos = r2(ing.reduce((t, l) => t + l.valor, 0));
+  const totalDescuentos = r2(desc.reduce((t, l) => t + l.valor, 0));
+  return { salida, motivo, anios, ingresos: ing, descuentos: desc, totalIngresos, totalDescuentos, neto: r2(totalIngresos - totalDescuentos), calculadoEl: '' };
+}
+
+/** Documentos y obligaciones ante el Ministerio del Trabajo, el IESS y el SRI. */
+export type LaborScope = 'alta' | 'salida' | 'anual' | 'empresa';
+export interface LaborDocDef { key: string; label: string; scope: LaborScope; who: string; help: string }
+export const LABOR_DOCS: LaborDocDef[] = [
+  { key: 'contrato', label: 'Contrato de trabajo firmado', scope: 'alta', who: 'Empresa y trabajador', help: 'Por escrito, con sueldo, jornada, cargo y periodo de prueba (máx. 90 días).' },
+  { key: 'contrato_sut', label: 'Contrato registrado en el SUT', scope: 'alta', who: 'Ministerio del Trabajo', help: 'Dentro de los 30 días desde el ingreso, en sut.trabajo.gob.ec.' },
+  { key: 'aviso_entrada', label: 'Aviso de entrada al IESS', scope: 'alta', who: 'IESS', help: 'Desde el primer día de trabajo, en el portal del empleador.' },
+  { key: 'cedula', label: 'Cédula y datos del trabajador', scope: 'alta', who: 'Archivo de la empresa', help: 'Copia de cédula, dirección, contacto de emergencia, cuenta bancaria.' },
+  { key: 'solicitud_decimos', label: 'Solicitud para recibir los décimos cada mes', scope: 'alta', who: 'Archivo de la empresa', help: 'Solo si el trabajador lo pidió; firmada por él.' },
+  { key: 'solicitud_fondos', label: 'Solicitud de fondos de reserva en el rol', scope: 'alta', who: 'IESS', help: 'Solo si el trabajador lo pidió (se registra en el IESS).' },
+  { key: 'gastos_personales', label: 'Proyección de gastos personales del trabajador (SRI)', scope: 'anual', who: 'SRI', help: 'El trabajador la entrega en enero; con ella se calcula su retención de IR.' },
+  { key: 'finiquito', label: 'Acta de finiquito firmada y pagada', scope: 'salida', who: 'Empresa y trabajador', help: 'Con el cálculo de la liquidación; se paga al salir.' },
+  { key: 'finiquito_sut', label: 'Acta de finiquito registrada en el SUT', scope: 'salida', who: 'Ministerio del Trabajo', help: 'Dentro de los 30 días desde la salida.' },
+  { key: 'aviso_salida', label: 'Aviso de salida al IESS', scope: 'salida', who: 'IESS', help: 'En los días siguientes a la salida (confirmar el plazo con la contadora).' },
+  { key: 'decimo13_pago', label: 'Pago del décimo tercero', scope: 'anual', who: 'Trabajadores', help: 'Hasta el 24 de diciembre (a quienes no lo reciben cada mes).' },
+  { key: 'decimo13_registro', label: 'Registro del décimo tercero en el Ministerio del Trabajo', scope: 'anual', who: 'Ministerio del Trabajo', help: 'Enero o febrero, según el cronograma por noveno dígito del RUC.' },
+  { key: 'decimo14_pago', label: 'Pago del décimo cuarto', scope: 'anual', who: 'Trabajadores', help: 'Costa: hasta el 15 de marzo. Sierra: hasta el 15 de agosto.' },
+  { key: 'decimo14_registro', label: 'Registro del décimo cuarto en el Ministerio del Trabajo', scope: 'anual', who: 'Ministerio del Trabajo', help: 'Según el cronograma que publica el Ministerio cada año.' },
+  { key: 'utilidades_pago', label: 'Pago de utilidades (15 %)', scope: 'anual', who: 'Trabajadores', help: 'Hasta el 15 de abril, sobre la utilidad del año anterior.' },
+  { key: 'utilidades_registro', label: 'Registro de utilidades en el Ministerio del Trabajo', scope: 'anual', who: 'Ministerio del Trabajo', help: 'Según el cronograma que publica el Ministerio cada año.' },
+  { key: 'formulario_107', label: 'Formulario 107 entregado a cada trabajador', scope: 'anual', who: 'SRI', help: 'Comprobante de retenciones del año anterior; en enero.' },
+  { key: 'rdep', label: 'Anexo de relación de dependencia (RDEP) al SRI', scope: 'anual', who: 'SRI', help: 'Según el calendario del SRI.' },
+  { key: 'reglamento_interno', label: 'Reglamento interno de trabajo', scope: 'empresa', who: 'Ministerio del Trabajo', help: 'Exigible según el número de trabajadores: confirmar con el abogado cuándo aplica.' },
+  { key: 'sst', label: 'Seguridad y salud en el trabajo (reglamento o plan de riesgos)', scope: 'empresa', who: 'Ministerio del Trabajo', help: 'Según el número de trabajadores; se registra en el SUT.' },
+];
+
+export interface LaborDocState { hecho: boolean; fecha?: string | null; ref?: string; archivo?: { path: string; name: string } | null; por?: string }
+export interface LaborItem extends LaborDocDef { owner: string; ownerName: string; due: string | null; state: LaborDocState | null; overdue: boolean; soon: boolean }
+const withDays = (iso: string, n: number) => addDays(iso, n);
+
+/** Lista de obligaciones laborales con su vencimiento y estado. docs[owner][key] = estado guardado. */
+export function laborChecklist(empleados: Employee[], docs: Record<string, Record<string, LaborDocState>>, now: number): LaborItem[] {
+  const today = ecDate(now); const y = Number(today.slice(0, 4));
+  const out: LaborItem[] = [];
+  const push = (def: LaborDocDef, owner: string, ownerName: string, due: string | null) => {
+    const state = docs[owner]?.[def.key] ?? null;
+    const done = !!state?.hecho;
+    out.push({ ...def, owner, ownerName, due, state, overdue: !done && !!due && due < today, soon: !done && !!due && due >= today && due <= withDays(today, 15) });
+  };
+  const def = (k: string) => LABOR_DOCS.find((d) => d.key === k)!;
+  for (const e of empleados) {
+    push(def('contrato'), e.id, e.nombre, e.ingreso);
+    push(def('contrato_sut'), e.id, e.nombre, withDays(e.ingreso, 30));
+    push(def('aviso_entrada'), e.id, e.nombre, e.ingreso);
+    push(def('cedula'), e.id, e.nombre, e.ingreso);
+    if (e.decimosMensuales) push(def('solicitud_decimos'), e.id, e.nombre, e.ingreso);
+    if (e.fondoMensual) push(def('solicitud_fondos'), e.id, e.nombre, e.ingreso);
+    if (e.activo) { const jan = `${y}-01-31`; const late = withDays(e.ingreso, 30); push(def('gastos_personales'), `${e.id}-${y}`, e.nombre, late > jan ? late : jan); }
+    if (!e.activo && e.salida) {
+      push(def('finiquito'), e.id, e.nombre, e.salida);
+      push(def('finiquito_sut'), e.id, e.nombre, withDays(e.salida, 30));
+      push(def('aviso_salida'), e.id, e.nombre, withDays(e.salida, 3));
+    }
+  }
+  if (empleados.length) {
+    const yearOwner = (yy: number) => `empresa-${yy}`;
+    const anyD13 = empleados.some((e) => !e.decimosMensuales);
+    // Lo del año en curso y lo que vence en enero–abril por el año anterior.
+    if (anyD13) push(def('decimo13_pago'), yearOwner(y), `Año ${y}`, `${y}-12-24`);
+    push(def('decimo13_registro'), yearOwner(y - 1), `Año ${y - 1}`, null);
+    if (anyD13) push(def('decimo14_pago'), yearOwner(y), `Año ${y}`, empleados.some((e) => e.region === 'sierra') ? `${y}-08-15` : `${y}-03-15`);
+    push(def('decimo14_registro'), yearOwner(y), `Año ${y}`, null);
+    push(def('utilidades_pago'), yearOwner(y - 1), `Utilidades ${y - 1}`, `${y}-04-15`);
+    push(def('utilidades_registro'), yearOwner(y - 1), `Utilidades ${y - 1}`, null);
+    push(def('formulario_107'), yearOwner(y - 1), `Año ${y - 1}`, `${y}-01-31`);
+    push(def('rdep'), yearOwner(y - 1), `Año ${y - 1}`, null);
+    push(def('reglamento_interno'), 'empresa', 'Empresa', null);
+    push(def('sst'), 'empresa', 'Empresa', null);
+  }
+  return out;
 }

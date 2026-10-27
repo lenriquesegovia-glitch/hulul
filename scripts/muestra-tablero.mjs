@@ -130,7 +130,7 @@ console.log(`Muestra: ${out.bookings.length} reservas, ${out.ledger.length} movi
 {
   const { expenseInput, payrollExpenses, payrollLine, payrollTotals, PAYROLL_PARAMS_2026, employeeInput } = await import('../functions/gastos-core.js');
   const empleados = [
-    { id: 'EMP000000001', ...employeeInput({ nombre: 'Karla Jiménez', cedula: '0923456781', cargo: 'Soporte y operaciones', sueldo: 650, ingreso: '2025-03-01', correo: 'karla@hululec.com', cuenta: 'Pacífico ahorros ••••4521' }) },
+    { id: 'EMP000000001', ...employeeInput({ nombre: 'Karla Jiménez', cedula: '0923456781', cargo: 'Soporte y operaciones', sueldo: 650, ingreso: '2025-03-01', correo: 'karla@hululec.com', cuenta: 'Pacífico ahorros ••••4521', cargasUtilidades: 2, cargasIr: 2 }) },
     { id: 'EMP000000002', ...employeeInput({ nombre: 'Bryan Macías', cedula: '0934567812', cargo: 'Atención al cliente', sueldo: 482, ingreso: '2026-06-01', decimosMensuales: true, cuenta: 'Pichincha ahorros ••••8810' }) },
   ];
   const months = ['2026-08', '2026-09', '2026-10'];
@@ -163,6 +163,9 @@ console.log(`Muestra: ${out.bookings.length} reservas, ${out.ledger.length} movi
   add({ fecha: '2026-09-20', categoria: 'tecnologia', proveedor: 'Dominios (hululec.com, hulul.ec…)', plataforma: 'dominios', base: 64, iva: 9.6, cubreMeses: 12, formaPago: 'tarjeta', tarjeta: 'Visa Pacífico ••4410', exterior: true, liquidacion: true });
   add({ fecha: '2026-09-02', categoria: 'notarios', proveedor: 'SENADI', base: 208, iva: 0, descripcion: 'Registro de la marca HULUL' });
   add({ fecha: '2026-10-24', categoria: 'mantenimiento', proveedor: 'TecnoFix', identificacion: '0990011223001', factura: '001-001-000000231', base: 85, iva: 12.75, estado: 'por_pagar', vence: '2026-10-30' });
-  writeFileSync(new URL('../apps/web/public/muestra-gastos.json', import.meta.url), JSON.stringify({ gastos, empleados, roles, pagosTarjeta: [{ id: 'TC1', fecha: '2026-09-15', monto: 300, tarjeta: 'Visa Pacífico ••4410', referencia: 'Pago agosto' }, { id: 'TC2', fecha: '2026-10-15', monto: 250, tarjeta: 'Visa Pacífico ••4410', referencia: 'Pago septiembre' }], params: PAYROLL_PARAMS_2026, canEdit: true, viewer: { role: 'dueno', email: 'muestra@hululec.com' } }));
+    empleados.push({ id: 'EMP000000003', ...employeeInput({ nombre: 'Daniel Ortega', cedula: '0945678123', cargo: 'Ventas', sueldo: 700, ingreso: '2025-06-01', activo: false, salida: '2026-09-30', motivoSalida: 'renuncia', vacacionesPendientes: 4.5 }) });
+  const laboral = { EMP000000001: { contrato: { hecho: true, fecha: '2025-03-01' }, contrato_sut: { hecho: true, fecha: '2025-03-20', ref: 'SUT-88231' }, aviso_entrada: { hecho: true, fecha: '2025-03-01' }, cedula: { hecho: true } },
+    EMP000000002: { contrato: { hecho: true, fecha: '2026-06-01' }, aviso_entrada: { hecho: true, fecha: '2026-06-01' } } };
+  writeFileSync(new URL('../apps/web/public/muestra-gastos.json', import.meta.url), JSON.stringify({ laboral, utilidades: [], gastos, empleados, roles, pagosTarjeta: [{ id: 'TC1', fecha: '2026-09-15', monto: 300, tarjeta: 'Visa Pacífico ••4410', referencia: 'Pago agosto' }, { id: 'TC2', fecha: '2026-10-15', monto: 250, tarjeta: 'Visa Pacífico ••4410', referencia: 'Pago septiembre' }], params: PAYROLL_PARAMS_2026, canEdit: true, viewer: { role: 'dueno', email: 'muestra@hululec.com' } }));
   console.log(`Muestra de gastos: ${gastos.length} gastos, ${empleados.length} empleados, ${roles.length} roles.`);
 }
