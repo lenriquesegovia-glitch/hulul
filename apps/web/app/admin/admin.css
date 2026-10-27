@@ -274,3 +274,15 @@ body:has(.adm) .cookie-banner { display: none; }
 .adm-kpi.selected { box-shadow: 0 0 0 2px var(--primary); }
 .adm-kpi.accent.selected { box-shadow: 0 0 0 3px #7FB6A6; }
 .adm-kpi-link { background: none; border: none; padding: 0; font: inherit; font-size: 11.5px; font-weight: 800; color: inherit; text-decoration: underline; cursor: pointer; }
+
+/* Bandeja de novedades (resumen ejecutivo) */
+.adm-inbox-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+.adm-inbox-list li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 7px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.adm-inbox-list li > i { width: 10px; height: 10px; border-radius: 50%; }
+.adm-inbox-list li > div { display: grid; gap: 2px; min-width: 0; font-size: 14px; }
+.adm-inbox-list small { color: var(--text-2); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-inbox-area { margin-right: 6px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+@media (max-width: 720px) {
+  .adm-inbox-list li { grid-template-columns: 10px minmax(0, 1fr); }
+  .adm-inbox-list li > .adm-bar { grid-column: 2; }
+}

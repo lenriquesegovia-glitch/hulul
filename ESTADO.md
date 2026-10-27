@@ -9,6 +9,10 @@
 - Excel para la contadora (estado de resultados, gastos, diario de gastos y nómina, compras para el ATS, roles) y botón «Enviar a la contadora».
 - Datos en `gastos`, `empleados`, `rolPagos` y `adminConfig/nomina` (solo servidor). Lógica en `functions/gastos-core.js` y `packages/shared/src/dashboard.ts`, con pruebas.
 - Pendiente: la contadora valida cuentas y parámetros; adjuntar foto/PDF del comprobante; archivo de pago masivo de sueldos al banco.
+- Devengado en todo (27-oct): cada gasto se reconoce en el mes que cubre; lo anual se reparte en 12 meses (pagados por anticipado 1010404) y el consumo de la nube que se cobra al mes siguiente va al mes en que se usó.
+- Tarjeta de crédito: los cargos son deuda con la tarjeta (2010401) hasta registrar el pago del estado de cuenta; gastos pagados con tarjeta personal de un socio quedan como deuda con él (20108) hasta el reembolso.
+- Plataformas (el stack: Firebase/Google Cloud, Vercel, Claude, Claude API, Expo, GitHub, Resend, Workspace, Google Play, Apple, dominios, Meta Ads): costo mensual, meses que faltan por registrar, IVA de servicios digitales, ISD 5 % y aviso de liquidación de compra faltante.
+- Bandeja «Novedades por revisar» arriba del resumen ejecutivo: reclamos por vencer, pagos, aprobaciones, atrasos de hoy, calificaciones bajas, UAFE, SRI, gastos vencidos, rol e IESS, plataformas, socios. «Visto» por navegador; vuelve si cambia.
 - Necesita publicar con backend (funciones nuevas).
 
 ## En PR — Asistente de reclamos y decisión prellenada, 26 de octubre de 2026 (Claude)

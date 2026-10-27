@@ -12,7 +12,7 @@ export const EXPENSE_CATEGORIES = {
   honorarios: { label: 'Honorarios profesionales (contadora, abogado…)', code: '520205', account: 'HONORARIOS, COMISIONES Y DIETAS A PERSONAS NATURALES' },
   subcontratos: { label: 'Subcontratos y trabajadores autónomos', code: '520206', account: 'REMUNERACIONES A OTROS TRABAJADORES AUTÓNOMOS' },
   marketing: { label: 'Marketing y publicidad', code: '520111', account: 'PROMOCIÓN Y PUBLICIDAD' },
-  tecnologia: { label: 'Tecnología, software y nube', code: '520228', account: 'OTROS GASTOS' },
+  tecnologia: { label: 'Plataformas y software (nube, tiendas de apps, IA, dominios)', code: '520228', account: 'OTROS GASTOS' },
   arriendo: { label: 'Arriendo de oficina', code: '520209', account: 'ARRENDAMIENTO OPERATIVO' },
   servicios: { label: 'Luz, agua, internet y teléfono', code: '520218', account: 'AGUA, ENERGÍA, LUZ Y TELECOMUNICACIONES' },
   mantenimiento: { label: 'Mantenimiento y reparaciones', code: '520208', account: 'MANTENIMIENTO Y REPARACIONES' },
@@ -35,31 +35,77 @@ export const PAY_METHODS = ['transferencia', 'tarjeta', 'efectivo', 'debito', 'c
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Valida y normaliza un gasto que llega del panel. */
+/** Umbral anual exento de ISD en consumos con tarjeta en el exterior (2026). */
+export const ISD_RATE = 0.05;
+export const ISD_EXEMPT_2026 = 5188.26;
+
+const ym = (iso) => String(iso).slice(0, 7);
+const addMonths = (m, n) => { const [y, mo] = m.split('-').map(Number); const d = new Date(Date.UTC(y, mo - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+const monthDiff = (a, b) => { const [y1, m1] = a.split('-').map(Number); const [y2, m2] = b.split('-').map(Number); return (y2 - y1) * 12 + (m2 - m1); };
+
+/**
+ * Valida y normaliza un gasto que llega del panel. Devengado: el gasto se reconoce en los meses
+ * que cubre (cubreDesde + cubreMeses), no cuando se paga. Con tarjeta de crédito el gasto queda
+ * pagado al proveedor y la deuda pasa a la tarjeta hasta que se paga su estado de cuenta.
+ */
 export function expenseInput(d) {
   const fecha = String(d?.fecha ?? '');
   const categoria = String(d?.categoria ?? '');
   const proveedor = String(d?.proveedor ?? '').trim().slice(0, 120);
   const descripcion = String(d?.descripcion ?? '').trim().slice(0, 400);
-  const base = r2(d?.base); const iva = r2(d?.iva);
+  const base = r2(d?.base); const iva = r2(d?.iva); const isd = r2(d?.isd);
   const retRenta = r2(d?.retRenta); const retIva = r2(d?.retIva);
   if (!ISO.test(fecha)) return { error: 'Elige la fecha.' };
   if (!MANUAL_CATEGORIES.includes(categoria)) return { error: 'Elige la categoría.' };
   if (proveedor.length < 2) return { error: 'Escribe a quién se le pagó.' };
   if (!(base > 0)) return { error: 'Escribe el valor sin IVA.' };
-  if (iva < 0 || retRenta < 0 || retIva < 0) return { error: 'Los valores no pueden ser negativos.' };
+  if (iva < 0 || retRenta < 0 || retIva < 0 || isd < 0) return { error: 'Los valores no pueden ser negativos.' };
   if (iva > base * 0.16) return { error: 'El IVA parece alto para esa base (máximo 15 %).' };
-  const estado = d?.estado === 'por_pagar' ? 'por_pagar' : 'pagado';
-  const vence = ISO.test(String(d?.vence ?? '')) ? d.vence : null;
+  if (isd > (base + iva) * 0.055) return { error: 'El ISD parece alto (es el 5 %).' };
+  const formaPago = PAY_METHODS.includes(d?.formaPago) ? d.formaPago : 'transferencia';
+  const tarjeta = formaPago === 'tarjeta';
+  const estado = !tarjeta && d?.estado === 'por_pagar' ? 'por_pagar' : 'pagado';
+  const vence = estado === 'por_pagar' && ISO.test(String(d?.vence ?? '')) ? d.vence : null;
   if (estado === 'por_pagar' && !vence) return { error: 'Si está por pagar, pon la fecha de vencimiento.' };
+  const cubreMeses = Math.max(1, Math.min(36, Math.round(Number(d?.cubreMeses) || 1)));
+  const cubreDesde = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(d?.cubreDesde ?? '')) ? d.cubreDesde : ym(fecha);
+  if (Math.abs(monthDiff(ym(fecha), cubreDesde)) > 12) return { error: 'El periodo que cubre debe empezar como máximo 12 meses antes o después de la fecha.' };
+  const exterior = !!d?.exterior;
+  if (d?.pagador === 'socio' && String(d?.socio ?? '').trim().length < 2) return { error: 'Escribe qué socio lo pagó.' };
   return {
-    fecha, categoria, proveedor, descripcion, base, iva, total: r2(base + iva), retRenta, retIva,
-    aPagar: r2(base + iva - retRenta - retIva),
+    fecha, categoria, proveedor, descripcion, base, iva, isd, total: r2(base + iva + isd), retRenta, retIva,
+    aPagar: r2(base + iva + isd - retRenta - retIva),
     identificacion: String(d?.identificacion ?? '').replace(/\D/g, '').slice(0, 13),
     factura: String(d?.factura ?? '').trim().slice(0, 30),
-    formaPago: PAY_METHODS.includes(d?.formaPago) ? d.formaPago : 'transferencia',
-    estado, vence, recurrente: !!d?.recurrente,
+    formaPago, estado, vence, recurrente: !!d?.recurrente,
+    tarjeta: tarjeta ? String(d?.tarjeta ?? '').trim().slice(0, 40) : '',
+    exterior, liquidacion: exterior && !!d?.liquidacion,
+    cubreDesde, cubreMeses,
+    // De quién es la tarjeta o el dinero: si es de un socio, la empresa le debe el reembolso.
+    pagador: d?.pagador === 'socio' ? 'socio' : 'empresa',
+    socio: d?.pagador === 'socio' ? String(d?.socio ?? '').trim().slice(0, 60) : '',
+    plataforma: /^[a-z0-9_]{2,30}$/.test(String(d?.plataforma ?? '')) ? d.plataforma : '',
   };
+}
+
+/** Meses (AAAA-MM) y monto devengado de cada uno: la base repartida en partes iguales. */
+export function accrualMonths(g) {
+  const n = Math.max(1, Number(g.cubreMeses) || 1);
+  const from = g.cubreDesde || ym(g.fecha);
+  const part = r2(g.base / n);
+  return Array.from({ length: n }, (_, i) => ({ mes: addMonths(from, i), monto: i === n - 1 ? r2(g.base - part * (n - 1)) : part }));
+}
+
+/** Pago del estado de cuenta de la tarjeta de crédito. */
+export function cardPaymentInput(d) {
+  const fecha = String(d?.fecha ?? '');
+  const monto = r2(d?.monto);
+  if (!ISO.test(fecha)) return { error: 'Elige la fecha del pago.' };
+  if (!(monto > 0)) return { error: 'Escribe cuánto pagaste de la tarjeta.' };
+  const tipo = d?.tipo === 'reembolso' ? 'reembolso' : 'tarjeta';
+  const socio = tipo === 'reembolso' ? String(d?.socio ?? '').trim().slice(0, 60) : '';
+  if (tipo === 'reembolso' && socio.length < 2) return { error: 'Escribe a qué socio se le reembolsó.' };
+  return { fecha, monto, tipo, socio, tarjeta: tipo === 'tarjeta' ? String(d?.tarjeta ?? '').trim().slice(0, 40) : '', referencia: String(d?.referencia ?? '').trim().slice(0, 80) };
 }
 
 /* ---------------------------------- Nómina ---------------------------------- */
@@ -119,7 +165,7 @@ export function payrollExpenses(mes, totals) {
     { id: `nomina_${mes}_beneficios`, categoria: 'nomina_beneficios', base: r2(totals.decimo13 + totals.decimo14 + totals.vacaciones) },
   ].filter((g) => g.base > 0).map((g) => ({
     ...g, fecha, proveedor: 'Nómina del mes', descripcion: `Rol de pagos ${mes}`, iva: 0, total: g.base, retRenta: 0, retIva: 0, aPagar: g.base,
-    identificacion: '', factura: '', formaPago: 'transferencia', estado: 'pagado', vence: null, recurrente: false, origen: 'nomina',
+    identificacion: '', factura: '', formaPago: 'transferencia', estado: 'pagado', vence: null, recurrente: false, origen: 'nomina', isd: 0, tarjeta: '', pagador: 'empresa', socio: '', plataforma: '', exterior: false, liquidacion: false, cubreDesde: mes, cubreMeses: 1,
   }));
 }
 

@@ -176,6 +176,44 @@ assert.equal(complianceAlerts({ bookings, payouts: [], providers: [] }, { from: 
   assert.ok(!j.some((l) => l.entry.startsWith('FC') && l.detail.startsWith('Pago') && l.party === 'Meta'), 'lo pendiente no se paga en el diario');
   const serie = sh.resultSeries(lg, gastos, range, 'mes');
   assert.equal(serie.length, 1); assert.equal(serie[0].utilidad, is.utilidad);
+
+  // Tarjeta, exterior y devengado.
+  const apple = { id: 'g3', ...core.expenseInput({ fecha: '2026-10-03', categoria: 'tecnologia', proveedor: 'Apple', base: 99, iva: 14.85, isd: 4.95, formaPago: 'tarjeta', exterior: true, cubreMeses: 12, plataforma: 'apple' }), pagadoEl: '2026-10-03' };
+  const gcp = { id: 'g4', ...core.expenseInput({ fecha: '2026-11-02', categoria: 'tecnologia', proveedor: 'Google Cloud', base: 40, iva: 6, formaPago: 'tarjeta', exterior: true, cubreDesde: '2026-10', plataforma: 'firebase', liquidacion: true }), pagadoEl: '2026-11-02' };
+  const socio = { id: 'g5', ...core.expenseInput({ fecha: '2026-10-08', categoria: 'tecnologia', proveedor: 'Claude', base: 100, formaPago: 'tarjeta', pagador: 'socio', socio: 'Luis', plataforma: 'claude' }), pagadoEl: '2026-10-08' };
+  const all = [apple, gcp, socio];
+  const oct = sh.expenseSummary(all, range, now);
+  assert.equal(oct.total, sh.r2(8.25 + 4.95 + 40 + 100), 'octubre: 1/12 de Apple + ISD + Google de octubre (cobrado en nov.) + Claude');
+  assert.equal(oct.prepaid.diferido, sh.r2(99 - 8.25), 'lo anual pagado en octubre que se devenga después');
+  const year = { from: '2026-01-01', to: '2027-12-31' };
+  const jj = sh.expenseJournal(all, [], year, [{ id: 'p1', fecha: '2026-11-20', monto: 50, tarjeta: 'Visa', referencia: '' }]);
+  for (const e of new Set(jj.map((l) => l.entry))) {
+    const x = jj.filter((l) => l.entry === e);
+    assert.equal(sh.r2(x.reduce((t, l) => t + l.debit, 0)), sh.r2(x.reduce((t, l) => t + l.credit, 0)), `asiento ${e} cuadra`);
+  }
+  const bal = (code) => sh.r2(jj.filter((l) => l.code === code).reduce((t, l) => t + l.credit - l.debit, 0));
+  assert.equal(bal('2010401'), sh.r2(apple.aPagar + gcp.aPagar - 50), 'deuda de la tarjeta = cargos − pagos');
+  assert.equal(bal('20108'), 100, 'se le debe al socio');
+  const reemb = sh.expenseJournal(all, [], year, [{ id: 'r1', fecha: '2026-11-25', monto: 100, tipo: 'reembolso', socio: 'Luis', tarjeta: '', referencia: '' }]);
+  assert.equal(sh.r2(reemb.filter((l) => l.code === '20108').reduce((t, l) => t + l.credit - l.debit, 0)), 0, 'reembolsado al socio');
+  assert.equal(sh.cardStatus(all, [{ id: 'r1', fecha: '2026-11-25', monto: 100, tipo: 'reembolso', socio: 'Luis', tarjeta: '', referencia: '' }], now).socios.length, 0);
+  assert.equal(bal('1010404'), 0, 'lo pagado por anticipado se devengó completo en el año');
+  assert.equal(bal('2010301'), 0, 'la provisión de octubre se cerró con el cargo de noviembre');
+  assert.equal(sh.r2(jj.filter((l) => l.code === '520228').reduce((t, l) => t + l.debit, 0)), 239, 'gasto total devengado de plataformas');
+  const cs = sh.cardStatus(all, [{ id: 'p1', fecha: '2026-11-20', monto: 50, tarjeta: '', referencia: '' }], now);
+  assert.equal(cs.saldo, sh.r2(apple.aPagar + gcp.aPagar - 50));
+  assert.deepEqual(cs.sinLiquidacion.ids, ['g3']);
+  const pc = sh.platformCosts(all, now);
+  assert.equal(pc.find((x) => x.key === 'apple').months.at(-1).monto, 13.2, 'la cuota del mes + el ISD del cargo');
+
+  // Bandeja de novedades
+  const dash = { range, generatedAt: now, bookings, ledger: [], payouts: [], providers: [], clients: [], claims: [] };
+  const inbox = sh.inboxItems(dash, () => true, now, { gastos: { gastos: [g2, ...all], roles: [], pagosTarjeta: [] } });
+  assert.ok(inbox.some((i) => i.id === 'gastos-vencidos' && i.level === 'alta'));
+  assert.ok(inbox.some((i) => i.id === 'liquidaciones'));
+  assert.ok(inbox.some((i) => i.id === 'socio-Luis'));
+  assert.ok(!sh.inboxItems(dash, (p) => p === 'tablero', now, {}).some((i) => i.area === 'Gastos'), 'sin permiso no ve gastos');
+  for (let i = 1; i < inbox.length; i++) assert.ok({ alta: 0, media: 1, info: 2 }[inbox[i - 1].level] <= { alta: 0, media: 1, info: 2 }[inbox[i].level]);
 }
 
 console.log('Tablero: OK');

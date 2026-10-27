@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  canDo, ecDate, EXPENSE_CATEGORIES, EXPENSE_GROUPS, EXPENSE_PAY_LABEL, expenseGroupOf, expenseJournal, expenseSummary, incomeStatement, MANUAL_EXPENSE_CATEGORIES, percent, r2, resultSeries,
+  BILLING_LABEL, canDo, cardStatus, ecDate, EXPENSE_CATEGORIES, expenseSlices, ISD_EXEMPT_2026, ISD_RATE, monthEnd, platformCosts, PLATFORMS, EXPENSE_GROUPS, EXPENSE_PAY_LABEL, expenseGroupOf, expenseJournal, expenseSummary, incomeStatement, MANUAL_EXPENSE_CATEGORIES, percent, r2, resultSeries,
   type Employee, type Expense, type ExpenseGroup, type Granularity, type Payroll, type PayrollLine,
 } from '@hulul/shared/dashboard';
 import type { EmployeeInput, ExpenseInput, ExpensesData, PayrollAdjust } from '@hulul/shared/firebase';
@@ -15,7 +15,8 @@ import { Badge, Donut, Drawer, fmtDay, FlowChart, HBars, Kpi, Loading, money, Pa
  * de resultados (ingresos de HULUL − gastos = utilidad). Escriben socios y contadora (permiso pagos).
  */
 
-type Tab = 'gastos' | 'pagar' | 'nomina' | 'empleados';
+type Tab = 'gastos' | 'pagar' | 'plataformas' | 'tarjeta' | 'nomina' | 'empleados';
+const TABS: Tab[] = ['gastos', 'pagar', 'plataformas', 'tarjeta', 'nomina', 'empleados'];
 const HEAD = ['CORPORACIÓN COFFEEPORT CÍA. LTDA. — HULUL', 'RUC 0993265160001'];
 const errMsg = (e: unknown) => ((e as { message?: string }).message || 'No se pudo completar.').replace(/\s*\[\d{3}\]\s*$/, '');
 const fb = () => import('@hulul/shared/firebase');
@@ -33,6 +34,7 @@ export function GastosPanel() {
   const [q, setQ] = useState('');
   const [gran, setGran] = useState<Granularity>('mes');
   const [open, setOpen] = useState<Expense | 'nuevo' | null>(null);
+  const [preset, setPreset] = useState<Partial<ExpenseInput> | null>(null);
   const [list, setList] = useState<{ title: string; ids: string[] } | null>(null);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
@@ -44,6 +46,13 @@ export function GastosPanel() {
     } catch (e) { setError(errMsg(e)); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  // ?vista=pagar|plataformas|tarjeta|nomina (desde la bandeja de novedades).
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get('vista') as Tab | null;
+    if (v && TABS.includes(v)) { setTab(v); setTimeout(() => document.getElementById('pestanas')?.scrollIntoView({ behavior: 'smooth' }), 400); }
+  }, []);
+  const card = useMemo(() => cardStatus(data?.gastos ?? [], data?.pagosTarjeta ?? [], now), [data, now]);
+  const newExpense = (p: Partial<ExpenseInput> | null = null) => { setPreset(p); setOpen('nuevo'); };
 
   const canEdit = !!data?.canEdit && (!MUESTRA || canDo(role, 'pagos'));
   const gastos = useMemo(() => data?.gastos ?? [], [data]);
@@ -69,8 +78,9 @@ export function GastosPanel() {
   /* ------------------------------ Excel y contadora ------------------------------ */
   const sheets = (): import('../excel').SheetSpec[] => {
     const inRange = gastos.filter((g) => g.fecha >= range.from && g.fecha <= range.to).sort((a, z) => a.fecha.localeCompare(z.fecha));
-    const roles = (data?.roles ?? []).filter((r) => `${r.mes}-28` >= range.from && `${r.mes}-28` <= range.to);
-    const j = expenseJournal(gastos, data?.roles ?? [], range);
+    const roles = (data?.roles ?? []).filter((r) => monthEnd(r.mes) >= range.from && monthEnd(r.mes) <= range.to);
+    const j = expenseJournal(gastos, data?.roles ?? [], range, data?.pagosTarjeta ?? []);
+    const pc = platformCosts(gastos, now, 12);
     const per = `Periodo ${range.from} al ${range.to}`;
     const out: import('../excel').SheetSpec[] = [
       { name: 'Estado de resultados', title: [...HEAD, per, 'Ingresos propios de HULUL (sin IVA ni valores de terceros) menos gastos. Utilidad antes de participación e impuesto a la renta.'],
@@ -84,9 +94,9 @@ export function GastosPanel() {
           { concepto: 'UTILIDAD (PÉRDIDA) DEL PERIODO', valor: is.utilidad },
         ] },
       { name: 'Gastos', title: [...HEAD, per, 'Gasto = base sin IVA. El IVA pagado va a crédito tributario (1010501).'],
-        columns: [{ key: 'fecha', header: 'Fecha', width: 12 }, { key: 'grupo', header: 'Grupo', width: 16 }, { key: 'categoria', header: 'Categoría', width: 30 }, { key: 'cuenta', header: 'Cuenta Supercias', text: true }, { key: 'proveedor', header: 'Proveedor / beneficiario', width: 30 }, { key: 'identificacion', header: 'RUC / cédula', text: true, width: 16 }, { key: 'factura', header: 'Nº comprobante', text: true, width: 20 }, { key: 'descripcion', header: 'Detalle', width: 30 }, { key: 'base', header: 'Base', money: true }, { key: 'iva', header: 'IVA', money: true }, { key: 'total', header: 'Total', money: true }, { key: 'retRenta', header: 'Ret. renta', money: true }, { key: 'retIva', header: 'Ret. IVA', money: true }, { key: 'aPagar', header: 'A pagar', money: true }, { key: 'forma', header: 'Forma de pago' }, { key: 'estado', header: 'Estado' }, { key: 'vence', header: 'Vence' }, { key: 'pagadoEl', header: 'Pagado el' }],
-        rows: inRange.map((g): Row => ({ ...g, recurrente: g.recurrente ? 'Sí' : '', grupo: EXPENSE_GROUPS.find((x) => x.key === expenseGroupOf(g))?.label, categoria: EXPENSE_CATEGORIES[g.categoria]?.label ?? g.categoria, cuenta: EXPENSE_CATEGORIES[g.categoria]?.code, forma: EXPENSE_PAY_LABEL[g.formaPago] ?? g.formaPago, estado: g.estado === 'pagado' ? 'Pagado' : 'Por pagar', vence: g.vence ?? '', pagadoEl: g.pagadoEl ?? '' })),
-        totals: ['base', 'iva', 'total', 'retRenta', 'retIva', 'aPagar'] },
+        columns: [{ key: 'fecha', header: 'Fecha', width: 12 }, { key: 'grupo', header: 'Grupo', width: 16 }, { key: 'categoria', header: 'Categoría', width: 30 }, { key: 'cuenta', header: 'Cuenta Supercias', text: true }, { key: 'proveedor', header: 'Proveedor / beneficiario', width: 30 }, { key: 'identificacion', header: 'RUC / cédula', text: true, width: 16 }, { key: 'factura', header: 'Nº comprobante', text: true, width: 20 }, { key: 'descripcion', header: 'Detalle', width: 30 }, { key: 'base', header: 'Base', money: true }, { key: 'iva', header: 'IVA', money: true }, { key: 'isd', header: 'ISD', money: true }, { key: 'total', header: 'Total', money: true }, { key: 'retRenta', header: 'Ret. renta', money: true }, { key: 'retIva', header: 'Ret. IVA', money: true }, { key: 'aPagar', header: 'A pagar', money: true }, { key: 'forma', header: 'Forma de pago' }, { key: 'devengado', header: 'Se devenga (desde, meses)', width: 22 }, { key: 'exterior', header: 'Exterior' }, { key: 'liquidacion', header: 'Liquidación de compra' }, { key: 'estado', header: 'Estado' }, { key: 'vence', header: 'Vence' }, { key: 'pagadoEl', header: 'Pagado el' }],
+        rows: inRange.map((g): Row => ({ ...g, recurrente: g.recurrente ? 'Sí' : '', exterior: g.exterior ? 'Sí' : '', liquidacion: g.liquidacion ? 'Sí' : g.exterior ? 'Falta' : '', devengado: g.cubreMeses > 1 ? `${g.cubreDesde} (${g.cubreMeses} meses)` : g.cubreDesde, grupo: EXPENSE_GROUPS.find((x) => x.key === expenseGroupOf(g))?.label, categoria: EXPENSE_CATEGORIES[g.categoria]?.label ?? g.categoria, cuenta: EXPENSE_CATEGORIES[g.categoria]?.code, forma: EXPENSE_PAY_LABEL[g.formaPago] ?? g.formaPago, estado: g.estado === 'pagado' ? 'Pagado' : 'Por pagar', vence: g.vence ?? '', pagadoEl: g.pagadoEl ?? '' })),
+        totals: ['base', 'iva', 'isd', 'total', 'retRenta', 'retIva', 'aPagar'] },
       { name: 'Diario gastos y nómina', title: [...HEAD, per, 'Partida doble con el plan de cuentas de la Superintendencia de Compañías (propuesta para validar).'],
         columns: [{ key: 'date', header: 'Fecha', width: 12 }, { key: 'entry', header: 'Asiento', width: 22 }, { key: 'code', header: 'Código', text: true }, { key: 'accountName', header: 'Cuenta', width: 46 }, { key: 'party', header: 'Tercero', width: 28 }, { key: 'detail', header: 'Detalle', width: 40 }, { key: 'debit', header: 'Debe', money: true }, { key: 'credit', header: 'Haber', money: true }],
         rows: j as unknown as Row[], totals: ['debit', 'credit'] },
@@ -94,6 +104,15 @@ export function GastosPanel() {
         columns: [{ key: 'fecha', header: 'Fecha', width: 12 }, { key: 'identificacion', header: 'RUC / cédula', text: true, width: 16 }, { key: 'proveedor', header: 'Proveedor', width: 30 }, { key: 'factura', header: 'Nº comprobante', text: true, width: 20 }, { key: 'base0', header: 'Base 0 %', money: true }, { key: 'base15', header: 'Base 15 %', money: true }, { key: 'iva', header: 'IVA', money: true }, { key: 'retRenta', header: 'Ret. renta', money: true }, { key: 'retIva', header: 'Ret. IVA', money: true }],
         rows: inRange.filter((g) => g.origen !== 'nomina').map((g): Row => ({ fecha: g.fecha, identificacion: g.identificacion, proveedor: g.proveedor, factura: g.factura, iva: g.iva, retRenta: g.retRenta, retIva: g.retIva, base0: g.iva ? 0 : g.base, base15: g.iva ? g.base : 0 })), totals: ['base0', 'base15', 'iva', 'retRenta', 'retIva'] },
     ];
+    out.push({ name: 'Plataformas', title: [...HEAD, 'Costo devengado mensual de los servicios que hacen funcionar HULUL (últimos 12 meses).'],
+      columns: [{ key: 'name', header: 'Servicio', width: 32 }, { key: 'billing', header: 'Cobro', width: 22 }, ...pc[0].months.map((m) => ({ key: m.mes, header: m.mes, money: true })), { key: 'total', header: 'Total', money: true }],
+      rows: pc.map((r): Row => ({ name: r.name, billing: BILLING_LABEL[r.billing], ...Object.fromEntries(r.months.map((m) => [m.mes, m.monto])), total: r.total })), totals: [...pc[0].months.map((m) => m.mes), 'total'] });
+    out.push({ name: 'Tarjeta de crédito', title: [...HEAD, `Deuda de la tarjeta al ${today}: ${money(card.saldo)} (cargos ${money(card.cargos)} − pagos ${money(card.pagos)}).`],
+      columns: [{ key: 'fecha', header: 'Fecha', width: 12 }, { key: 'tipo', header: 'Movimiento', width: 14 }, { key: 'detalle', header: 'Detalle', width: 40 }, { key: 'tarjeta', header: 'Tarjeta', width: 20 }, { key: 'cargo', header: 'Cargo', money: true }, { key: 'pago', header: 'Pago', money: true }],
+      rows: [
+        ...gastos.filter((g) => g.formaPago === 'tarjeta' && g.pagador !== 'socio').map((g): Row => ({ fecha: g.fecha, tipo: 'Cargo', detalle: `${g.proveedor}${g.exterior ? ' (exterior)' : ''}`, tarjeta: g.tarjeta, cargo: g.aPagar, pago: null })),
+        ...(data?.pagosTarjeta ?? []).filter((p) => p.tipo !== 'reembolso').map((p): Row => ({ fecha: p.fecha, tipo: 'Pago', detalle: p.referencia || 'Pago del estado de cuenta', tarjeta: p.tarjeta, cargo: null, pago: p.monto })),
+      ].sort((a, z) => String(a.fecha).localeCompare(String(z.fecha))), totals: ['cargo', 'pago'] });
     for (const r of roles) out.push(payrollSheet(r));
     return out;
   };
@@ -125,13 +144,13 @@ export function GastosPanel() {
 
   if (error) return (<><PageHead title="Gastos y nómina" /><div className="adm-err" role="alert">{error}</div></>);
 
-  const tabs: [Tab, string][] = [['gastos', `Gastos (${rows.length})`], ['pagar', `Por pagar (${sum.porPagar.ids.length})`], ['nomina', 'Rol de pagos'], ...(canEdit ? [['empleados', `Empleados (${data?.empleados.filter((e) => e.activo).length ?? 0})`] as [Tab, string]] : [])];
+  const tabs: [Tab, string][] = [['gastos', `Gastos (${rows.length})`], ['pagar', `Por pagar (${sum.porPagar.ids.length})`], ['plataformas', 'Plataformas'], ['tarjeta', 'Tarjeta de crédito'], ['nomina', 'Rol de pagos'], ...(canEdit ? [['empleados', `Empleados (${data?.empleados.filter((e) => e.activo).length ?? 0})`] as [Tab, string]] : [])];
   const groupItems = sum.byGroup.map((g) => ({ label: g.label, color: g.color, count: Math.round(g.value ?? 0), onClick: () => goGroup(g.key as ExpenseGroup) }));
 
   return (
     <>
       <PageHead title="Gastos y nómina" lead="Lo que gasta la empresa, lo que se debe a proveedores, el rol de pagos y la utilidad real de HULUL.">
-        {canEdit && <button type="button" className="adm-btn solid" onClick={() => setOpen('nuevo')}>+ Registrar gasto</button>}
+        {canEdit && <button type="button" className="adm-btn solid" onClick={() => newExpense()}>+ Registrar gasto</button>}
         <button type="button" className="adm-btn" disabled={!data || !!busy} onClick={exportXlsx}>{busy === 'xlsx' ? 'Armando…' : 'Descargar Excel'}</button>
         <button type="button" className="adm-btn" disabled={!data || !!busy} onClick={sendAccountant}>{busy === 'mail' ? 'Enviando…' : 'Enviar a la contadora'}</button>
       </PageHead>
@@ -141,9 +160,10 @@ export function GastosPanel() {
         <>
           <div className="adm-kpis">
             <Kpi label="Ingresos de HULUL" value={money(is.ingresos.total)} hint="Plataforma, comisión y multas (sin IVA)" href="/admin/contabilidad" />
-            <Kpi label="Gastos del periodo" value={money(is.totalGastos)} hint={`${sum.count} comprobantes · IVA pagado ${money(sum.ivaCredito)}`} onClick={() => goGroup('todos')} />
+            <Kpi label="Gastos del periodo (devengado)" value={money(is.totalGastos)} hint={`${sum.count} gastos · IVA a crédito ${money(sum.ivaCredito)}${sum.prepaid.diferido ? ` · ${money(sum.prepaid.diferido)} diferido a meses siguientes` : ''}`} onClick={() => goGroup('todos')} />
             <Kpi accent label={is.utilidad >= 0 ? 'Utilidad' : 'Pérdida'} value={money(is.utilidad)} hint={is.ingresos.total ? `Margen ${percent(is.margen)}` : 'Sin ingresos en el periodo'} onClick={() => document.getElementById('resultados')?.scrollIntoView({ behavior: 'smooth' })} />
             <Kpi label="Por pagar a proveedores" value={money(sum.porPagar.total)} hint={sum.vencidos.total ? <span style={{ color: 'var(--bad)' }}>{money(sum.vencidos.total)} vencido</span> : sum.proximos.total ? `${money(sum.proximos.total)} vence en 7 días` : 'Nada vencido'} onClick={() => setTab('pagar')} />
+            <Kpi label="Deuda de la tarjeta" value={money(card.saldo)} hint={card.socios.length ? `+ ${money(card.socios.reduce((t, x) => t + x.total, 0))} por reembolsar a socios` : 'Cargos − pagos del estado de cuenta'} onClick={() => setTab('tarjeta')} />
             <Kpi label={`Nómina de ${monthLabel(thisMonth).split(' ')[0]}`} value={payrollNow ? money(payrollNow.totals.costo) : '—'} hint={payrollNow ? `${payrollNow.status === 'aprobado' ? 'Aprobada' : 'Borrador'} · neto ${money(payrollNow.totals.neto)}` : 'Aún sin rol de pagos'} onClick={() => setTab('nomina')} />
           </div>
 
@@ -188,7 +208,7 @@ export function GastosPanel() {
             </div>
           </div>
 
-          <div className="adm-tabs" role="tablist">
+          <div className="adm-tabs" role="tablist" id="pestanas">
             {tabs.map(([k, l]) => <button key={k} type="button" role="tab" className="adm-tab" aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>)}
           </div>
 
@@ -207,12 +227,14 @@ export function GastosPanel() {
 
           {tab === 'pagar' && <PayablesTab gastos={gastos} today={today} canEdit={canEdit} onOpen={setOpen} onDone={load} />}
           {tab === 'nomina' && <PayrollTab data={data} month={thisMonth} canEdit={canEdit} onDone={load} />}
+          {tab === 'plataformas' && <PlatformsTab gastos={gastos} now={now} canEdit={canEdit} onAdd={(k) => newExpense(platformPreset(k, today))} onList={showList} />}
+          {tab === 'tarjeta' && <CardTab data={data} now={now} canEdit={canEdit} onList={showList} onDone={load} />}
           {tab === 'empleados' && canEdit && <EmployeesTab empleados={data.empleados} sbu={data.params.sbu} onDone={load} />}
         </>
       )}
 
       {open && (
-        <ExpenseDrawer g={open === 'nuevo' ? null : open} canEdit={canEdit} today={today} onClose={() => setOpen(null)} onSaved={async () => { setOpen(null); await load(); }} />
+        <ExpenseDrawer g={open === 'nuevo' ? null : open} preset={preset} canEdit={canEdit} today={today} onClose={() => setOpen(null)} onSaved={async () => { setOpen(null); await load(); }} />
       )}
       {list && (
         <Drawer title={list.title} sub={`${list.ids.length} gastos · ${money(list.ids.reduce((t, id) => t + (byId.get(id)?.base ?? 0), 0))}`} onClose={() => setList(null)}>
@@ -226,6 +248,8 @@ export function GastosPanel() {
 /* ---------------------------------- Tabla de gastos ---------------------------------- */
 
 function StatusBadge({ g, today }: { g: Expense; today: string }) {
+  if (g.pagador === 'socio') return <Badge tone="t-violet">Pagó {g.socio || 'un socio'}</Badge>;
+  if (g.formaPago === 'tarjeta') return <Badge tone="t-info">En la tarjeta</Badge>;
   if (g.estado === 'pagado') return <Badge tone="t-ok">Pagado</Badge>;
   if (g.vence && g.vence < today) return <Badge tone="t-bad">Vencido {fmtDay(g.vence)}</Badge>;
   return <Badge tone="t-warn">Por pagar{g.vence ? ` · ${fmtDay(g.vence)}` : ''}</Badge>;
@@ -315,17 +339,34 @@ function PayablesTab({ gastos, today, canEdit, onOpen, onDone }: { gastos: Expen
 
 /* ---------------------------------- Ficha / formulario de gasto ---------------------------------- */
 
-const emptyExpense = (today: string): ExpenseInput => ({ fecha: today, categoria: 'otros', proveedor: '', identificacion: '', factura: '', descripcion: '', base: 0, iva: 0, retRenta: 0, retIva: 0, formaPago: 'transferencia', estado: 'pagado', vence: null, recurrente: false });
+const emptyExpense = (today: string): ExpenseInput => ({
+  fecha: today, categoria: 'otros', proveedor: '', identificacion: '', factura: '', descripcion: '', base: 0, iva: 0, isd: 0, retRenta: 0, retIva: 0,
+  formaPago: 'transferencia', estado: 'pagado', vence: null, recurrente: false, tarjeta: '', pagador: 'empresa', socio: '', exterior: false, liquidacion: false, plataforma: '',
+  cubreDesde: today.slice(0, 7), cubreMeses: 1,
+});
 
-function ExpenseDrawer({ g, canEdit, today, onClose, onSaved }: { g: Expense | null; canEdit: boolean; today: string; onClose: () => void; onSaved: () => Promise<void> }) {
+/** Datos para un cargo de una plataforma del stack (se completan el valor y la fecha). */
+export function platformPreset(key: string, today: string): Partial<ExpenseInput> {
+  const p = PLATFORMS.find((x) => x.key === key);
+  if (!p) return {};
+  const cover = p.billing === 'anual' ? 12 : 1;
+  // Lo de consumo llega a inicios del mes siguiente: se devenga en el mes anterior.
+  const desde = p.billing === 'consumo' ? addMonth(today.slice(0, 7), -1) : today.slice(0, 7);
+  return { plataforma: p.key, proveedor: p.name, categoria: p.categoria, exterior: p.exterior, formaPago: 'tarjeta', recurrente: p.billing === 'mensual' || p.billing === 'consumo', cubreMeses: cover, cubreDesde: desde, descripcion: p.what };
+}
+const addMonth = (m: string, n: number) => { const [y, mo] = m.split('-').map(Number); return new Date(Date.UTC(y, mo - 1 + n, 1)).toISOString().slice(0, 7); };
+
+function ExpenseDrawer({ g, preset, canEdit, today, onClose, onSaved }: { g: Expense | null; preset?: Partial<ExpenseInput> | null; canEdit: boolean; today: string; onClose: () => void; onSaved: () => Promise<void> }) {
   const nomina = g?.origen === 'nomina';
   const [edit, setEdit] = useState(!g);
-  const [f, setF] = useState<ExpenseInput>(() => (g ? { ...g } : emptyExpense(today)));
+  const [f, setF] = useState<ExpenseInput>(() => (g ? { ...emptyExpense(today), ...g } : { ...emptyExpense(today), ...preset }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const set = <K extends keyof ExpenseInput>(k: K, v: ExpenseInput[K]) => setF((x) => ({ ...x, [k]: v }));
-  const total = r2(Number(f.base) + Number(f.iva));
+  const total = r2(Number(f.base) + Number(f.iva) + Number(f.isd));
   const aPagar = r2(total - Number(f.retRenta) - Number(f.retIva));
+  const card = f.formaPago === 'tarjeta';
+  const applyPreset = (key: string) => setF((x) => ({ ...x, ...platformPreset(key, x.fecha || today) }));
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true); setErr('');
@@ -337,22 +378,29 @@ function ExpenseDrawer({ g, canEdit, today, onClose, onSaved }: { g: Expense | n
 
   if (g && !edit) {
     const c = EXPENSE_CATEGORIES[g.categoria];
+    const slices = expenseSlices(g).filter((s) => !s.isd);
     return (
       <Drawer title={g.proveedor} sub={`${c?.label ?? g.categoria} · cuenta ${c?.code ?? ''}`} onClose={onClose}>
         <div className="adm-grid" style={{ gap: 14 }}>
-          <div className="adm-bar"><StatusBadge g={g} today={today} />{g.recurrente && <Badge tone="t-mute">Gasto fijo mensual</Badge>}{nomina && <Badge tone="t-info">Generado por el rol de pagos</Badge>}</div>
+          <div className="adm-bar">
+            <StatusBadge g={g} today={today} />{g.recurrente && <Badge tone="t-mute">Gasto fijo mensual</Badge>}{nomina && <Badge tone="t-info">Generado por el rol de pagos</Badge>}
+            {g.exterior && <Badge tone="t-warm">Exterior</Badge>}{g.exterior && !g.liquidacion && <Badge tone="t-bad">Falta liquidación de compra</Badge>}
+          </div>
           <dl className="adm-kv">
-            <dt>Fecha del comprobante</dt><dd>{fmtDay(g.fecha)}</dd>
+            <dt>Fecha del comprobante o del cargo</dt><dd>{fmtDay(g.fecha)}</dd>
             {g.identificacion && <><dt>RUC / cédula</dt><dd>{g.identificacion}</dd></>}
             {g.factura && <><dt>Nº comprobante</dt><dd>{g.factura}</dd></>}
             <dt>Base (gasto)</dt><dd>{money(g.base)}</dd>
-            <dt>IVA (crédito tributario)</dt><dd>{money(g.iva)}</dd>
-            <dt>Total del comprobante</dt><dd>{money(g.total)}</dd>
+            <dt>{g.exterior ? 'IVA cobrado por la tarjeta' : 'IVA'} (crédito tributario)</dt><dd>{money(g.iva)}</dd>
+            {g.isd > 0 && <><dt>ISD 5 % (gasto)</dt><dd>{money(g.isd)}</dd></>}
+            <dt>Total</dt><dd>{money(g.total)}</dd>
             {(g.retRenta > 0 || g.retIva > 0) && <><dt>Retenciones (renta + IVA)</dt><dd>-{money(g.retRenta + g.retIva)}</dd></>}
-            <dt style={{ fontWeight: 800 }}>A pagar al proveedor</dt><dd className="big">{money(g.aPagar)}</dd>
-            <dt>Forma de pago</dt><dd>{EXPENSE_PAY_LABEL[g.formaPago] ?? g.formaPago}</dd>
+            <dt style={{ fontWeight: 800 }}>{g.formaPago === 'tarjeta' ? 'Cargado a la tarjeta' : 'A pagar al proveedor'}</dt><dd className="big">{money(g.aPagar)}</dd>
+            <dt>Forma de pago</dt><dd>{EXPENSE_PAY_LABEL[g.formaPago] ?? g.formaPago}{g.tarjeta ? ` · ${g.tarjeta}` : ''}</dd>
+            {g.pagador === 'socio' && <><dt>Lo pagó</dt><dd>{g.socio} (se le reembolsa)</dd></>}
             {g.vence && <><dt>Vence</dt><dd>{fmtDay(g.vence)}</dd></>}
-            {g.pagadoEl && <><dt>Pagado el</dt><dd>{fmtDay(g.pagadoEl)}</dd></>}
+            {g.pagadoEl && g.formaPago !== 'tarjeta' && <><dt>Pagado el</dt><dd>{fmtDay(g.pagadoEl)}</dd></>}
+            <dt>Se devenga en</dt><dd>{slices.length === 1 ? monthLabel(slices[0].mes) : `${monthLabel(slices[0].mes)} – ${monthLabel(slices[slices.length - 1].mes)} (${money(slices[0].monto)} al mes)`}</dd>
             {g.creadoPor && <><dt>Registrado por</dt><dd style={{ fontWeight: 400 }}>{g.creadoPor}</dd></>}
           </dl>
           {g.descripcion && <p style={{ margin: 0, fontSize: 14 }}>{g.descripcion}</p>}
@@ -371,10 +419,18 @@ function ExpenseDrawer({ g, canEdit, today, onClose, onSaved }: { g: Expense | n
   }
 
   return (
-    <Drawer title={g ? 'Editar gasto' : 'Registrar gasto'} sub="Escribe los valores del comprobante (factura, nota de venta o liquidación)." onClose={onClose}>
+    <Drawer title={g ? 'Editar gasto' : 'Registrar gasto'} sub="Escribe los valores del comprobante o del cargo en el estado de cuenta de la tarjeta." onClose={onClose}>
       <form className="adm-grid" style={{ gap: 12 }} onSubmit={(e) => { e.preventDefault(); save(); }}>
+        {!g && (
+          <div className="adm-grid" style={{ gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>¿Es una plataforma de HULUL? Tócala y se llena sola:</span>
+            <div className="adm-bar" style={{ gap: 6 }}>
+              {PLATFORMS.map((p) => <button key={p.key} type="button" className="adm-chip" aria-pressed={f.plataforma === p.key} onClick={() => applyPreset(p.key)}>{p.name.split(' ·')[0].replace(' (Anthropic)', '')}</button>)}
+            </div>
+          </div>
+        )}
         <div className="adm-grid g-2" style={{ gap: 10 }}>
-          <label className="adm-field">Fecha<input className="adm-input" type="date" required value={f.fecha} onChange={(e) => set('fecha', e.target.value)} /></label>
+          <label className="adm-field">Fecha del comprobante o del cargo<input className="adm-input" type="date" required value={f.fecha} onChange={(e) => set('fecha', e.target.value)} /></label>
           <label className="adm-field">Categoría
             <select className="adm-select" value={f.categoria} onChange={(e) => set('categoria', e.target.value)}>
               {EXPENSE_GROUPS.filter((gr) => gr.key !== 'nomina').map((gr) => (
@@ -385,33 +441,69 @@ function ExpenseDrawer({ g, canEdit, today, onClose, onSaved }: { g: Expense | n
             </select>
           </label>
         </div>
-        <label className="adm-field">Proveedor o beneficiario<input className="adm-input" required minLength={2} value={f.proveedor} onChange={(e) => set('proveedor', e.target.value)} placeholder="Ej.: Inmobiliaria Kennedy S.A." /></label>
+        <label className="adm-field">Proveedor o beneficiario<input className="adm-input" required minLength={2} value={f.proveedor} onChange={(e) => set('proveedor', e.target.value)} placeholder="Ej.: Vercel, Inmobiliaria Kennedy S.A." /></label>
         <div className="adm-grid g-2" style={{ gap: 10 }}>
-          <label className="adm-field">RUC o cédula<input className="adm-input" inputMode="numeric" value={f.identificacion} onChange={(e) => set('identificacion', e.target.value)} placeholder="Para el ATS" /></label>
-          <label className="adm-field">Nº de comprobante<input className="adm-input" value={f.factura} onChange={(e) => set('factura', e.target.value)} placeholder="001-001-000000123" /></label>
+          <label className="adm-field">{f.exterior ? 'Nº de liquidación de compra' : 'Nº de comprobante'}<input className="adm-input" value={f.factura} onChange={(e) => set('factura', e.target.value)} placeholder="001-001-000000123" /></label>
+          <label className="adm-field">RUC o cédula<input className="adm-input" inputMode="numeric" value={f.identificacion} onChange={(e) => set('identificacion', e.target.value)} placeholder={f.exterior ? 'No aplica (exterior)' : 'Para el ATS'} /></label>
         </div>
         <label className="adm-field">Detalle<input className="adm-input" value={f.descripcion} onChange={(e) => set('descripcion', e.target.value)} placeholder="Qué se compró o pagó" /></label>
-        <div className="adm-grid g-2" style={{ gap: 10 }}>
-          <label className="adm-field">Valor sin IVA (base)<NumInput required value={f.base} onChange={(n) => set('base', n ?? 0)} /></label>
-          <label className="adm-field">IVA
-            <span className="row gap-8"><NumInput value={f.iva} onChange={(n) => set('iva', n ?? 0)} />
-              <button type="button" className="adm-btn" onClick={() => set('iva', r2(Number(f.base) * 0.15))}>15 %</button>
-              <button type="button" className="adm-btn" onClick={() => set('iva', 0)}>0 %</button></span>
-          </label>
-          <label className="adm-field">Retención de renta<NumInput value={f.retRenta} onChange={(n) => set('retRenta', n ?? 0)} placeholder="0,00" /></label>
-          <label className="adm-field">Retención de IVA<NumInput value={f.retIva} onChange={(n) => set('retIva', n ?? 0)} placeholder="0,00" /></label>
-        </div>
-        <dl className="adm-kv"><dt>Total del comprobante</dt><dd>{money(total)}</dd><dt style={{ fontWeight: 800 }}>A pagar al proveedor</dt><dd className="big">{money(aPagar)}</dd></dl>
+
         <div className="adm-grid g-2" style={{ gap: 10 }}>
           <label className="adm-field">Forma de pago
             <select className="adm-select" value={f.formaPago} onChange={(e) => set('formaPago', e.target.value)}>{Object.entries(EXPENSE_PAY_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           </label>
-          <label className="adm-field">Estado
-            <select className="adm-select" value={f.estado} onChange={(e) => set('estado', e.target.value as Expense['estado'])}><option value="pagado">Ya está pagado</option><option value="por_pagar">Por pagar</option></select>
-          </label>
-          {f.estado === 'por_pagar' && <label className="adm-field">Vence<input className="adm-input" type="date" required value={f.vence ?? ''} onChange={(e) => set('vence', e.target.value || null)} /></label>}
+          {card ? (
+            <label className="adm-field">¿De quién es la tarjeta?
+              <select className="adm-select" value={f.pagador} onChange={(e) => set('pagador', e.target.value as Expense['pagador'])}><option value="empresa">De la empresa</option><option value="socio">Personal de un socio (se le reembolsa)</option></select>
+            </label>
+          ) : (
+            <label className="adm-field">Estado
+              <select className="adm-select" value={f.estado} onChange={(e) => set('estado', e.target.value as Expense['estado'])}><option value="pagado">Ya está pagado</option><option value="por_pagar">Por pagar</option></select>
+            </label>
+          )}
+          {card && f.pagador === 'empresa' && <label className="adm-field">Tarjeta<input className="adm-input" value={f.tarjeta} onChange={(e) => set('tarjeta', e.target.value)} placeholder="Ej.: Visa Pacífico ••1234" /></label>}
+          {f.pagador === 'socio' && card && <label className="adm-field">Socio<input className="adm-input" required value={f.socio} onChange={(e) => set('socio', e.target.value)} placeholder="Socio 1, Socio 2…" /></label>}
+          {!card && f.estado === 'por_pagar' && <label className="adm-field">Vence<input className="adm-input" type="date" required value={f.vence ?? ''} onChange={(e) => set('vence', e.target.value || null)} /></label>}
         </div>
-        <label className="adm-toggle"><input type="checkbox" checked={f.recurrente} onChange={(e) => set('recurrente', e.target.checked)} /> Gasto fijo mensual (arriendo, internet, contadora…): se puede copiar al mes siguiente con un clic</label>
+        <label className="adm-toggle"><input type="checkbox" checked={f.exterior} onChange={(e) => set('exterior', e.target.checked)} /> Servicio del exterior (Google, Vercel, Anthropic, Apple, Meta…)</label>
+
+        <div className="adm-grid g-2" style={{ gap: 10 }}>
+          <label className="adm-field">Valor sin IVA (base)<NumInput required value={f.base} onChange={(n) => set('base', n ?? 0)} /></label>
+          <label className="adm-field">{f.exterior ? 'IVA cobrado por la tarjeta' : 'IVA'}
+            <span className="row gap-8"><NumInput value={f.iva} onChange={(n) => set('iva', n ?? 0)} />
+              <button type="button" className="adm-btn" onClick={() => set('iva', r2(Number(f.base) * 0.15))}>15 %</button>
+              <button type="button" className="adm-btn" onClick={() => set('iva', 0)}>0 %</button></span>
+          </label>
+          {f.exterior ? (
+            <label className="adm-field">ISD (si el banco lo cobró)
+              <span className="row gap-8"><NumInput value={f.isd} onChange={(n) => set('isd', n ?? 0)} placeholder="0,00" />
+                <button type="button" className="adm-btn" onClick={() => set('isd', r2(Number(f.base) * ISD_RATE))}>5 %</button></span>
+            </label>
+          ) : (
+            <>
+              <label className="adm-field">Retención de renta<NumInput value={f.retRenta} onChange={(n) => set('retRenta', n ?? 0)} placeholder="0,00" /></label>
+              <label className="adm-field">Retención de IVA<NumInput value={f.retIva} onChange={(n) => set('retIva', n ?? 0)} placeholder="0,00" /></label>
+            </>
+          )}
+        </div>
+        {f.exterior && (
+          <label className="adm-toggle"><input type="checkbox" checked={f.liquidacion} onChange={(e) => set('liquidacion', e.target.checked)} /> Ya se emitió la liquidación de compra (sustenta el gasto y el crédito de IVA ante el SRI)</label>
+        )}
+        <dl className="adm-kv"><dt>Total</dt><dd>{money(total)}</dd><dt style={{ fontWeight: 800 }}>{card ? 'Cargado a la tarjeta' : 'A pagar al proveedor'}</dt><dd className="big">{money(aPagar)}</dd></dl>
+
+        <fieldset className="adm-card" style={{ padding: 12, display: 'grid', gap: 10 }}>
+          <legend style={{ fontWeight: 800, fontSize: 13.5, padding: '0 4px' }}>Devengado: ¿a qué mes corresponde el gasto?</legend>
+          <div className="adm-grid g-2" style={{ gap: 10 }}>
+            <label className="adm-field">Desde el mes<input className="adm-input" type="month" required value={f.cubreDesde} onChange={(e) => set('cubreDesde', e.target.value)} /></label>
+            <label className="adm-field">Cuántos meses cubre
+              <select className="adm-select" value={f.cubreMeses} onChange={(e) => set('cubreMeses', Number(e.target.value))}>{[1, 2, 3, 6, 12, 24, 36].map((n) => <option key={n} value={n}>{n === 1 ? 'Solo ese mes' : `${n} meses`}</option>)}</select>
+            </label>
+          </div>
+          <span className="muted" style={{ fontSize: 12.5 }}>
+            {f.cubreMeses > 1 ? `Se reconocen ${money(r2(Number(f.base) / f.cubreMeses))} cada mes; el resto queda como pagado por anticipado.` : f.cubreDesde < f.fecha.slice(0, 7) ? 'Corresponde a un mes anterior al cargo (p. ej. el consumo de la nube de octubre que se cobra en noviembre): se registra en ese mes.' : 'Se reconoce completo en ese mes.'}
+          </span>
+        </fieldset>
+        <label className="adm-toggle"><input type="checkbox" checked={f.recurrente} onChange={(e) => set('recurrente', e.target.checked)} /> Gasto fijo mensual: se puede copiar al mes siguiente con un clic</label>
         {err && <div className="adm-err" role="alert">{err}</div>}
         <div className="adm-bar">
           <button type="submit" className="adm-btn solid" disabled={busy}>{busy ? 'Guardando…' : 'Guardar gasto'}</button>
@@ -420,6 +512,7 @@ function ExpenseDrawer({ g, canEdit, today, onClose, onSaved }: { g: Expense | n
       </form>
     </Drawer>
   );
+
 }
 
 /* ---------------------------------- Rol de pagos ---------------------------------- */
@@ -599,4 +692,107 @@ function NumInput({ value, onChange, ...rest }: { value: number | undefined; onC
     const t = e.target.value.replace(/[^\d.,]/g, ''); setText(t);
     const n = Number(t.replace(',', '.')); onChange(t === '' ? undefined : Number.isFinite(n) ? n : undefined);
   }} />;
+}
+
+/* ---------------------------------- Plataformas (stack) ---------------------------------- */
+
+function PlatformsTab({ gastos, now, canEdit, onAdd, onList }: { gastos: Expense[]; now: number; canEdit: boolean; onAdd: (key: string) => void; onList: (title: string, ids: string[]) => void }) {
+  const rows = useMemo(() => platformCosts(gastos, now), [gastos, now]);
+  const months = rows[0]?.months.map((m) => m.mes) ?? [];
+  const totals = months.map((mes) => r2(rows.reduce((t, r) => t + (r.months.find((m) => m.mes === mes)?.monto ?? 0), 0)));
+  const cs = useMemo(() => cardStatus(gastos, [], now), [gastos, now]);
+  const short = (m: string) => new Date(`${m}-15T12:00:00Z`).toLocaleDateString('es-EC', { timeZone: 'UTC', month: 'short', year: '2-digit' });
+  return (
+    <div className="adm-grid" style={{ gap: 12 }}>
+      <div className="adm-note">
+        Todo lo que hace funcionar HULUL se registra como gasto <b>devengado</b>, mes a mes: la nube y la IA por consumo van al mes en que se usaron (aunque la tarjeta lo cobre al mes siguiente) y lo anual (Apple, dominios) se reparte en 12 meses.
+        Para que el SRI acepte el gasto y el crédito de IVA de un servicio del exterior hay que emitir una <b>liquidación de compra</b>; el estado de cuenta de la tarjeta es el comprobante de retención del IVA.
+      </div>
+      <div className="adm-table-wrap">
+        <table className="adm-table">
+          <thead><tr><th>Servicio</th><th>Cobro</th>{months.map((m) => <th key={m} className="num">{short(m)}</th>)}{canEdit && <th />}</tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.key}>
+                <td><b>{r.name}</b><div className="muted" style={{ fontSize: 12.5 }}>{r.what}</div>{r.missing.length > 0 && <Badge tone="t-bad">Falta {r.missing.map(short).join(', ')}</Badge>}</td>
+                <td style={{ fontSize: 12.5 }}>{BILLING_LABEL[r.billing]}</td>
+                {r.months.map((m) => (
+                  <td key={m.mes} className="num" style={{ cursor: m.ids.length ? 'pointer' : 'default', color: m.monto ? undefined : r.missing.includes(m.mes) ? 'var(--bad)' : 'var(--muted)' }}
+                    onClick={() => m.ids.length && onList(`${r.name} · ${monthLabel(m.mes)}`, m.ids)}>{m.monto ? money(m.monto) : r.missing.includes(m.mes) ? 'falta' : '—'}</td>
+                ))}
+                {canEdit && <td><button type="button" className="adm-btn" onClick={() => onAdd(r.key)}>+ Cargo</button></td>}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot><tr><td colSpan={2}>Costo de la plataforma</td>{totals.map((t, i) => <td key={months[i]} className="num">{money(t)}</td>)}{canEdit && <td />}</tr></tfoot>
+        </table>
+      </div>
+      <div className="adm-kpis">
+        <Kpi label="Consumos en el exterior este año" value={money(cs.exteriorAnio)} hint={`Exento de ISD hasta ${money(ISD_EXEMPT_2026)} al año; sobre eso, 5 %.`} />
+        <Kpi label="Sin liquidación de compra" value={cs.sinLiquidacion.ids.length} hint={cs.sinLiquidacion.ids.length ? `${money(cs.sinLiquidacion.total)} sin sustento ante el SRI` : 'Todo sustentado'} onClick={() => cs.sinLiquidacion.ids.length && onList('Cargos del exterior sin liquidación de compra', cs.sinLiquidacion.ids)} />
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------- Tarjeta de crédito ---------------------------------- */
+
+function CardTab({ data, now, canEdit, onList, onDone }: { data: ExpensesData; now: number; canEdit: boolean; onList: (title: string, ids: string[]) => void; onDone: () => Promise<void> }) {
+  const pagos = data.pagosTarjeta ?? [];
+  const cs = useMemo(() => cardStatus(data.gastos, pagos, now), [data.gastos, pagos, now]);
+  const today = ecDate(now);
+  const [f, setF] = useState<{ fecha: string; monto: number | undefined; tarjeta: string; referencia: string; tipo: 'tarjeta' | 'reembolso'; socio: string }>({ fecha: today, monto: undefined, tarjeta: '', referencia: '', tipo: 'tarjeta', socio: '' });
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const save = async () => {
+    setBusy(true); setMsg('');
+    try {
+      if (MUESTRA) throw new Error('En la muestra no se guardan cambios.');
+      await (await fb()).adminCardPayment({ ...f, monto: f.monto ?? 0 });
+      setMsg(f.tipo === 'reembolso' ? `Reembolso a ${f.socio} registrado.` : 'Pago de la tarjeta registrado.'); setF({ ...f, monto: undefined, referencia: '' }); await onDone();
+    } catch (e) { setMsg(errMsg(e)); } finally { setBusy(false); }
+  };
+  const del = async (id: string) => {
+    if (!window.confirm('¿Borrar este pago de la tarjeta?')) return;
+    try { if (MUESTRA) throw new Error('En la muestra no se guardan cambios.'); await (await fb()).adminDeleteCardPayment(id); await onDone(); } catch (e) { setMsg(errMsg(e)); }
+  };
+  return (
+    <div className="adm-grid" style={{ gap: 12 }}>
+      <div className="adm-kpis">
+        <Kpi accent label="Deuda de la tarjeta hoy" value={money(cs.saldo)} hint="Cargos registrados − pagos del estado de cuenta" />
+        <Kpi label="Cargos a la tarjeta" value={money(cs.cargos)} hint="Todo lo cargado a tarjetas de la empresa" onClick={() => onList('Cargos a la tarjeta de la empresa', cs.cargosIds)} />
+        <Kpi label="Pagos de la tarjeta" value={money(cs.pagos)} hint={`${pagos.filter((p) => p.tipo !== 'reembolso').length} pagos registrados`} />
+        {cs.socios.map((s) => <Kpi key={s.nombre} label={`Se le debe a ${s.nombre}`} value={money(s.total)} hint={canEdit ? 'Toca para registrar el reembolso' : 'Pagado con su tarjeta o dinero personal'} onClick={() => (canEdit ? setF({ ...f, tipo: 'reembolso', socio: s.nombre, monto: s.total }) : onList(`Gastos pagados por ${s.nombre}`, s.ids))} />)}
+      </div>
+      <div className="adm-note">Cada cargo es gasto del mes que corresponde (devengado) y deuda con la tarjeta; cuando pagas el estado de cuenta, registra el pago aquí y la deuda baja. Lo que cuadra con el banco es el pago, no cada cargo.</div>
+      {canEdit && (
+        <form className="adm-card adm-grid" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); save(); }}>
+          <div className="adm-bar" style={{ justifyContent: 'space-between' }}>
+            <h2 style={{ margin: 0 }}>{f.tipo === 'reembolso' ? `Reembolso a ${f.socio || 'un socio'}` : 'Registrar pago del estado de cuenta'}</h2>
+            <span className="adm-bar"><button type="button" className="adm-chip" aria-pressed={f.tipo === 'tarjeta'} onClick={() => setF({ ...f, tipo: 'tarjeta' })}>Pago de la tarjeta</button><button type="button" className="adm-chip" aria-pressed={f.tipo === 'reembolso'} onClick={() => setF({ ...f, tipo: 'reembolso' })}>Reembolso a un socio</button></span>
+          </div>
+          <div className="adm-grid g-2" style={{ gap: 10 }}>
+            <label className="adm-field">Fecha del pago<input className="adm-input" type="date" required value={f.fecha} onChange={(e) => setF({ ...f, fecha: e.target.value })} /></label>
+            <label className="adm-field">Monto pagado<NumInput required value={f.monto} onChange={(n) => setF({ ...f, monto: n })} /></label>
+            {f.tipo === 'reembolso'
+              ? <label className="adm-field">Socio<input className="adm-input" required value={f.socio} onChange={(e) => setF({ ...f, socio: e.target.value })} placeholder="Socio 1" /></label>
+              : <label className="adm-field">Tarjeta<input className="adm-input" value={f.tarjeta} onChange={(e) => setF({ ...f, tarjeta: e.target.value })} placeholder="Visa Pacífico ••1234" /></label>}
+            <label className="adm-field">Referencia<input className="adm-input" value={f.referencia} onChange={(e) => setF({ ...f, referencia: e.target.value })} placeholder="Nº de comprobante del banco" /></label>
+          </div>
+          {msg && <div className="adm-note" role="status">{msg}</div>}
+          <div className="adm-bar"><button type="submit" className="adm-btn solid" disabled={busy}>{busy ? 'Guardando…' : f.tipo === 'reembolso' ? 'Registrar reembolso' : 'Registrar pago'}</button>{f.tipo === 'tarjeta' && cs.saldo > 0 && <button type="button" className="adm-btn" onClick={() => setF({ ...f, monto: cs.saldo })}>Pagar todo ({money(cs.saldo)})</button>}</div>
+        </form>
+      )}
+      {pagos.length > 0 && (
+        <div className="adm-table-wrap">
+          <table className="adm-table">
+            <thead><tr><th>Fecha</th><th>Tarjeta o socio</th><th>Referencia</th><th className="num">Monto</th>{canEdit && <th />}</tr></thead>
+            <tbody>{[...pagos].sort((a, z) => z.fecha.localeCompare(a.fecha)).map((p) => (
+              <tr key={p.id}><td>{fmtDay(p.fecha)}</td><td>{p.tipo === 'reembolso' ? `Reembolso a ${p.socio}` : p.tarjeta || 'Pago de la tarjeta'}</td><td>{p.referencia || '—'}</td><td className="num"><b>{money(p.monto)}</b></td>{canEdit && <td><button type="button" className="adm-btn" onClick={() => del(p.id)}>Borrar</button></td>}</tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }

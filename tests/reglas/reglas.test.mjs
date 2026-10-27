@@ -76,6 +76,7 @@ await no('nadie lee la clave de la IA', getDoc(doc(intruso, 'adminConfig/ia')));
 await no('nadie lee los gastos de la empresa', getDoc(doc(intruso, 'gastos/g1')));
 await no('nadie crea gastos desde la app', setDoc(doc(intruso, 'gastos/g2'), { base: 10 }));
 await no('nadie lee los empleados', getDoc(doc(intruso, 'empleados/e1')));
+await no('nadie lee los pagos de la tarjeta', getDoc(doc(intruso, 'pagosTarjeta/p1')));
 await no('nadie lee el rol de pagos', getDoc(doc(intruso, 'rolPagos/2026-10')));
 await no('nadie lee el análisis de IA de un reclamo', getDoc(doc(cli1, 'reclamos/b1/privado/ia')));
 

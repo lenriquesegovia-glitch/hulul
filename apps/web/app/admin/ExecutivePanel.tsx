@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { cashSeries, caseFlags, caseOutcome, executive, inRange, moneyFlow, quality, weekMoney, type CaseFlags, type DashBooking, type Granularity } from '@hulul/shared/dashboard';
 import { useAdmin } from './AdminShell';
+import { Novedades } from './Novedades';
 import { BookingListDrawer, catName, Donut, FlowChart, type FlowKey, fmtDay, HBars, Kpi, Loading, money, PageHead, percent, PeriodBar } from './ui';
 
 const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
@@ -38,6 +39,7 @@ export function ExecutivePanel() {
       <PeriodBar />
       {!ex || !q || !wm ? <Loading /> : (
         <>
+          <Novedades onOpen={open} />
           {can('contabilidad') && flow && (
             <section className="adm-card">
               <div className="adm-bar" style={{ justifyContent: 'space-between' }}>

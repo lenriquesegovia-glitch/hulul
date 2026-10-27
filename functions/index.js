@@ -33,7 +33,7 @@ import { MAX_FILE_BYTES, PRO_UID, REVIEW_LIST_STATUSES, maskBank, providerFiles,
 import { can, dashForRole, normEmail, roleFor, roleInput } from './roles-core.js';
 import { clientStatementPdf, statementData, statementPdf } from './statement-pdf.js';
 import { bankFile, BANK_FORMATS, DEFAULT_BANK_FORMAT, paymentLines } from './bank-files.js';
-import { employeeInput, expenseInput, PAYROLL_PARAMS_2026, payrollExpenses, payrollLine, payrollTotals } from './gastos-core.js';
+import { cardPaymentInput, employeeInput, expenseInput, PAYROLL_PARAMS_2026, payrollExpenses, payrollLine, payrollTotals } from './gastos-core.js';
 import { buildClaimPrompt, callClaude, IA_MODEL, parseAnalysis } from './ia-reclamos.js';
 import { appointmentAt, bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
 import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
@@ -2468,6 +2468,8 @@ export const adminEstadosSemana = onCall({ region: REGION, memory: '512MiB', tim
   const week = /^\d{4}-\d{2}-\d{2}$/.test(String(req.data?.week ?? '')) ? req.data.week : payoutWeek(Date.now());
   const ref = db().doc(`estadosCuenta/${week}`);
   let snap = await ref.get();
+  // peek: solo consulta (bandeja de novedades); no prepara el lote.
+  if (req.data?.peek === true && !snap.exists) return { week, status: 'sin_preparar', items: [], preparedAt: null, approvedBy: '', approvedAt: null, sent: 0 };
   if (!snap.exists || req.data?.rebuild === true) { await prepareStatementsBatch(week); snap = await ref.get(); }
   const d = snap.data() ?? {};
   const ms = (t) => t?.toMillis?.() ?? null;
@@ -2633,12 +2635,13 @@ async function payrollParams() {
 export const adminGastos = onCall({ region: REGION, memory: '512MiB' }, async (req) => {
   const admin = await requireAdmin(req, 'contabilidad');
   const full = can(admin.role, 'pagos');
-  const [g, e, r, params] = await Promise.all([db().collection('gastos').get(), full ? db().collection('empleados').get() : null, db().collection('rolPagos').get(), payrollParams()]);
+  const [g, e, r, params, tc] = await Promise.all([db().collection('gastos').get(), full ? db().collection('empleados').get() : null, db().collection('rolPagos').get(), payrollParams(), db().collection('pagosTarjeta').get()]);
+  const pagosTarjeta = tc.docs.map((d) => { const x = d.data(); return { id: d.id, fecha: x.fecha, monto: x.monto, tipo: x.tipo ?? 'tarjeta', socio: x.socio ?? '', tarjeta: x.tarjeta ?? '', referencia: x.referencia ?? '', creadoPor: x.creadoPor ?? '' }; });
   const gastos = g.docs.map((d) => { const x = d.data(); return { id: d.id, ...x, createdAt: tsMs(x.createdAt), updatedAt: tsMs(x.updatedAt) }; });
   const empleados = (e?.docs ?? []).map((d) => { const x = d.data(); return { id: d.id, ...x, createdAt: tsMs(x.createdAt), updatedAt: tsMs(x.updatedAt) }; });
   const roles = r.docs.map((d) => { const x = d.data(); return { mes: d.id, status: x.status, totals: x.totals, lines: full ? x.lines ?? [] : [], aprobadoPor: x.aprobadoPor ?? null, aprobadoEl: tsMs(x.aprobadoEl) }; });
   await logAdmin(admin, 'ver_gastos');
-  return { gastos, empleados, roles, params, canEdit: full, viewer: { role: admin.role, email: admin.email } };
+  return { gastos, empleados, roles, params, pagosTarjeta, canEdit: full, viewer: { role: admin.role, email: admin.email } };
 });
 
 /** Crea o actualiza un gasto manual. */
@@ -2652,7 +2655,7 @@ export const guardarGasto = onCall({ region: REGION }, async (req) => {
   const prev = id ? (await ref.get()).data() : null;
   if (id && !prev) throw new HttpsError('not-found', 'Ese gasto ya no existe.');
   if (prev?.origen === 'nomina') throw new HttpsError('failed-precondition', 'Los gastos de nómina se cambian desde el rol de pagos.');
-  const pagadoEl = g.estado === 'pagado' ? (/^\d{4}-\d{2}-\d{2}$/.test(String(req.data?.pagadoEl ?? '')) ? req.data.pagadoEl : prev?.pagadoEl ?? (g.fecha <= ecToday() ? g.fecha : ecToday())) : null;
+  const pagadoEl = g.formaPago === 'tarjeta' ? g.fecha : g.estado === 'pagado' ? (/^\d{4}-\d{2}-\d{2}$/.test(String(req.data?.pagadoEl ?? '')) ? req.data.pagadoEl : prev?.pagadoEl ?? (g.fecha <= ecToday() ? g.fecha : ecToday())) : null;
   await ref.set({ ...g, pagadoEl, origen: 'manual', ...(prev ? {} : { creadoPor: admin.email, createdAt: FieldValue.serverTimestamp() }), updatedAt: FieldValue.serverTimestamp(), actualizadoPor: admin.email }, { merge: true });
   await logAdmin(admin, id ? 'gasto_editado' : 'gasto_creado', { gastoId: ref.id, total: g.total });
   return { ok: true, id: ref.id };
@@ -2698,12 +2701,32 @@ export const copiarRecurrentes = onCall({ region: REGION }, async (req) => {
     if (done.has(d.id)) continue;
     const x = d.data();
     const fecha = `${mes}-${String(Math.min(28, Number(String(x.fecha).slice(8, 10)) || 1)).padStart(2, '0')}`;
-    batch.set(db().collection('gastos').doc(), { ...x, fecha, vence: fecha, estado: 'por_pagar', pagadoEl: null, factura: '', copiaDe: d.id, creadoPor: admin.email, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    const card = x.formaPago === 'tarjeta';
+    batch.set(db().collection('gastos').doc(), { ...x, fecha, cubreDesde: mes, vence: card ? null : fecha, estado: card ? 'pagado' : 'por_pagar', pagadoEl: card ? fecha : null, factura: '', liquidacion: false, copiaDe: d.id, creadoPor: admin.email, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
     n++;
   }
   if (n) await batch.commit();
   await logAdmin(admin, 'gastos_recurrentes', { mes, count: n });
   return { ok: true, count: n };
+});
+
+/** Registra el pago del estado de cuenta de la tarjeta de crédito (baja la deuda de la tarjeta). */
+export const registrarPagoTarjeta = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const p = cardPaymentInput(req.data);
+  if (p.error) throw new HttpsError('invalid-argument', p.error);
+  const ref = await db().collection('pagosTarjeta').add({ ...p, creadoPor: admin.email, createdAt: FieldValue.serverTimestamp() });
+  await logAdmin(admin, 'pago_tarjeta', { pagoId: ref.id, monto: p.monto });
+  return { ok: true, id: ref.id };
+});
+
+export const borrarPagoTarjeta = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const id = String(req.data?.id ?? '');
+  if (!GASTO_ID.test(id)) throw new HttpsError('invalid-argument', 'Pago no válido.');
+  const snap = await db().doc(`pagosTarjeta/${id}`).get();
+  if (snap.exists) { await snap.ref.delete(); await logAdmin(admin, 'pago_tarjeta_borrado', { pagoId: id, monto: snap.data().monto }); }
+  return { ok: true };
 });
 
 /** Crea o actualiza un empleado en relación de dependencia. */

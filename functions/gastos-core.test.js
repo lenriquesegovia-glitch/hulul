@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { employeeInput, expenseInput, monthsWorked, payrollExpenses, payrollLine, payrollTotals } from './gastos-core.js';
+import { accrualMonths, cardPaymentInput, employeeInput, expenseInput, monthsWorked, payrollExpenses, payrollLine, payrollTotals } from './gastos-core.js';
 
 test('gasto: valida y calcula lo que se paga', () => {
   const g = expenseInput({ fecha: '2026-10-20', categoria: 'honorarios', proveedor: 'Contadora', base: 200, iva: 30, retRenta: 20, retIva: 21, estado: 'pagado' });
@@ -39,4 +39,17 @@ test('empleado: valida', () => {
   assert.ok(employeeInput({ nombre: 'Ana Ruiz', cedula: '0912345678', sueldo: 482, ingreso: '2026-01-02' }).nombre);
   assert.ok(employeeInput({ nombre: 'Ana', cedula: '12', sueldo: 482, ingreso: '2026-01-02' }).error);
   assert.equal(employeeInput({ nombre: 'Ana Ruiz', cedula: '0912345678', sueldo: 300, ingreso: '2026-01-02' }).bajoSbu, true);
+});
+
+test('tarjeta, exterior y devengado', () => {
+  const g = expenseInput({ fecha: '2026-10-03', categoria: 'tecnologia', proveedor: 'Apple Developer', base: 99, iva: 14.85, isd: 4.95, formaPago: 'tarjeta', estado: 'por_pagar', exterior: true, cubreMeses: 12 });
+  assert.equal(g.estado, 'pagado', 'con tarjeta el proveedor ya cobró; la deuda es con la tarjeta');
+  assert.equal(g.total, 118.8);
+  const m = accrualMonths(g);
+  assert.equal(m.length, 12); assert.equal(m[0].mes, '2026-10'); assert.equal(m[11].mes, '2027-09');
+  assert.equal(Math.round(m.reduce((t, x) => t + x.monto, 0) * 100) / 100, 99);
+  const nov = expenseInput({ fecha: '2026-11-02', categoria: 'tecnologia', proveedor: 'Google Cloud', base: 40, formaPago: 'tarjeta', cubreDesde: '2026-10' });
+  assert.deepEqual(accrualMonths(nov), [{ mes: '2026-10', monto: 40 }], 'la factura de octubre cobrada en noviembre se devenga en octubre');
+  assert.ok(expenseInput({ fecha: '2026-10-03', categoria: 'otros', proveedor: 'X', base: 100, isd: 20 }).error);
+  assert.ok(cardPaymentInput({ fecha: '2026-10-25', monto: 0 }).error);
 });
