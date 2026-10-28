@@ -5,7 +5,8 @@
 - Decisión de Luis: RUC y firma electrónica (.p12) obligatorios para trabajar en HULUL, como PedidosYa. Quien no la tiene se registra igual y se compromete a sacarla en 30 días (cláusula en las reglas que acepta, con autorización para que HULUL la use solo para sus comprobantes y su contrato).
 - Registro: sección «Firma electrónica (obligatoria)» con guía para sacarla. Agenda web: aviso con la fecha límite y botón «Ya tengo mi firma» (`declararFirma`).
 - Panel: estado de la firma y plazo en Aprobar profesionales, con «Marcar verificada» (`marcarFirmaProfesional`); en Novedades, plazos vencidos, por vencer y firmas por verificar.
-- Pendiente: contrato firmado con la firma (proveedor de firma en la nube por cotizar: Uanataca o Security Data); aviso también en la agenda de la app; pausar cuentas vencidas (hoy solo alerta).
+- Pausa automática (decisión de Luis): `pausaSinFirma` cada día 07:00 pausa a los aprobados con más de 30 días sin firma (`suspendedReason: firma_electronica`, aviso por push y correo); se reactiva al tocar «Ya tengo mi firma» o al marcarla verificada en el panel.
+- Pendiente: contrato firmado con la firma (proveedor de firma en la nube por cotizar: Uanataca o Security Data); aviso también en la agenda de la app.
 
 ## En PR — Legal y blindaje, 27 de octubre de 2026 (Claude)
 

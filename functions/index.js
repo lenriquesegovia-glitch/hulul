@@ -670,16 +670,20 @@ export const directorioProfesionales = onDocumentWritten(
       return;
     }
     if ((after.suspendedUntil ?? 0) > Date.now() && after.suspendedUntil !== before?.suspendedUntil) {
-      const why = after.suspendedReason === 'calificacion'
+      const firma = after.suspendedReason === 'firma_electronica';
+      const why = firma ? `pasaron ${SIGN_DAYS} días desde tu registro sin firma electrónica`
+        : after.suspendedReason === 'calificacion'
         ? `tu calificación bajó de ${RATING_MIN} estrellas`
         : `acumulaste ${STRIKE_LIMIT} faltas en ${STRIKE_WINDOW_DAYS} días (llegar tarde, no ir o cancelar a última hora)`;
-      const text = `Como ${why}, no recibirás reservas nuevas hasta el ${fmtDay(after.suspendedUntil)}. Los trabajos que ya aceptaste siguen en tu agenda.`;
+      const text = firma
+        ? `Como ${why}, no recibirás reservas nuevas hasta que la tengas. Cuando la saques, entra a tu agenda y toca «Ya tengo mi firma»: tu cuenta se reactiva al instante. Los trabajos que ya aceptaste siguen en tu agenda.`
+        : `Como ${why}, no recibirás reservas nuevas hasta el ${fmtDay(after.suspendedUntil)}. Los trabajos que ya aceptaste siguen en tu agenda.`;
       await pushTo(uid, 'Tu cuenta está pausada', text, { url: AGENDA, to: 'pro' }).catch(() => {});
       if (after.email) {
         const { from, notifyTo } = senders();
         await transport().sendMail({ from, to: after.email, replyTo: notifyTo, subject: 'Tu cuenta de HULUL está pausada',
           html: layout('Cuenta pausada', `<p style="font-size:15px">Hola ${esc(after.firstName)}. ${esc(text)}</p><p style="font-size:14px">Si crees que hay un error, responde a este correo.</p>`) }).catch(() => {});
-        await transport().sendMail({ from, to: notifyTo, subject: `Profesional pausado: ${after.firstName ?? ''} ${after.lastName ?? ''}`, html: layout('Profesional pausado', `<p>${esc(uid)} · ${esc(why)} · hasta ${esc(fmtDay(after.suspendedUntil))}</p>`) }).catch(() => {});
+        await transport().sendMail({ from, to: notifyTo, subject: `Profesional pausado: ${after.firstName ?? ''} ${after.lastName ?? ''}`, html: layout('Profesional pausado', `<p>${esc(uid)} · ${esc(why)}${firma ? '' : ` · hasta ${esc(fmtDay(after.suspendedUntil))}`}</p>`) }).catch(() => {});
       }
     }
     if (!approvedCats(after).length) {
@@ -2905,13 +2909,33 @@ export const rolPagos = onCall({ region: REGION }, async (req) => {
 
 /* ---------------------------- Firma electrónica de profesionales ---------------------------- */
 
+const SIGN_DAYS = 30;
+/** Quita la pausa por falta de firma (si esa era la razón). */
+const liftSignaturePause = (p) => (p?.suspendedReason === 'firma_electronica' ? { suspendedUntil: 0, suspendedReason: '' } : {});
+
+/** Cada mañana: pausa a los profesionales aprobados que pasaron 30 días desde su registro sin firma electrónica. */
+export const pausaSinFirma = onSchedule({ schedule: 'every day 07:00', region: REGION, timeZone: 'America/Guayaquil', secrets: [MAIL_PASSWORD] }, async () => {
+  const now = Date.now();
+  const snap = await db().collection('providers').where('status', '==', 'aprobado').get();
+  let n = 0;
+  for (const d of snap.docs) {
+    const p = d.data();
+    const sub = p.submittedAt?.toMillis?.() ?? (typeof p.submittedAt === 'number' ? p.submittedAt : null);
+    if (p.eSignature || p.tester || !sub || sub + SIGN_DAYS * DAY_MS > now || (p.suspendedUntil ?? 0) > now) continue;
+    await d.ref.set({ suspendedUntil: now + 3650 * DAY_MS, suspendedReason: 'firma_electronica', suspendedAt: now }, { merge: true });
+    n++;
+  }
+  if (n) logger.warn('Profesionales pausados por no tener firma electrónica', { n });
+});
+
 /** El profesional avisa que ya tiene su firma electrónica (HULUL la verifica al conectarla). */
 export const declararFirma = onCall({ region: REGION }, async (req) => {
   const uid = req.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
   const ref = db().doc(`providers/${uid}`);
-  if (!(await ref.get()).exists) throw new HttpsError('not-found', 'No encontramos tu registro de profesional.');
-  await ref.set({ eSignature: true, eSignatureAt: FieldValue.serverTimestamp(), eSignatureVerified: false }, { merge: true });
+  const cur = await ref.get();
+  if (!cur.exists) throw new HttpsError('not-found', 'No encontramos tu registro de profesional.');
+  await ref.set({ eSignature: true, eSignatureAt: FieldValue.serverTimestamp(), eSignatureVerified: false, ...liftSignaturePause(cur.data()) }, { merge: true });
   return { ok: true };
 });
 
@@ -2921,7 +2945,8 @@ export const marcarFirmaProfesional = onCall({ region: REGION }, async (req) => 
   const uid = String(req.data?.uid ?? '');
   if (!PRO_UID.test(uid)) throw new HttpsError('invalid-argument', 'Profesional no válido.');
   const tiene = req.data?.tiene === true;
-  await db().doc(`providers/${uid}`).set({ eSignature: tiene, eSignatureVerified: tiene, eSignatureAt: FieldValue.serverTimestamp(), eSignatureBy: admin.email }, { merge: true });
+  const cur = (await db().doc(`providers/${uid}`).get()).data();
+  await db().doc(`providers/${uid}`).set({ eSignature: tiene, eSignatureVerified: tiene, eSignatureAt: FieldValue.serverTimestamp(), eSignatureBy: admin.email, ...(tiene ? liftSignaturePause(cur) : {}) }, { merge: true });
   await logAdmin(admin, 'firma_profesional', { proId: uid, tiene });
   return { ok: true };
 });
