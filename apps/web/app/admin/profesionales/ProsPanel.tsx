@@ -120,6 +120,12 @@ function ProDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
   }, [uid]);
   useEffect(() => { load(); }, [load]);
 
+  const markSign = async (tiene: boolean) => {
+    setBusy(true); setErr('');
+    try { const { adminMarkESignature } = await import('@hulul/shared/firebase'); await adminMarkESignature(uid, tiene); setDone(tiene ? 'Firma electrónica marcada como verificada.' : 'Marcado: no tiene firma electrónica.'); await load(); }
+    catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
   const decide = async (decision: ProReviewDecision) => {
     if (decision !== 'aprobado' && note.trim().length < 10) { setErr('Escribe el motivo para el profesional (al menos 10 caracteres). Lo va a leer.'); return; }
     const label = { aprobado: 'aprobar', observado: 'pedir corrección a', rechazado: 'rechazar' }[decision];
@@ -161,7 +167,12 @@ function ProDetail({ uid, onBack }: { uid: string; onBack: () => void }) {
         <Row k="Cédula" v={p.cedula} />
         <Row k="RUC" v={p.ruc} />
         <Row k="Régimen SRI" v={TAX_REGIME_LABEL[p.taxRegime as TaxRegime] ?? (p.taxRegime || '—')} />
-        <Row k="Firma electrónica" v={p.eSignature ? 'Sí' : 'No'} />
+        <Row k="Firma electrónica" v={<span className="row gap-8" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          {p.eSignature ? (p.eSignatureVerified === false ? 'Dice que la tiene (sin verificar)' : p.eSignatureVerified ? 'Verificada' : 'Sí (declarada en el registro)')
+            : p.submittedAt ? `No · plazo hasta ${when(p.submittedAt + 30 * 86_400_000)}${p.submittedAt + 30 * 86_400_000 < Date.now() ? ' (vencido)' : ''}` : 'No'}
+          {!p.eSignatureVerified && <button type="button" className="btn btn-secondary" style={{ minHeight: 34, padding: '4px 12px' }} disabled={busy} onClick={() => markSign(true)}>Marcar verificada</button>}
+          {p.eSignature && <button type="button" className="link-btn" disabled={busy} onClick={() => markSign(false)}>No la tiene</button>}
+        </span>} />
         <Row k="Celular" v={<>{p.phone} · <a href={wa(p.phone)} target="_blank" rel="noreferrer">WhatsApp</a></>} />
         <Row k="Correo" v={<a href={`mailto:${p.email}`}>{p.email}</a>} />
         <Row k="Experiencia" v={`${p.years} año(s)`} />

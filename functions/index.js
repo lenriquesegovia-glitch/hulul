@@ -2903,6 +2903,29 @@ export const rolPagos = onCall({ region: REGION }, async (req) => {
   return { ok: true, status: doc.status, lines, totals };
 });
 
+/* ---------------------------- Firma electrónica de profesionales ---------------------------- */
+
+/** El profesional avisa que ya tiene su firma electrónica (HULUL la verifica al conectarla). */
+export const declararFirma = onCall({ region: REGION }, async (req) => {
+  const uid = req.auth?.uid;
+  if (!uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const ref = db().doc(`providers/${uid}`);
+  if (!(await ref.get()).exists) throw new HttpsError('not-found', 'No encontramos tu registro de profesional.');
+  await ref.set({ eSignature: true, eSignatureAt: FieldValue.serverTimestamp(), eSignatureVerified: false }, { merge: true });
+  return { ok: true };
+});
+
+/** Panel: marca si el profesional tiene firma electrónica (verificada por HULUL). */
+export const marcarFirmaProfesional = onCall({ region: REGION }, async (req) => {
+  const admin = await requireAdmin(req, 'profesionales');
+  const uid = String(req.data?.uid ?? '');
+  if (!PRO_UID.test(uid)) throw new HttpsError('invalid-argument', 'Profesional no válido.');
+  const tiene = req.data?.tiene === true;
+  await db().doc(`providers/${uid}`).set({ eSignature: tiene, eSignatureVerified: tiene, eSignatureAt: FieldValue.serverTimestamp(), eSignatureBy: admin.email }, { merge: true });
+  await logAdmin(admin, 'firma_profesional', { proId: uid, tiene });
+  return { ok: true };
+});
+
 /* ---------------------------------- Legal ---------------------------------- */
 
 /**
@@ -3115,7 +3138,7 @@ export const adminProfesional = onCall({ region: REGION }, async (req) => {
       phone: p.phone, email: p.email, years: p.years ?? 0, bio: p.bio ?? '', categories: p.categories ?? [], services: p.services ?? {},
       visitRates: p.visitRates ?? {}, catEvidence: p.catEvidence ?? {}, catStatus: p.catStatus ?? {}, proposals: p.proposals ?? [],
       cities: p.cities ?? [], days: p.days ?? [], from: p.from ?? '', to: p.to ?? '', acceptsCash: !!p.acceptsCash,
-      offHours: p.offHours ?? [], holidays: !!p.holidays, surcharges: p.surcharges ?? {}, taxRegime: p.taxRegime ?? '', eSignature: !!p.eSignature,
+      offHours: p.offHours ?? [], holidays: !!p.holidays, surcharges: p.surcharges ?? {}, taxRegime: p.taxRegime ?? '', eSignature: !!p.eSignature, eSignatureVerified: p.eSignatureVerified ?? null,
       submittedAt: millis(p.submittedAt), reviewNote: p.reviewNote ?? '', reviewedBy: p.reviewedBy ?? '', reviewedAt: millis(p.reviewedAt),
     },
     bank: maskBank(bs.exists ? bs.data() : null),

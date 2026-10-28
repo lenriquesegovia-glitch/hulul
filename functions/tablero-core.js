@@ -143,7 +143,7 @@ export function providerRow(uid, p, now = Date.now()) {
     strikes30: (Array.isArray(p.strikeLog) ? p.strikeLog : []).filter((t) => Number(t) > since).length,
     suspendedUntil: Number(p.suspendedUntil) > now ? Number(p.suspendedUntil) : null, suspendedReason: str(p.suspendedReason, 120),
     payoutBalance: num(p.payoutBalance), cashDebt: num(p.cashDebt), fines: num(p.fines),
-    taxRegime: str(p.taxRegime, 30) || 'general', eSignature: !!p.eSignature, acceptsCash: !!p.acceptsCash, tester: !!p.tester,
+    taxRegime: str(p.taxRegime, 30) || 'general', eSignature: !!p.eSignature, eSignatureVerified: p.eSignatureVerified === undefined ? undefined : !!p.eSignatureVerified, acceptsCash: !!p.acceptsCash, tester: !!p.tester,
     ruc: str(p.ruc, 13), email: maskContact(p.email), phone: maskContact(p.phone),
     submittedAt: ms(p.submittedAt), reviewedAt: ms(p.reviewedAt),
   };

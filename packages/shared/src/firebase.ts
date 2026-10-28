@@ -827,7 +827,7 @@ export interface ProFile {
     visitRates: Record<string, number>; catEvidence: Record<string, { kind: string; note: string; reference?: string; files: string[] }>;
     catStatus: Record<string, string>; proposals: { id: string; name: string; services: string[]; rate?: number; note: string }[];
     cities: string[]; days: number[]; from: string; to: string; acceptsCash: boolean; offHours: number[]; holidays: boolean;
-    surcharges: { nocturno?: number; feriado?: number }; taxRegime: string; eSignature: boolean;
+    surcharges: { nocturno?: number; feriado?: number }; taxRegime: string; eSignature: boolean; eSignatureVerified?: boolean | null;
     submittedAt: number | null; reviewNote: string; reviewedBy: string; reviewedAt: number | null;
   };
   bank: { bank: string; type: string; number: string; holder: string; holderId: string } | null;
@@ -1109,4 +1109,13 @@ export async function adminLegalCaseFile(id: string, i: number): Promise<{ fileN
 }
 export async function adminSaveShield(key: string, item: Omit<ShieldItem, 'por' | 'at'>): Promise<ShieldItem> {
   return (await callable<{ key: string } & Omit<ShieldItem, 'por' | 'at'>, { ok: boolean; item: ShieldItem }>('guardarBlindaje')({ key, ...item })).data.item;
+}
+
+/** El profesional avisa que ya tiene su firma electrónica. */
+export async function declareESignature(): Promise<void> {
+  await callable<Record<string, never>, { ok: boolean }>('declararFirma')({});
+}
+/** Panel: marca la firma electrónica del profesional como verificada (o que no la tiene). */
+export async function adminMarkESignature(uid: string, tiene: boolean): Promise<void> {
+  await callable<{ uid: string; tiene: boolean }, { ok: boolean }>('marcarFirmaProfesional')({ uid, tiene });
 }

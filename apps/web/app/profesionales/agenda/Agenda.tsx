@@ -58,6 +58,7 @@ export function Agenda() {
   const user = useUser();
   const [status, setStatus] = useState<ProviderStatus | null | undefined>(undefined);
   const [name, setName] = useState('');
+  const [sign, setSign] = useState<{ has: boolean; until: number | null }>({ has: true, until: null });
   const [rows, setRows] = useState<ProBooking[] | null>(null);
   const [error, setError] = useState('');
 
@@ -71,6 +72,10 @@ export function Agenda() {
       if (off) return;
       setStatus(snap.exists() ? (snap.data().status as ProviderStatus) : null);
       setName(snap.exists() ? String(snap.data().firstName ?? '') : '');
+      if (snap.exists()) {
+        const sub = snap.data().submittedAt?.toMillis?.() ?? null;
+        setSign({ has: !!snap.data().eSignature, until: sub ? sub + 30 * 86_400_000 : null });
+      }
     })().catch(() => { if (!off) setStatus(null); });
     return () => { off = true; };
   }, [user]);
@@ -114,7 +119,28 @@ export function Agenda() {
     );
   }
 
-  return <AgendaBody uid={user.uid} name={name} rows={rows} error={error} />;
+  return <>{!sign.has && <SignatureBanner until={sign.until} onDone={() => setSign({ has: true, until: null })} />}<AgendaBody uid={user.uid} name={name} rows={rows} error={error} /></>;
+}
+
+/** Recordatorio de la firma electrónica obligatoria (30 días desde el registro). */
+function SignatureBanner({ until, onDone }: { until: number | null; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const late = until !== null && until < Date.now();
+  const date = until ? new Date(until).toLocaleDateString('es-EC', { timeZone: 'America/Guayaquil', day: 'numeric', month: 'long' }) : '';
+  const done = async () => {
+    setBusy(true); setMsg('');
+    try { const { declareESignature } = await import('@hulul/shared/firebase'); await declareESignature(); onDone(); }
+    catch { setMsg('No pudimos guardar. Revisa tu conexión e inténtalo de nuevo.'); } finally { setBusy(false); }
+  };
+  return (
+    <div className="notice stack gap-8" style={{ marginBottom: 16, borderLeftColor: late ? 'var(--danger, #B42318)' : undefined }}>
+      <strong>{late ? 'Se venció el plazo para tu firma electrónica' : `Saca tu firma electrónica${date ? ` antes del ${date}` : ''}`}</strong>
+      <span>Es obligatoria para trabajar en HULUL: con ella emitimos tus facturas y firmas tu contrato. Se saca en línea con una entidad acreditada (por ejemplo Security Data o Uanataca), desde unos $11, y suele estar lista en horas. Pide la firma <b>en archivo (.p12)</b>.</span>
+      {msg && <span role="alert" className="form-error">{msg}</span>}
+      <div><button type="button" className="btn btn-primary" disabled={busy} onClick={done}>{busy ? 'Guardando…' : 'Ya tengo mi firma'}</button></div>
+    </div>
+  );
 }
 
 function AgendaBody({ uid, name, rows, error }: { uid: string; name: string; rows: ProBooking[] | null; error: string }) {

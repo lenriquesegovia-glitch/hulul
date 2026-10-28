@@ -1,5 +1,12 @@
 # HULUL — Estado y registro de entregas
 
+## En PR — Firma electrónica obligatoria para profesionales, 27 de octubre de 2026 (Claude)
+
+- Decisión de Luis: RUC y firma electrónica (.p12) obligatorios para trabajar en HULUL, como PedidosYa. Quien no la tiene se registra igual y se compromete a sacarla en 30 días (cláusula en las reglas que acepta, con autorización para que HULUL la use solo para sus comprobantes y su contrato).
+- Registro: sección «Firma electrónica (obligatoria)» con guía para sacarla. Agenda web: aviso con la fecha límite y botón «Ya tengo mi firma» (`declararFirma`).
+- Panel: estado de la firma y plazo en Aprobar profesionales, con «Marcar verificada» (`marcarFirmaProfesional`); en Novedades, plazos vencidos, por vencer y firmas por verificar.
+- Pendiente: contrato firmado con la firma (proveedor de firma en la nube por cotizar: Uanataca o Security Data); aviso también en la agenda de la app; pausar cuentas vencidas (hoy solo alerta).
+
 ## En PR — Legal y blindaje, 27 de octubre de 2026 (Claude)
 
 - Prueba de aceptación: `registrarAceptacion` guarda en `aceptaciones/{id}` (solo servidor) quién aceptó, qué versión de términos, privacidad y mandato, fecha, IP, dispositivo y huella SHA-256; marca `legal` en el perfil (las reglas impiden cambiarlo desde la app) y envía copia por correo. Se registra al crear la cuenta de cliente (web y app) y al enviar el registro de profesional.
