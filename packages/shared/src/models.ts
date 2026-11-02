@@ -38,6 +38,9 @@ export interface Professional {
   to?: string;
   /** Profesional de pruebas: horario libre durante el periodo de prueba. */
   tester?: boolean;
+  /** Formas de pago que acepta: tarjeta (con firma electrónica verificada) y pago directo (si no debe a HULUL). */
+  payCard?: boolean;
+  payDirect?: boolean;
   /** Horas fuera de horario (0–7, 18–23) en que acepta llegar. */
   offHours?: number[];
   /** Atiende feriados. */

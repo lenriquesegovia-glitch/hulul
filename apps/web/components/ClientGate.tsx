@@ -20,6 +20,9 @@ export interface ClientProfile {
   consentMarketing: boolean;
   /** Versiones de términos y privacidad aceptadas (las escribe el servidor). */
   legal?: { terminos?: string; privacidad?: string };
+  /** Saldo a favor y reservas sin cargo de plataforma (los da y descuenta el servidor). */
+  credit?: number;
+  perks?: { cargosGratis?: number };
 }
 
 async function fb() {

@@ -69,3 +69,20 @@ test('liquidación semanal: tarjeta menos deuda de efectivo', () => {
   assert.equal(liq.net, Math.round((23 - 3.45 - 2.29 - 3.45) * 100) / 100);
   assert.equal(liq.retentions.renta, 0);
 });
+
+test('beneficios del cliente en el libro de movimientos', async () => {
+  const { benefitDiscount, ledgerEntriesFor, priceOf } = await import('./money.js');
+  const q = priceOf(20, 0, 'general');
+  assert.equal(benefitDiscount({ tipo: 'cargo_gratis', monto: q.platformInvoice.total }, q).disc, q.platformInvoice.total);
+  assert.ok(benefitDiscount({ tipo: 'cargo_gratis', monto: 5 }, q).error);
+  assert.ok(benefitDiscount({ tipo: 'credito', monto: 999 }, q).error);
+  const base = { status: 'completada', visit: 20, surcharge: 0, taxRegime: 'general', paymentMethod: 'tarjeta' };
+  const free = ledgerEntriesFor({ ...base, beneficio: { tipo: 'cargo_gratis', monto: q.platformInvoice.total }, beneficioAplicado: true });
+  assert.ok(!free.some((e) => e.kind === 'plataforma'), 'sin cargo de plataforma');
+  assert.equal(free.find((e) => e.kind === 'recaudo_visita').amount, q.proInvoice.total);
+  const cred = ledgerEntriesFor({ ...base, paymentMethod: 'transferencia', beneficio: { tipo: 'credito', monto: 5 }, beneficioAplicado: true });
+  const ca = cred.find((e) => e.kind === 'credito_aplicado');
+  assert.equal(ca.amount, -5); assert.equal(ca.proDelta, 5, 'el profesional cobró $5 menos: HULUL se los reconoce');
+  const notApplied = ledgerEntriesFor({ ...base, beneficio: { tipo: 'credito', monto: 5 } });
+  assert.ok(!notApplied.some((e) => e.kind === 'credito_aplicado'), 'sin confirmar por el servidor no cuenta');
+});

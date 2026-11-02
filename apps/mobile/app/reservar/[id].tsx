@@ -10,7 +10,7 @@ import { Icon } from '@/components/Icon';
 import { MapPicker } from '@/components/MapPicker';
 import type { ClientBooking, ClientProfile } from '@hulul/shared/firebase';
 import { RatingBox } from '@/components/Rating';
-import { serviceCopy, HOME_SAFETY_ACCEPT, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, surchargeFor, isOffHour, SURCHARGE_LABEL, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quoteVisit, type Professional, slotAvailable, TEST_SLOTS, testPeriodOpen, timeAvailable, MAX_REQUEST_PHOTOS, type PaymentMethod } from '@hulul/shared';
+import { serviceCopy, HOME_SAFETY_ACCEPT, BOOKING_DAYS, checkSlot, leadMinutes, slotInWindow, surchargeFor, isOffHour, SURCHARGE_LABEL, HOME_SAFETY_NOTICE, HOME_SAFETY_TITLE, visitHours, visitLabel, getCategory, searchPlaces, type LatLng, type PlaceSuggestion, dayAvailable, firstAvailable, formatUSD, quoteVisit, type Professional, slotAvailable, TEST_SLOTS, testPeriodOpen, timeAvailable, MAX_REQUEST_PHOTOS, type PaymentMethod, paymentOptionsFor, applyBenefit, benefitOptions, type BenefitChoice } from '@hulul/shared';
 import { BackButton, Body, H2, PrimaryButton } from '@/components/ui';
 import { nextDays, PAYMENT_OPTIONS, SLOTS, useBooking } from '@/lib/booking';
 import { c, font, radius } from '@/theme';
@@ -135,7 +135,10 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
       setPhotoMsg((e as { code?: string }).code === 'sin-permiso-camara' ? 'Permite la cámara en los ajustes del celular para tomar fotos.' : 'No se pudo abrir la cámara o la galería.');
     }
   };
-  const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
+  const payOptions = paymentOptionsFor(pro);
+  const [payment, setPayment] = useState<PaymentMethod>(payOptions[0]?.value ?? 'transferencia');
+  const benefits = benefitOptions(profile);
+  const [benefit, setBenefit] = useState<BenefitChoice>(benefits.default);
   const [error, setError] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [agreeError, setAgreeError] = useState(false);
@@ -185,6 +188,8 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
   // Recargo nocturno o de feriado del profesional (monto fijo), si aplica.
   const sc = !tester && slot >= 0 ? surchargeFor(isoAt(day), slots[slot], pro) : { kind: null, amount: 0 };
   const q = quoteVisit(pro.visitRate, sc.amount, pro.taxRegime);
+  // Beneficio del cliente (reserva sin cargo de plataforma o saldo a favor).
+  const ben = applyBenefit(q, profile, benefit);
 
   /** Día sin horas libres (por anticipación, horario del servicio o del profesional). */
   const dayOff = (i: number) => offDays[i] ?? true;
@@ -255,14 +260,15 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
         subtotal: q.subtotal,
         fee: q.fee,
         iva: q.iva,
-        total: q.total,
+        total: ben.total,
+        ...(ben.beneficio ? { beneficio: ben.beneficio } : {}),
         // Régimen del profesional al reservar: define el IVA de la visita y las facturas.
         taxRegime: q.regime,
         visitIva: q.proInvoice.iva,
         consentMarketing: profile.consentMarketing,
         demo: true,
       });
-      confirm({ professionalId: pro.id, professionalName: pro.name, category: pro.category, dayIndex: day, slotIndex: slot, slotTime: slots[slot], hours, address, notes: job, payment, total: q.total, bookingId });
+      confirm({ professionalId: pro.id, professionalName: pro.name, category: pro.category, dayIndex: day, slotIndex: slot, slotTime: slots[slot], hours, address, notes: job, payment, total: ben.total, bookingId });
       router.replace('/confirmada');
     } catch {
       setSaveError('No pudimos registrar tu reserva. Revisa tu conexión e inténtalo de nuevo.');
@@ -460,7 +466,9 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
           <View style={{ gap: 10 }}>
             <H2 style={{ fontSize: 14, fontFamily: font.bodyBold, color: c.textSecondary }}>Forma de pago</H2>
-            {PAYMENT_OPTIONS.map((m) => {
+            {!payOptions.length && <Body style={{ color: c.copper }}>Este profesional no puede recibir reservas por ahora. Elige otro profesional.</Body>}
+            {payOptions.length > 0 && payOptions.length < PAYMENT_OPTIONS.length && <Body muted style={{ fontSize: 12.5 }}>{payOptions.some((m) => m.value === 'tarjeta') ? 'Con este profesional, por ahora, el pago es con tarjeta.' : 'Con este profesional, por ahora, pagas directo: transferencia o DeUna.'}</Body>}
+            {payOptions.map((m) => {
               const on = m.value === payment;
               return (
                 <Pressable key={m.value} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => setPayment(m.value)} style={[s.pay, on && { borderColor: c.copper }]}>
@@ -479,9 +487,17 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
             {sc.kind && q.surcharge > 0 && <Row label={SURCHARGE_LABEL[sc.kind]} value={formatUSD(q.surcharge)} />}
             <Row label="Cargo de plataforma HULUL" value={formatUSD(q.fee)} />
             <Row label={q.proInvoice.iva > 0 ? 'IVA 15%' : 'IVA 15% (del cargo de plataforma)'} value={formatUSD(q.iva)} />
+            {(benefits.cargosGratis > 0 || benefits.credit > 0) && (
+              <View style={{ gap: 8, paddingTop: 8 }}>
+                <Text style={s.payText}>Tus beneficios</Text>
+                {benefits.cargosGratis > 0 && <Checkbox checked={benefit === 'cargo_gratis'} onChange={(v) => setBenefit(v ? 'cargo_gratis' : 'ninguno')}><Body style={{ fontSize: 13.5 }}>Usar 1 de tus {benefits.cargosGratis} {benefits.cargosGratis === 1 ? 'reserva' : 'reservas'} sin cargo de plataforma</Body></Checkbox>}
+                {benefits.credit > 0 && <Checkbox checked={benefit === 'credito'} onChange={(v) => setBenefit(v ? 'credito' : 'ninguno')}><Body style={{ fontSize: 13.5 }}>Usar mi saldo a favor ({formatUSD(benefits.credit)})</Body></Checkbox>}
+              </View>
+            )}
+            {ben.disc > 0 && <Row label={ben.beneficio?.tipo === 'cargo_gratis' ? 'Cargo de plataforma gratis' : 'Tu saldo a favor'} value={`−${formatUSD(ben.disc)}`} />}
             <View style={s.totalRow}>
               <Text style={s.totalText}>Total</Text>
-              <Text style={s.totalText}>{formatUSD(q.total)}</Text>
+              <Text style={s.totalText}>{formatUSD(ben.total)}</Text>
             </View>
             <Body muted style={{ fontSize: 12.5 }}>{copy.priceNote}</Body>
             <Body muted style={{ fontSize: 12.5 }}>Recibes dos comprobantes: la factura de {pro.name.split(' ')[0]} por la visita y la de HULUL por el cargo de plataforma.</Body>
@@ -510,7 +526,7 @@ function BookingFormInner({ pro, uid, profile }: { pro: Professional; uid: strin
 
         <View style={s.footer}>
           {saveError ? <Text style={[s.error, { marginBottom: 8 }]}>{saveError}</Text> : null}
-          <PrimaryButton label={sending ? 'Registrando tu reserva…' : `Confirmar reserva de prueba · ${formatUSD(q.total)}`} onPress={onConfirm} />
+          <PrimaryButton label={sending ? 'Registrando tu reserva…' : `Confirmar reserva de prueba · ${formatUSD(ben.total)}`} onPress={onConfirm} disabled={!payOptions.length} />
         </View>
       </View>
     </SafeAreaView>

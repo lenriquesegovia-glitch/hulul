@@ -25,6 +25,14 @@ export default function AccountScreen() {
                 <Body muted>{profile.phone} · {profile.email}</Body>
                 <Pressable accessibilityRole="button" onPress={logout}><Text style={s.link}>Cerrar sesión</Text></Pressable>
               </Card>
+              {((profile.perks?.cargosGratis ?? 0) > 0 || (profile.credit ?? 0) > 0) && (
+                <Card style={{ gap: 6 }}>
+                  <Text style={s.name}>Tus beneficios</Text>
+                  {(profile.perks?.cargosGratis ?? 0) > 0 && <Body>{profile.perks!.cargosGratis} {profile.perks!.cargosGratis === 1 ? 'reserva' : 'reservas'} sin cargo de plataforma</Body>}
+                  {(profile.credit ?? 0) > 0 && <Body>${(profile.credit ?? 0).toFixed(2)} de saldo a favor</Body>}
+                  <Body muted style={{ fontSize: 12.5 }}>Se aplican solos en tu próxima reserva.</Body>
+                </Card>
+              )}
               <Bookings uid={user.uid} />
             </View>
           )}

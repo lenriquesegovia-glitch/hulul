@@ -138,6 +138,18 @@ assert.equal(complianceAlerts({ bookings, payouts: [], providers: [] }, { from: 
   const sales = hululSales({ ledger: lg, bookings: [card, cash], providers: [] }, { from: '2026-10-01', to: '2026-10-31' });
   assert.equal(sales.filter((x) => x.to === 'cliente').length, 2);
   assert.equal(sales.filter((x) => x.to === 'profesional').length, 2);
+  // Beneficios: saldo a favor usado (tarjeta y directo) y reserva sin cargo de plataforma, siempre cuadrado.
+  const cardCr = bookingRow('crd000000000', { ...base, date: '2026-10-21', slot: '10:00', status: 'completada', beneficio: { tipo: 'credito', monto: 5 }, beneficioAplicado: true });
+  const cashCr = bookingRow('csh000000000', { ...base, date: '2026-10-21', slot: '11:00', status: 'completada', paymentMethod: 'transferencia', beneficio: { tipo: 'credito', monto: 5 }, beneficioAplicado: true });
+  const lg2 = [
+    ...mk(cardCr, { ...base, status: 'completada', beneficio: { tipo: 'credito', monto: 5 }, beneficioAplicado: true }),
+    ...mk(cashCr, { ...base, status: 'completada', paymentMethod: 'transferencia', beneficio: { tipo: 'credito', monto: 5 }, beneficioAplicado: true }),
+  ];
+  assert.ok(lg2.some((e) => e.kind === 'credito_aplicado'));
+  const l2 = journal({ ledger: lg2, payouts: [], bookings: [cardCr, cashCr], providers: [] }, { from: '2026-10-01', to: '2026-10-31' });
+  assert.ok(Math.abs(l2.reduce((t, l) => t + l.debit - l.credit, 0)) < 0.001, 'con saldo a favor: debe = haber');
+  assert.ok(l2.some((l) => l.detail.startsWith('Saldo a favor')), 'el saldo usado aparece en el diario');
+  assert.equal(cardCr.beneficio?.tipo, 'credito');
   const q = quality(bookings, { from: '2026-10-01', to: '2026-10-31' });
   assert.equal(q.stars.reduce((t, s) => t + s.count, 0), q.rated);
   const wm = weekMoney({ ledger: lg, payouts: [], bookings: [card, cash] }, now);

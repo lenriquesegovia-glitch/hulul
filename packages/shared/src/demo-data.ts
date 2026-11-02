@@ -40,6 +40,8 @@ export interface PublicPro {
   surcharges?: { nocturno?: number; feriado?: number };
   /** Régimen tributario (define si su visita lleva IVA). */
   taxRegime?: TaxRegime;
+  payCard?: boolean;
+  payDirect?: boolean;
 }
 
 /** Día de la semana en Ecuador (0 = domingo). */
@@ -76,6 +78,9 @@ export function toProfessional(p: PublicPro, category?: CategorySlug): Professio
     from: p.from || undefined,
     to: p.to || undefined,
     tester: !!p.tester,
+    // Fichas publicadas antes de esta regla: sin el dato se permite todo (el servidor lo vuelve a validar).
+    payCard: p.payCard !== false,
+    payDirect: p.payDirect !== false,
     offHours: Array.isArray(p.offHours) ? p.offHours : [],
     holidays: !!p.holidays,
     surcharges: p.surcharges ?? {},

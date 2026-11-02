@@ -23,6 +23,14 @@ export function Account() {
             <span className="muted">{profile.phone} · {profile.email}</span>
             <button type="button" className="link-btn" style={{ alignSelf: 'flex-start', padding: 0 }} onClick={logout}>Cerrar sesión</button>
           </div>
+          {((profile.perks?.cargosGratis ?? 0) > 0 || (profile.credit ?? 0) > 0) && (
+            <div className="card stack gap-8" style={{ borderLeft: '4px solid var(--success)' }}>
+              <strong>Tus beneficios</strong>
+              {(profile.perks?.cargosGratis ?? 0) > 0 && <span>{profile.perks!.cargosGratis} {profile.perks!.cargosGratis === 1 ? 'reserva' : 'reservas'} sin cargo de plataforma</span>}
+              {(profile.credit ?? 0) > 0 && <span>{formatUSD(profile.credit!)} de saldo a favor</span>}
+              <span className="muted" style={{ fontSize: 13.5 }}>Se aplican solos en tu próxima reserva (puedes elegir guardarlos).</span>
+            </div>
+          )}
           <ProSwitch uid={user.uid} />
           <Bookings uid={user.uid} />
         </div>

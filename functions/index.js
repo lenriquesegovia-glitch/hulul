@@ -38,7 +38,7 @@ import { parseStatement, readStatement } from './estado-tarjeta.js';
 import { acceptanceInput, acceptancePdf, caseInput, clientInfo, fingerprint, LEGAL_DOCS } from './legal-core.js';
 import { buildClaimPrompt, callClaude, IA_MODEL, parseAnalysis } from './ia-reclamos.js';
 import { appointmentAt, bookingRow, claimRow, clientRow, dashRange, ledgerRow, payoutRow, providerRow } from './tablero-core.js';
-import { chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
+import { benefitDiscount, chargesVat, extraOf, IVA_RATE, ledgerDiff, ledgerEntriesFor, PAYOUT_HOLD_HOURS, payoutWeek, PLATFORM_FEE, priceOf, r2, regimeOf, reversalOf, weeklyPayout } from './money.js';
 
 /** Debe coincidir con la ubicación de la base de datos Firestore. */
 const REGION = 'southamerica-east1';
@@ -409,6 +409,9 @@ async function checkPrice(b) {
   if (!snap.exists) return { ok: true };
   const p = snap.data();
   const pubDoc = (await db().doc(`pros/${b.professionalId}`).get()).data();
+  // Tarjeta solo con firma electrónica verificada; pago directo solo si su deuda con HULUL no pasa del tope.
+  if (b.paymentMethod === 'tarjeta' && !(p.tester === true || p.eSignatureVerified === true)) return { ok: false, total: 0, reason: `${String(b.professionalName ?? 'Este profesional').split(' ')[0]} aún no recibe pagos con tarjeta: elige transferencia o DeUna.` };
+  if (b.paymentMethod !== 'tarjeta' && (await debtByCedula(p)) > CASH_DEBT_LIMIT) return { ok: false, total: 0, reason: `${String(b.professionalName ?? 'Este profesional').split(' ')[0]} no puede recibir pagos directos por ahora: elige tarjeta u otro profesional.` };
   // Fuera de horario o feriado: solo si el profesional lo activó (los de prueba, libres).
   const tester = p.tester === true;
   const refusal = tester ? '' : offHoursRefusal(p, b.date, b.slot);
@@ -428,15 +431,51 @@ async function checkPrice(b) {
     const appliedVisit = b.pricingVersion === 2 && s.amount > 0 ? s.amount : v;
     const extra = b.pricingVersion === 2 ? 0 : s.amount;
     const q = priceOf(appliedVisit, extra, regime);
+    // Con beneficio, el total enviado es el precio menos el descuento.
+    const ben = benefitDiscount(b.beneficio, q);
+    if (ben.error) return false;
+    const bt = r2(Number(b.total ?? 0) + ben.disc);
     // Apps anteriores calculaban el IVA sobre (visita + cargo) en un solo paso: también vale.
     const legacyIva = r2((q.subtotal + fee) * IVA_RATE);
     const ivaOk = near(b.iva, q.iva) || (chargesVat(regime) && near(b.iva, legacyIva));
-    const totalOk = near(b.total, q.total) || (chargesVat(regime) && near(b.total, r2(q.subtotal + fee + legacyIva)));
+    const totalOk = near(bt, q.total) || (chargesVat(regime) && near(bt, r2(q.subtotal + fee + legacyIva)));
     return near(b.visit, appliedVisit) && near(b.surcharge, extra) && (s.amount === 0 || b.surchargeKind === s.kind)
       && near(b.subtotal, q.subtotal) && near(b.fee, fee) && ivaOk && totalOk;
   };
   const pubOk = Number.isFinite(Number(pub)) && (okFor(r2(Number(pub)), sc) || okFor(r2(Number(pub)), pubSc));
   return { ok: okFor(visit, sc) || okFor(visit, pubSc) || pubOk, total, regime };
+}
+
+/** Descuenta el beneficio de la cuenta del cliente (transacción) y lo marca aplicado en la reserva. */
+async function consumeBenefit(b, id) {
+  const cref = db().doc(`clients/${b.clientId}`);
+  const bref = db().doc(`bookings/${id}`);
+  return db().runTransaction(async (tx) => {
+    const c = (await tx.get(cref)).data() ?? {};
+    const monto = r2(Number(b.beneficio?.monto ?? 0));
+    if (b.beneficio?.tipo === 'cargo_gratis') {
+      if (Number(c.perks?.cargosGratis ?? 0) < 1) return { ok: false, reason: 'Ya no tienes reservas sin cargo de plataforma.' };
+      tx.set(cref, { perks: { cargosGratis: FieldValue.increment(-1) } }, { merge: true });
+    } else if (b.beneficio?.tipo === 'credito') {
+      if (Number(c.credit ?? 0) + 0.009 < monto) return { ok: false, reason: 'Tu saldo a favor no alcanza para ese descuento.' };
+      tx.set(cref, { credit: FieldValue.increment(-monto) }, { merge: true });
+    } else return { ok: false, reason: 'Beneficio no válido.' };
+    tx.update(bref, { beneficioAplicado: true });
+    return { ok: true };
+  });
+}
+
+/** Devuelve el beneficio a la cuenta del cliente si la reserva se canceló. */
+async function returnBenefit(after, id) {
+  const bref = db().doc(`bookings/${id}`);
+  const cref = db().doc(`clients/${after.clientId}`);
+  await db().runTransaction(async (tx) => {
+    const b = (await tx.get(bref)).data();
+    if (!b?.beneficioAplicado || b.beneficioDevuelto) return;
+    if (b.beneficio.tipo === 'cargo_gratis') tx.set(cref, { perks: { cargosGratis: FieldValue.increment(1) } }, { merge: true });
+    else tx.set(cref, { credit: FieldValue.increment(r2(Number(b.beneficio.monto ?? 0))) }, { merge: true });
+    tx.update(bref, { beneficioDevuelto: true });
+  });
 }
 
 /** Reserva terminada del cliente que aún no calificó (id), o null. */
@@ -478,6 +517,15 @@ export const avisoReserva = onDocumentCreated(
           html: layout('Precio alterado o desactualizado', rows([['Código', code(event.params.id)], ['Cliente', esc(b.contactName)], ['Profesional', esc(b.professionalName)], ['Enviado', usd(b.total)], ['Correcto', usd(priced.total)]])) }).catch(() => {});
         logger.warn('Reserva anulada: precio no coincide', { id: event.params.id, sent: b.total, expected: priced.total });
         return;
+      }
+      // Beneficio del cliente (reserva sin cargo o saldo a favor): se descuenta de su cuenta ahora.
+      if (b.beneficio) {
+        const used = await consumeBenefit(b, event.params.id);
+        if (!used.ok) {
+          await event.data.ref.update({ status: 'cancelada', cancelledBy: 'sistema', cancelledAt: FieldValue.serverTimestamp(), cancelFee: 0, cancelReason: `${used.reason} Vuelve a reservar: no se te cobró nada.` });
+          await pushTo(b.clientId, 'Revisa tu reserva', `${used.reason} Vuelve a reservar: no se te cobró nada.`, { bookingId: event.params.id, to: 'cliente' }).catch(() => {});
+          return;
+        }
       }
       // El régimen y el IVA de la visita los fija el servidor (facturas y libro de movimientos).
       if (priced.regime) {
@@ -619,7 +667,7 @@ export function proBookingEmail(b, id, p, { from, notifyTo }) {
 const cleanOffHours = (xs) => (Array.isArray(xs) ? [...new Set(xs.map(Number).filter((h) => OFF_HOURS.includes(h)))] : []);
 
 /** Datos públicos de un profesional aprobado (nada de cédula, RUC, contacto ni banco). */
-export function publicPro(p, uid) {
+export function publicPro(p, uid, extra = {}) {
   const name = p.kind === 'empresa' ? String(p.businessName ?? '').trim() : `${String(p.firstName ?? '').trim()} ${String(p.lastName ?? '').trim()}`.trim();
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
   return {
@@ -635,7 +683,25 @@ export function publicPro(p, uid) {
     tester: p.tester === true,
     // Régimen tributario: el cliente ve el precio con o sin IVA en la visita.
     taxRegime: regimeOf(p.taxRegime),
+    // Cobro con tarjeta por HULUL solo con firma electrónica verificada (HULUL emite su comprobante).
+    payCard: p.tester === true || p.eSignatureVerified === true,
+    // Pago directo (transferencia, DeUna): se corta si su deuda con HULUL (todas sus cuentas) pasa del tope.
+    payDirect: !(Number(extra.debt ?? p.cashDebt ?? 0) > CASH_DEBT_LIMIT),
   };
+}
+
+/** Tope de deuda de un profesional con HULUL (cargo y comisión de cobros directos) antes de cortarle el pago directo. */
+const CASH_DEBT_LIMIT = 30;
+/** Cuentas de la misma persona (misma cédula). */
+async function sameCedula(cedula) {
+  const c = String(cedula ?? '').replace(/\D/g, '');
+  if (c.length !== 10) return [];
+  return (await db().collection('providers').where('cedula', '==', c).get()).docs;
+}
+/** Deuda total con HULUL de todas las cuentas de esa cédula. */
+async function debtByCedula(p) {
+  const docs = await sameCedula(p.cedula);
+  return docs.length ? Math.round(docs.reduce((t, d) => t + Number(d.data().cashDebt ?? 0), 0) * 100) / 100 : Number(p.cashDebt ?? 0);
 }
 
 /**
@@ -701,7 +767,7 @@ export const directorioProfesionales = onDocumentWritten(
       }).catch((e) => logger.warn('No se pudo avisar la categoría aprobada', { uid, e: String(e) }));
     }
     await ref.set({
-      ...publicPro(after, uid),
+      ...publicPro(after, uid, { debt: await debtByCedula(after) }),
       suspendedUntil: Number(after.suspendedUntil ?? 0),
       ...(cur.exists ? {} : { rating: 0, reviewCount: 0, jobsDone: 0, approvedAt: FieldValue.serverTimestamp() }),
       updatedAt: FieldValue.serverTimestamp(),
@@ -2139,8 +2205,9 @@ export const libroMovimientos = onDocumentWritten(
     const after = event.data?.after?.data();
     if (!after || after.demo) return;
     const before = event.data?.before?.data();
+    if (after.status === 'cancelada' && after.beneficioAplicado && !after.beneficioDevuelto) await returnBenefit(after, id).catch((e) => logger.warn('No se pudo devolver el beneficio', { id, e: String(e) }));
     // Solo interesa cuando cambia algo que mueve dinero.
-    const sig = (b) => (b ? JSON.stringify([b.status, b.cancelFee ?? 0, b.proFine ?? 0, b.clientCredit ?? 0, b.extra?.status ?? '', b.extra?.amount ?? 0, b.paymentMethod, b.taxRegime ?? '']) : '');
+    const sig = (b) => (b ? JSON.stringify([b.status, b.cancelFee ?? 0, b.proFine ?? 0, b.clientCredit ?? 0, b.extra?.status ?? '', b.extra?.amount ?? 0, b.paymentMethod, b.taxRegime ?? '', !!b.beneficioAplicado]) : '');
     if (sig(before) === sig(after)) return;
     const desired = ledgerEntriesFor(after);
     if (desired === null) return;
@@ -2903,6 +2970,40 @@ export const rolPagos = onCall({ region: REGION }, async (req) => {
   return { ok: true, status: doc.status, lines, totals };
 });
 
+/* ---------------------------- Beneficios a clientes ---------------------------- */
+
+/**
+ * Panel: da un beneficio a un cliente (plan de incentivos o compensación). cargo_gratis = N reservas sin
+ * cargo de plataforma; credito = saldo a favor en $ que se descuenta solo en su próxima reserva.
+ */
+export const otorgarBeneficio = onCall({ region: REGION, secrets: [MAIL_PASSWORD] }, async (req) => {
+  const admin = await requireAdmin(req, 'pagos');
+  const clientId = String(req.data?.clientId ?? '');
+  if (!/^[A-Za-z0-9]{10,40}$/.test(clientId)) throw new HttpsError('invalid-argument', 'Cliente no válido.');
+  const tipo = req.data?.tipo === 'credito' ? 'credito' : req.data?.tipo === 'cargo_gratis' ? 'cargo_gratis' : null;
+  if (!tipo) throw new HttpsError('invalid-argument', 'Elige el tipo de beneficio.');
+  const cantidad = Math.round(Number(req.data?.cantidad ?? 0));
+  const monto = r2(Number(req.data?.monto ?? 0));
+  if (tipo === 'cargo_gratis' && !(cantidad >= 1 && cantidad <= 10)) throw new HttpsError('invalid-argument', 'Entre 1 y 10 reservas sin cargo.');
+  if (tipo === 'credito' && !(monto > 0 && monto <= 50)) throw new HttpsError('invalid-argument', 'El saldo a favor debe ser entre $0,01 y $50.');
+  const motivo = String(req.data?.motivo ?? 'Plan de incentivos').trim().slice(0, 140);
+  const cref = db().doc(`clients/${clientId}`);
+  const c = (await cref.get()).data();
+  if (!c) throw new HttpsError('not-found', 'Ese cliente no tiene cuenta.');
+  await cref.set(tipo === 'cargo_gratis' ? { perks: { cargosGratis: FieldValue.increment(cantidad) } } : { credit: FieldValue.increment(monto) }, { merge: true });
+  const ref = await db().collection('beneficios').add({ clientId, tipo, cantidad: tipo === 'cargo_gratis' ? cantidad : 0, monto: tipo === 'credito' ? monto : 0, motivo, por: admin.email, at: FieldValue.serverTimestamp() });
+  // El saldo a favor es una deuda de HULUL con el cliente (gasto de marketing desde hoy).
+  if (tipo === 'credito') await db().collection('ledger').doc(`beneficio_${ref.id}`).set({ kind: 'credito_promocional', bucket: 'pasivo_cliente', amount: monto, proDelta: 0, proId: '', bookingId: null, clientId, paymentMethod: null, payoutId: null, availableAt: Date.now(), createdAt: FieldValue.serverTimestamp(), memo: motivo });
+  const text = tipo === 'cargo_gratis' ? `Tienes ${cantidad === 1 ? '1 reserva' : `${cantidad} reservas`} sin cargo de plataforma. Se aplica sola en tu próxima reserva.` : `Tienes $${monto.toFixed(2)} de saldo a favor. Se descuenta solo en tu próxima reserva.`;
+  await pushTo(clientId, '¡Gracias por confiar en HULUL!', text, { url: 'https://hululec.com/cuenta', to: 'cliente' }).catch(() => {});
+  if (c.email) {
+    const { from, notifyTo } = senders();
+    await transport().sendMail({ from, to: c.email, replyTo: notifyTo, subject: 'Un regalo de HULUL para ti', html: layout('Gracias por confiar en HULUL', `<p style="font-size:15px">Hola ${esc(String(c.name ?? '').split(' ')[0])}, ${esc(text)}</p>` + button('https://hululec.com/servicios', 'Reservar ahora')) }).catch(() => {});
+  }
+  await logAdmin(admin, 'beneficio_cliente', { clientId, tipo, cantidad, monto });
+  return { ok: true };
+});
+
 /* ---------------------------- Firma electrónica de profesionales ---------------------------- */
 
 /** El profesional avisa que ya tiene su firma electrónica (HULUL la verifica al conectarla). */
@@ -3171,6 +3272,15 @@ export const decidirProfesional = onCall({ region: REGION }, async (req) => {
   const uid = String(req.data?.uid ?? '');
   if (!PRO_UID.test(uid)) throw new HttpsError('invalid-argument', 'Profesional no válido.');
   const ref = db().doc(`providers/${uid}`);
+  if (req.data?.decision === 'aprobado') {
+    // No se aprueba a quien tiene otra cuenta (misma cédula) pausada o con deuda con HULUL.
+    const me = (await ref.get()).data() ?? {};
+    const others = (await sameCedula(me.cedula)).filter((d) => d.id !== uid).map((d) => d.data());
+    const paused = others.find((o) => Number(o.suspendedUntil ?? 0) > Date.now());
+    const owes = others.reduce((t, o) => t + Number(o.cashDebt ?? 0), 0);
+    if (paused) throw new HttpsError('failed-precondition', `Esta persona tiene otra cuenta pausada (${paused.suspendedReason === 'firma_electronica' ? 'sin firma electrónica' : paused.suspendedReason || 'pausa'}). Debe resolverla antes de aprobar una nueva.`);
+    if (owes > 0) throw new HttpsError('failed-precondition', `Esta persona debe $${owes.toFixed(2)} a HULUL en otra cuenta. Debe pagarlo antes de aprobar una nueva.`);
+  }
   const out = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const r = reviewPatch(req.data, snap.exists ? snap.data() : null, Object.keys(CATEGORIES));
