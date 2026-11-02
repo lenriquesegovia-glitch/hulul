@@ -1,5 +1,11 @@
 # HULUL — Estado y registro de entregas
 
+## En PR — Efectividad por actividad, mejores clientes e incentivos, 2 de noviembre de 2026 (Claude)
+
+- Resumen ejecutivo: «Efectividad por actividad» (por categoría: % de éxito sobre lo terminado, % y detalle de problemas, calificación, lo que deja a HULUL por reserva; orden por éxito, ganancia o cantidad) reemplaza «Resultado por servicio». «Dónde está la ganancia»: oportunidades, alertas y datos (día y hora que más dejan, recompra).
+- Clientes: «Mejores clientes» (oro, plata, bronce por puntaje = lo que dejó a HULUL × frecuencia × recencia, sin problemas) con plan de incentivos: presupuesto = % de lo que dejó a HULUL (10/20/30 %, tope $25), traducido a reservas sin cargo de plataforma o % de descuento; WhatsApp con el mensaje y Excel.
+- Pendiente: canjear el beneficio dentro de la app (hoy el crédito de clientes no se aplica al reservar); decidir mecanismo con Luis.
+
 ## En PR — Firma electrónica obligatoria para profesionales, 27 de octubre de 2026 (Claude)
 
 - Decisión de Luis: RUC y firma electrónica (.p12) obligatorios para trabajar en HULUL, como PedidosYa. Quien no la tiene se registra igual y se compromete a sacarla en 30 días (cláusula en las reglas que acepta, con autorización para que HULUL la use solo para sus comprobantes y su contrato).
