@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { cashSeries, caseFlags, caseOutcome, executive, inRange, moneyFlow, quality, weekMoney, type CaseFlags, type DashBooking, type Granularity } from '@hulul/shared/dashboard';
+import { bestClients, TIER_INFO, cashSeries, caseFlags, caseOutcome, executive, inRange, moneyFlow, quality, weekMoney, type CaseFlags, type DashBooking, type Granularity } from '@hulul/shared/dashboard';
 import { useAdmin } from './AdminShell';
 import { Novedades } from './Novedades';
 import { Efectividad } from './Efectividad';
@@ -31,6 +31,7 @@ export function ExecutivePanel() {
   const pickLine = (k: FlowKey) => setOnly((cur) => (cur && cur.length === 1 && cur[0] === k ? null : [k]));
   const flow = useMemo(() => (view ? moneyFlow(view.bookings, range) : null), [view, range]);
   const series = useMemo(() => (view ? cashSeries(view.bookings, range, g) : []), [view, range, g]);
+  const best = useMemo(() => (view ? bestClients(view, now) : []), [view, now]);
   const rows = useMemo(() => (view?.bookings ?? []).filter((b) => inRange(b.date, range)), [view, range]);
   const ids = (pred: (b: DashBooking, f: CaseFlags) => boolean) => rows.filter((b) => pred(b, caseFlags(b))).map((b) => b.id);
 
@@ -151,6 +152,22 @@ export function ExecutivePanel() {
           </div>
 
           <Efectividad bookings={view?.bookings ?? []} range={range} open={open} />
+
+          <section className="adm-card">
+            <h2>Mejores clientes</h2>
+            <p className="sub">Los que más dejan a HULUL, vuelven y no dan problemas{best.length ? ` · ${best.filter((c) => c.tier === 'oro').length} oro, ${best.filter((c) => c.tier === 'plata').length} plata, ${best.filter((c) => c.tier === 'bronce').length} bronce` : ''}.</p>
+            {best.length ? (
+              <ol style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 8, fontSize: 14 }}>
+                {best.slice(0, 5).map((c) => (
+                  <li key={c.clientId}>
+                    <Link href={`/admin/clientes?id=${c.clientId}`}><b>{c.name || '—'}</b></Link> <span className="muted" style={{ fontSize: 12.5 }}>· {TIER_INFO[c.tier].label}</span>
+                    <div className="muted" style={{ fontSize: 12.5 }}>{c.done} servicios · dejó {money(c.hulul)} a HULUL{c.daysSince != null && c.daysSince > 45 ? ' · no vuelve hace más de 45 días' : ''} · beneficio sugerido: {c.incentive.text}</div>
+                  </li>
+                ))}
+              </ol>
+            ) : <div className="adm-empty">Aún no hay clientes con 2 o más servicios.</div>}
+            {best.length > 0 && <p style={{ margin: '12px 0 0' }}><Link className="adm-btn" href="/admin/clientes?mejores=1">Ver todos y dar beneficios</Link></p>}
+          </section>
 
           <div className="adm-grid g-3">
             <section className="adm-card">
