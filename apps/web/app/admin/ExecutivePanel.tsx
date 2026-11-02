@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { cashSeries, caseFlags, caseOutcome, executive, inRange, moneyFlow, quality, weekMoney, type CaseFlags, type DashBooking, type Granularity } from '@hulul/shared/dashboard';
 import { useAdmin } from './AdminShell';
 import { Novedades } from './Novedades';
+import { Efectividad } from './Efectividad';
 import { BookingListDrawer, catName, Donut, FlowChart, type FlowKey, fmtDay, HBars, Kpi, Loading, money, PageHead, percent, PeriodBar } from './ui';
 
 const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
@@ -149,41 +150,7 @@ export function ExecutivePanel() {
             </section>
           </div>
 
-          <section className="adm-card">
-            <h2>Resultado por servicio</h2>
-            <p className="sub">Cada categoría con lo que salió bien, lo que tuvo algún problema y lo que sigue pendiente. Toca una barra para ver los casos.</p>
-            {(() => {
-              const cats = [...new Set(rows.map((b) => b.category))].map((c) => {
-                const mine = rows.filter((b) => b.category === c);
-                const ok = mine.filter((b) => caseFlags(b).success);
-                const bad = mine.filter((b) => { const f = caseFlags(b); return f.closed && !f.success; });
-                const pend = mine.filter((b) => !caseFlags(b).closed);
-                return { c, mine, ok, bad, pend };
-              }).sort((a, z) => z.mine.length - a.mine.length);
-              if (!cats.length) return <div className="adm-empty">Sin reservas en el periodo.</div>;
-              const max = Math.max(...cats.map((x) => x.mine.length));
-              return (
-                <div className="adm-grid" style={{ gap: 10 }}>
-                  {cats.map((x) => (
-                    <div key={x.c} className="adm-catrow">
-                      <span>{catName(x.c)}</span>
-                      <div className="adm-catbar" style={{ width: `${(x.mine.length / max) * 100}%` }}>
-                        {([['ok', x.ok, '#206344', 'con éxito'], ['bad', x.bad, '#C98A1B', 'con problema'], ['pend', x.pend, '#9DB6C9', 'pendientes']] as const).filter(([, l]) => l.length).map(([k, l, color, label]) => (
-                          <button key={k} type="button" style={{ flex: l.length, background: color }} title={`${catName(x.c)}: ${l.length} ${label}`}
-                            onClick={() => open(`${catName(x.c)}: ${label}`, l.map((b) => b.id))}>{l.length}</button>
-                        ))}
-                      </div>
-                      <b>{x.mine.length ? percent(x.ok.length / Math.max(1, x.ok.length + x.bad.length)) : '—'}</b>
-                    </div>
-                  ))}
-                  <div className="adm-bar" style={{ fontSize: 12.5, color: 'var(--muted)' }}>
-                    {[['Éxito', '#206344'], ['Con problema', '#C98A1B'], ['Pendiente', '#9DB6C9']].map(([l, c]) => <span key={l} className="row gap-4"><i style={{ width: 10, height: 10, borderRadius: 3, background: c, display: 'inline-block' }} />{l}</span>)}
-                    <span>· % = éxito sobre lo terminado</span>
-                  </div>
-                </div>
-              );
-            })()}
-          </section>
+          <Efectividad bookings={view?.bookings ?? []} range={range} open={open} />
 
           <div className="adm-grid g-3">
             <section className="adm-card">

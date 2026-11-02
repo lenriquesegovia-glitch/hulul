@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { bookingInvoices, bookingMoney, caseFlags, clientStats, inRange, toCsv, type ClientStats, type DashBooking } from '@hulul/shared/dashboard';
+import { bestClients, bookingInvoices, bookingMoney, caseFlags, clientStats, inRange, toCsv, type ClientStats, type DashBooking } from '@hulul/shared/dashboard';
 import { useAdmin } from '../AdminShell';
+import { MejoresClientes } from './MejoresClientes';
 import { Badge, BookingDetail, BookingListDrawer, BookingsCrm, downloadCsv, downloadPdf, fmtDay, initials, Kpi, Loading, money, PageHead, PeriodBar } from '../ui';
 
 type Sort = 'reciente' | 'reservas' | 'gasto' | 'riesgo' | 'nombre';
@@ -16,6 +17,7 @@ export function ClientsPanel() {
   const [onlyPeriod, setOnlyPeriod] = useState(true);
   const [sel, setSel] = useState('');
   const [seg, setSeg] = useState<'' | 'repiten' | 'riesgo' | 'saldo'>('');
+  const [best, setBest] = useState(false);
   const SEG_LABEL = { repiten: 'Repiten (2+ servicios)', riesgo: 'Reportados o ausentes', saldo: 'Con saldo pendiente' } as const;
 
   useEffect(() => { const id = new URLSearchParams(window.location.search).get('id'); if (id) setSel(id); }, []);
@@ -52,10 +54,12 @@ export function ClientsPanel() {
         <>
           <div className="adm-kpis">
             <Kpi accent label="Clientes en la vista" value={base.length} hint={onlyPeriod ? 'Con reservas en el periodo' : 'Todos los cargados'} onClick={() => go('')} />
+            <Kpi label="Mejores clientes" value={view ? bestClients(view, now).length : 0} hint={best ? 'Mostrando el plan ✓' : 'Oro, plata y bronce, con plan de incentivos'} selected={best} onClick={() => { setBest((x) => !x); setTimeout(() => document.getElementById('mejores-clientes')?.scrollIntoView({ behavior: 'smooth' }), 50); }} />
             <Kpi label="Repiten (2+ servicios)" value={base.filter((c) => c.done >= 2).length} hint={seg === 'repiten' ? 'Filtrando la lista ✓' : 'Ver quiénes'} onClick={() => go('repiten')} />
             <Kpi label="Reportados o ausentes" value={base.filter((c) => c.reported + c.absent > 0).length} hint={seg === 'riesgo' ? 'Filtrando la lista ✓' : 'Ver quiénes'} onClick={() => go('riesgo')} />
             <Kpi label="Con saldo pendiente" value={base.filter((c) => (c.profile?.balance ?? 0) > 0).length} hint={`${money(base.reduce((t, c) => t + Math.max(0, c.profile?.balance ?? 0), 0))}${seg === 'saldo' ? ' · filtrando ✓' : ''}`} onClick={() => go('saldo')} />
           </div>
+          {best && <MejoresClientes view={view} now={now} onPick={pick} />}
           <div className="adm-bar">
             <input className="adm-input adm-search" type="search" placeholder="Buscar por nombre o celular" value={q} onChange={(e) => setQ(e.target.value)} />
             <select className="adm-select" value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Ordenar">

@@ -261,4 +261,23 @@ assert.equal(complianceAlerts({ bookings, payouts: [], providers: [] }, { from: 
   assert.equal(fl.inflow.total, Math.round((fl.bank.total + fl.direct.total) * 100) / 100);
 }
 
+// Efectividad por actividad y mejores clientes
+{
+  const sh = await import('../packages/shared/src/dashboard.ts');
+  const R = { from: '2026-10-01', to: '2026-10-31' };
+  const eff = sh.categoryEffectiveness(bookings, R);
+  const p = eff.find((c) => c.category === 'plomeria');
+  assert.ok(p.closed > 0 && p.successRate >= 0 && p.successRate <= 1);
+  assert.equal(p.success + (p.closed - p.success), p.closed);
+  assert.ok(p.problemRate > 0, 'atrasos, mal servicio y no llegó cuentan como problema');
+  const many = [];
+  for (let i = 0; i < 6; i++) many.push({ ...by.ok, id: `x${i}`, clientId: 'VIP', date: `2026-10-0${i + 1}` });
+  many.push({ ...by.ok, id: 'y1', clientId: 'C9', date: '2026-10-02' }, { ...by.ok, id: 'y2', clientId: 'C9', date: '2026-10-03' });
+  const best = sh.bestClients({ bookings: many, clients: [] }, now);
+  assert.equal(best[0].clientId, 'VIP'); assert.equal(best[0].tier, 'oro');
+  assert.ok(best[0].incentive.budget <= sh.INCENTIVE_DEFAULTS.maxValue && best[0].incentive.budget > 0);
+  assert.ok(best[0].incentive.budget <= best[0].hulul * sh.INCENTIVE_DEFAULTS.budgetPct + 0.01, 'el beneficio sale de lo que dejó a HULUL');
+  assert.ok(Array.isArray(sh.growthInsights(bookings, R)));
+}
+
 console.log('Tablero: OK');

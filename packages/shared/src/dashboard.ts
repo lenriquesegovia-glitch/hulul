@@ -1772,3 +1772,132 @@ export function laborChecklist(empleados: Employee[], docs: Record<string, Recor
   }
   return out;
 }
+
+/* ------------------------------ Efectividad, mejores clientes y crecimiento ------------------------------ */
+
+export interface CategoryEffect {
+  category: string; total: number; closed: number; open: number;
+  success: number; late: number; badService: number; claims: number; proFail: number; clientCancel: number; clientAbsent: number;
+  successRate: number; problemRate: number; avgRating: number | null; rated: number;
+  hulul: number; perBooking: number; gross: number;
+  ids: { all: string[]; success: string[]; problems: string[] };
+}
+
+/**
+ * Efectividad por actividad: de lo terminado en cada categoría, qué porcentaje salió bien, cuánto
+ * tuvo problemas (atraso, mal servicio, reclamo, el profesional falló) y cuánto deja a HULUL por reserva.
+ */
+export function categoryEffectiveness(all: DashBooking[], range: DateRange): CategoryEffect[] {
+  const rows = all.filter((b) => inRange(b.date, range));
+  const cats = [...new Set(rows.map((b) => b.category))];
+  return cats.map((category) => {
+    const mine = rows.filter((b) => b.category === category);
+    const fl = mine.map((b) => ({ b, f: caseFlags(b) }));
+    const closed = fl.filter((x) => x.f.closed);
+    const ok = closed.filter((x) => x.f.success);
+    const done = mine.filter((b) => b.status === 'completada' || b.status === 'en_disputa' || (b.status === 'cancelada' && b.cancelFee > 0));
+    const problems = closed.filter((x) => x.f.late || x.f.badService || x.f.claimByClient || x.f.proNoShow || x.f.proCancelled);
+    const ratings = mine.filter((b) => b.rating !== null).map((b) => b.rating!);
+    const hulul = r2(done.reduce((t, b) => t + bookingMoney(b).hulul, 0));
+    return {
+      category, total: mine.length, closed: closed.length, open: mine.length - closed.length,
+      success: ok.length, late: closed.filter((x) => x.f.late).length, badService: closed.filter((x) => x.f.badService).length,
+      claims: closed.filter((x) => x.f.claimByClient).length, proFail: closed.filter((x) => x.f.proNoShow || x.f.proCancelled).length,
+      clientCancel: closed.filter((x) => x.f.clientCancelled).length, clientAbsent: closed.filter((x) => x.f.clientAbsent).length,
+      successRate: pctOf(ok.length, closed.length), problemRate: pctOf(problems.length, closed.length),
+      avgRating: ratings.length ? r2(ratings.reduce((t, x) => t + x, 0) / ratings.length) : null, rated: ratings.length,
+      hulul, perBooking: done.length ? r2(hulul / done.length) : 0, gross: r2(done.reduce((t, b) => t + bookingMoney(b).gross, 0)),
+      ids: { all: mine.map((b) => b.id), success: ok.map((x) => x.b.id), problems: problems.map((x) => x.b.id) },
+    };
+  }).sort((a, z) => z.closed - a.closed || z.total - a.total);
+}
+
+export type ClientTier = 'oro' | 'plata' | 'bronce';
+export const TIER_INFO: Record<ClientTier, { label: string; color: string; help: string }> = {
+  oro: { label: 'Oro', color: '#B8860B', help: 'Los que más dejan a HULUL, vuelven seguido y sin problemas' },
+  plata: { label: 'Plata', color: '#7D8A92', help: 'Clientes fieles con buen historial' },
+  bronce: { label: 'Bronce', color: '#9A5B34', help: 'Ya repitieron; vale la pena engancharlos' },
+};
+/** Plan de incentivos: qué parte de lo que dejó cada cliente a HULUL se le devuelve en beneficios. */
+export const INCENTIVE_DEFAULTS = { budgetPct: 0.2, months: 12, minDone: 2, maxValue: 25 };
+
+export interface BestClient {
+  clientId: string; name: string; phone: string; email: string; tier: ClientTier; score: number;
+  done: number; hulul: number; gross: number; perVisit: number; avgGiven: number | null; last: string | null; daysSince: number | null;
+  categories: string[]; problems: number;
+  /** Beneficio sugerido: valor en $ (presupuesto) y en qué se traduce. */
+  incentive: { budget: number; fees: number; discountPct: number; text: string };
+  ids: string[];
+}
+
+/**
+ * Mejores clientes: los que dejan más a HULUL (cargo de plataforma + comisión), vuelven y no dan problemas.
+ * Puntaje = ingreso HULUL × frecuencia × (sin problemas) × recencia. Oro: el 10 % más alto (mín. 1);
+ * Plata: siguiente 20 %; Bronce: el resto con 2+ servicios. El beneficio sugerido usa un % de lo que dejó.
+ */
+export function bestClients(data: Pick<DashData, 'bookings' | 'clients'>, now: number, opt = INCENTIVE_DEFAULTS): BestClient[] {
+  const today = ecDate(now);
+  const from = addDays(today, -Math.round(opt.months * 30.4));
+  const profiles = new Map(data.clients.map((c) => [c.uid, c]));
+  const byClient = new Map<string, DashBooking[]>();
+  for (const b of data.bookings) if (b.clientId && !b.demo && b.date >= from && b.date <= today) byClient.set(b.clientId, [...(byClient.get(b.clientId) ?? []), b]);
+  const rows = [...byClient.entries()].map(([clientId, list]) => {
+    const done = list.filter((b) => b.status === 'completada');
+    const problems = list.filter((b) => { const f = caseFlags(b); return f.clientAbsent || f.clientReported || (f.claimByClient && b.claim?.outcome === 'profesional'); }).length;
+    const hulul = r2(list.reduce((t, b) => t + (b.status === 'completada' || (b.status === 'cancelada' && b.cancelFee > 0) ? bookingMoney(b).hulul : 0), 0));
+    const gross = r2(done.reduce((t, b) => t + bookingMoney(b).gross, 0));
+    const given = done.filter((b) => b.rating !== null).map((b) => b.rating!);
+    const last = done.map((b) => b.date).sort().pop() ?? null;
+    const daysSince = last ? Math.round((Date.parse(today) - Date.parse(last)) / DAY) : null;
+    const recency = daysSince === null ? 0 : daysSince <= 30 ? 1 : daysSince <= 90 ? 0.8 : 0.5;
+    const score = r2(hulul * Math.log2(1 + done.length) * (problems ? 0.5 / problems : 1) * recency);
+    const p = profiles.get(clientId);
+    return {
+      clientId, name: p?.name || list[0]?.clientName || 'Cliente', phone: p?.phone || list[0]?.clientPhone || '', email: p?.email ?? '',
+      score, done: done.length, hulul, gross, perVisit: done.length ? r2(gross / done.length) : 0,
+      avgGiven: given.length ? r2(given.reduce((t, x) => t + x, 0) / given.length) : null, last, daysSince,
+      categories: [...new Set(done.map((b) => b.category))], problems, ids: list.map((b) => b.id),
+    };
+  }).filter((r) => r.done >= opt.minDone && r.problems < 2).sort((a, z) => z.score - a.score);
+  const nOro = Math.max(1, Math.ceil(rows.length * 0.1)); const nPlata = Math.ceil(rows.length * 0.2);
+  const FEE = 1.99 * 1.15;
+  return rows.map((r, i) => {
+    const tier: ClientTier = i < nOro ? 'oro' : i < nOro + nPlata ? 'plata' : 'bronce';
+    const pct = tier === 'oro' ? opt.budgetPct : tier === 'plata' ? opt.budgetPct * 0.75 : opt.budgetPct * 0.5;
+    const budget = r2(Math.min(opt.maxValue, r.hulul * pct));
+    const fees = Math.floor(budget / FEE);
+    const discountPct = r.perVisit ? Math.min(30, Math.floor((budget / r.perVisit) * 100)) : 0;
+    const text = budget < FEE ? 'Aún poco: un mensaje de agradecimiento' : fees >= 1 ? `${fees} ${fees === 1 ? 'reserva' : 'reservas'} sin cargo de plataforma, o ${discountPct} % de descuento en su próxima visita` : `${discountPct} % de descuento en su próxima visita`;
+    return { ...r, tier, incentive: { budget, fees, discountPct, text } };
+  });
+}
+
+export interface GrowthInsight { level: 'oportunidad' | 'alerta' | 'dato'; title: string; detail: string; ids?: string[] }
+
+/** Lo que más dinero genera y lo que lo está frenando, en frases para decidir. */
+export function growthInsights(all: DashBooking[], range: DateRange, name: (category: string) => string = (c) => c): GrowthInsight[] {
+  const cats = categoryEffectiveness(all, range).filter((c) => c.closed >= 3);
+  const out: GrowthInsight[] = [];
+  const byPer = [...cats].sort((a, z) => z.perBooking - a.perBooking);
+  const best = byPer.find((c) => c.successRate >= 0.8);
+  if (best) out.push({ level: 'oportunidad', title: `Promociona ${name(best.category)}`, detail: `Deja ${money(best.perBooking)} a HULUL por reserva con ${percent(best.successRate)} de éxito. Es la mejor combinación de ganancia y calidad.`, ids: best.ids.all });
+  const pl = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  for (const c of cats.filter((x) => x.problemRate >= 0.25).sort((a, z) => z.problemRate - a.problemRate).slice(0, 3)) {
+    const parts = [c.late && pl(c.late, 'atraso', 'atrasos'), c.badService && pl(c.badService, 'con mal servicio', 'con mal servicio'), c.claims && pl(c.claims, 'reclamo', 'reclamos'), c.proFail && pl(c.proFail, 'vez que el profesional no llegó o canceló', 'veces que el profesional no llegó o canceló')].filter(Boolean) as string[];
+    const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} y ${parts[parts.length - 1]}` : parts[0] ?? '';
+    out.push({ level: 'alerta', title: `${name(c.category)} tiene problemas en ${percent(c.problemRate)} de los casos`, detail: `${list.charAt(0).toUpperCase()}${list.slice(1)}. Revisa a sus profesionales antes de invertir en publicidad.`, ids: c.ids.problems });
+  }
+  const rows = all.filter((b) => inRange(b.date, range) && (b.status === 'completada'));
+  if (rows.length >= 5) {
+    const dayName = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    const byDay = new Map<number, number>(); const byHour = new Map<string, number>();
+    for (const b of rows) { const d = weekday(b.date); byDay.set(d, r2((byDay.get(d) ?? 0) + bookingMoney(b).hulul)); const h = b.slot.slice(0, 2); byHour.set(h, r2((byHour.get(h) ?? 0) + 1)); }
+    const topDay = [...byDay.entries()].sort((a, z) => z[1] - a[1])[0];
+    const topHour = [...byHour.entries()].sort((a, z) => z[1] - a[1])[0];
+    if (topDay) out.push({ level: 'dato', title: `El ${dayName[topDay[0]]} es el día que más deja`, detail: `${money(topDay[1])} para HULUL en el periodo. La hora más pedida es a las ${topHour?.[0]}:00: asegúrate de tener profesionales disponibles.` });
+    const repeat = new Map<string, number>(); for (const b of rows) repeat.set(b.clientId, (repeat.get(b.clientId) ?? 0) + 1);
+    const once = [...repeat.values()].filter((n) => n === 1).length;
+    if (repeat.size >= 5) out.push({ level: once / repeat.size > 0.6 ? 'alerta' : 'dato', title: `${percent(1 - once / repeat.size)} de los clientes volvió a reservar`, detail: once / repeat.size > 0.6 ? 'La mayoría usa HULUL una sola vez: un beneficio para la segunda reserva puede subir mucho la ganancia.' : 'Buena fidelidad: cuida a los mejores clientes con el plan de incentivos.' });
+  }
+  return out;
+}
