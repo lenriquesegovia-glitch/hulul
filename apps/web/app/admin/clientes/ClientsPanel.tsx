@@ -20,7 +20,10 @@ export function ClientsPanel() {
   const [best, setBest] = useState(false);
   const SEG_LABEL = { repiten: 'Repiten (2+ servicios)', riesgo: 'Reportados o ausentes', saldo: 'Con saldo pendiente' } as const;
 
-  useEffect(() => { const id = new URLSearchParams(window.location.search).get('id'); if (id) setSel(id); }, []);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search); const id = q.get('id'); if (id) setSel(id);
+    if (q.get('mejores')) { setBest(true); setTimeout(() => document.getElementById('mejores-clientes')?.scrollIntoView({ behavior: 'smooth' }), 300); }
+  }, []);
   const pick = (id: string) => { setSel(id); window.history.replaceState(null, '', id ? `/admin/clientes?id=${encodeURIComponent(id)}` : '/admin/clientes'); window.scrollTo({ top: 0 }); };
 
   const all = useMemo(() => (view ? clientStats(view, now) : []), [view, now]);
