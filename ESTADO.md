@@ -1,5 +1,15 @@
 # HULUL — Estado y registro de entregas
 
+## En PR — Beneficios dentro de la cuenta del cliente, pago con tarjeta solo con firma y control por cédula, 2 de noviembre de 2026 (Claude)
+
+- Incluye también el PR de efectividad y mejores clientes (rama `claude/mejores-clientes`): con fusionar este basta.
+- Beneficios en la cuenta del cliente: el admin (permiso pagos) da desde **Clientes › Mejores clientes › Dar beneficio** reservas sin cargo de plataforma (1–10) o saldo a favor (hasta $50, nota de crédito). Queda en `clients/{uid}.perks.cargosGratis` / `credit`, con registro en la colección `beneficios`, aviso push y correo.
+- Al reservar (web y app) el cliente elige usarlo o guardarlo; el servidor valida el descuento en `checkPrice`, lo consume en una transacción y lo devuelve si la reserva se cancela. Libro: `credito_promocional` al darlo, `credito_aplicado` al usarlo; sin cargo no genera ingreso ni IVA de plataforma. El saldo a favor por atrasos (que antes nunca se usaba) ahora también se aplica.
+- Profesional sin firma electrónica verificada: solo pago directo (transferencia/DeUna); la tarjeta se habilita con la firma verificada.
+- Plazo de 30 días y deuda en efectivo contados por cédula y por cuenta: el plazo cuenta desde la primera cuenta con esa cédula; deuda > $30 sumando todas las cuentas corta el pago directo; no se aprueba un registro nuevo si otra cuenta con la misma cédula está pausada o debe.
+- Pruebas: 77 de funciones, tablero (con diario cuadrado con saldo a favor), reglas nuevas (perks no editables por el cliente, beneficio inventado rechazado). Las reglas corren en el check "verificar".
+- Publicar: Actions › Publicar HULUL con **Firebase** y **Android** marcados (cambian reglas, funciones y la app).
+
 ## En PR — Efectividad por actividad, mejores clientes e incentivos, 2 de noviembre de 2026 (Claude)
 
 - Resumen ejecutivo: «Efectividad por actividad» (por categoría: % de éxito sobre lo terminado, % y detalle de problemas, calificación, lo que deja a HULUL por reserva; orden por éxito, ganancia o cantidad) reemplaza «Resultado por servicio». «Dónde está la ganancia»: oportunidades, alertas y datos (día y hora que más dejan, recompra).

@@ -27,6 +27,10 @@ import {
   visitLabel,
   nextDays,
   PAYMENT_OPTIONS,
+  paymentOptionsFor,
+  applyBenefit,
+  benefitOptions,
+  type BenefitChoice,
   quoteVisit,
   SLOTS,
   slotAvailable,
@@ -227,7 +231,10 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
   }, [jobs]);
   const [location, setLocation] = useState<LatLng | null>(null);
   const [notesLen, setNotesLen] = useState(0);
-  const [payment, setPayment] = useState<PaymentMethod>('tarjeta');
+  const payOptions = paymentOptionsFor(pro);
+  const [payment, setPayment] = useState<PaymentMethod>(payOptions[0]?.value ?? 'transferencia');
+  const benefits = benefitOptions(profile);
+  const [benefit, setBenefit] = useState<BenefitChoice>(benefits.default);
   const [done, setDone] = useState<{ name: string; id: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -235,6 +242,8 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
   // Recargo nocturno o de feriado del profesional (monto fijo), si aplica.
   const sc = !tester && now && slot >= 0 ? surchargeFor(isoDay(now, day), slots[slot], pro) : { kind: null, amount: 0 };
   const q = quoteVisit(pro.visitRate, sc.amount, pro.taxRegime);
+  // Beneficio del cliente (reserva sin cargo de plataforma o saldo a favor): baja el total a pagar.
+  const ben = applyBenefit(q, profile, benefit);
   // Se calcula una vez (no en cada letra que se escribe en la descripción).
   const okDays = useMemo(() => (now ? days.map((_, i) => slots.some((_, sIdx) => okWith(now, i, sIdx, hours))) : []), [now, days, hours, pro, tester]); // eslint-disable-line react-hooks/exhaustive-deps
   const okSlots = useMemo(() => (now ? slots.map((_, i) => okWith(now, day, i, hours)) : []), [now, day, hours, pro, tester]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -305,7 +314,8 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
         subtotal: q.subtotal,
         fee: q.fee,
         iva: q.iva,
-        total: q.total,
+        total: ben.total,
+        ...(ben.beneficio ? { beneficio: ben.beneficio } : {}),
         // Régimen del profesional al reservar: define el IVA de la visita y las facturas.
         taxRegime: q.regime,
         visitIva: q.proInvoice.iva,
@@ -330,7 +340,7 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
           </span>
           <h2 style={{ fontSize: 26 }}>Reserva confirmada{done.name ? `, ${done.name}` : ''}</h2>
           <p style={{ color: 'var(--text-2)' }}>
-            {pro.name} llegará {days[day].long} a las {slots[slot]}. {cat.name} · visita · {formatUSD(q.total)}
+            {pro.name} llegará {days[day].long} a las {slots[slot]}. {cat.name} · visita · {formatUSD(ben.total)}
           </p>
           <p className="muted" style={{ fontSize: 13.5 }}>Código de reserva: {done.id.slice(0, 8).toUpperCase()}</p>
           {DEMO_MODE && (
@@ -467,7 +477,9 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
       <fieldset className="stack gap-12 fs">
         <legend className="fs-title">4. Pago</legend>
         <div className="stack gap-8" role="radiogroup" aria-label="Forma de pago">
-          {PAYMENT_OPTIONS.map((m) => (
+          {!payOptions.length && <p className="form-error">Este profesional no puede recibir reservas por ahora. Elige otro profesional.</p>}
+          {payOptions.length < PAYMENT_OPTIONS.length && payOptions.length > 0 && <p className="muted" style={{ fontSize: 13.5 }}>{payOptions.some((m) => m.value === 'tarjeta') ? 'Con este profesional, por ahora, el pago es con tarjeta.' : 'Con este profesional, por ahora, pagas directo: transferencia o DeUna.'}</p>}
+          {payOptions.map((m) => (
             <label key={m.value} className={`pay-option ${m.value === payment ? 'on' : ''}`}>
               <input type="radio" name="pago" value={m.value} checked={m.value === payment} onChange={() => setPayment(m.value)} />
               <span>{m.label}</span>
@@ -484,8 +496,17 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
           )}
           <div className="row" style={{ justifyContent: 'space-between' }}><span>Cargo de plataforma HULUL</span><span>{formatUSD(q.fee)}</span></div>
           <div className="row" style={{ justifyContent: 'space-between' }}><span>{q.proInvoice.iva > 0 ? 'IVA 15%' : 'IVA 15% (del cargo de plataforma)'}</span><span>{formatUSD(q.iva)}</span></div>
+          {(benefits.cargosGratis > 0 || benefits.credit > 0) && (
+            <div className="stack gap-6" style={{ padding: '10px 0', borderTop: '1px solid var(--border)' }}>
+              <strong style={{ fontSize: 14 }}>Tus beneficios</strong>
+              {benefits.cargosGratis > 0 && <label className="check"><input type="radio" name="beneficio" checked={benefit === 'cargo_gratis'} onChange={() => setBenefit('cargo_gratis')} /><span>Usar 1 de tus {benefits.cargosGratis} {benefits.cargosGratis === 1 ? 'reserva' : 'reservas'} sin cargo de plataforma</span></label>}
+              {benefits.credit > 0 && <label className="check"><input type="radio" name="beneficio" checked={benefit === 'credito'} onChange={() => setBenefit('credito')} /><span>Usar mi saldo a favor ({formatUSD(benefits.credit)})</span></label>}
+              <label className="check"><input type="radio" name="beneficio" checked={benefit === 'ninguno'} onChange={() => setBenefit('ninguno')} /><span>Guardarlo para otra reserva</span></label>
+            </div>
+          )}
+          {ben.disc > 0 && <div className="row" style={{ justifyContent: 'space-between', color: 'var(--success)' }}><span>{ben.beneficio?.tipo === 'cargo_gratis' ? 'Cargo de plataforma gratis' : 'Tu saldo a favor'}</span><span>−{formatUSD(ben.disc)}</span></div>}
           <div className="row" style={{ justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid var(--border)', fontWeight: 700, fontSize: 18 }}>
-            <span>Total</span><span>{formatUSD(q.total)}</span>
+            <span>Total</span><span>{formatUSD(ben.total)}</span>
           </div>
           <p className="muted" style={{ fontSize: 13.5 }}>{copy.priceNote}</p>
           <p className="muted" style={{ fontSize: 13.5 }}>Recibes dos comprobantes electrónicos: la factura de {pro.name.split(' ')[0]} por la visita y la de HULUL por el cargo de plataforma.</p>
@@ -515,8 +536,8 @@ function BookingFormBody({ pro, uid, profile }: { pro: Professional; uid: string
       </div>
 
       {error && <p role="alert" style={{ color: 'var(--primary)', fontWeight: 600 }}>{error}</p>}
-      <button type="submit" className="btn btn-primary" style={{ minHeight: 54, fontSize: 16 }} disabled={sending || slot < 0} aria-busy={sending}>
-        {sending ? 'Registrando tu reserva…' : DEMO_MODE ? `Confirmar reserva de prueba · ${formatUSD(q.total)}` : `Confirmar y pagar ${formatUSD(q.total)}`}
+      <button type="submit" className="btn btn-primary" style={{ minHeight: 54, fontSize: 16 }} disabled={sending || slot < 0 || !payOptions.length} aria-busy={sending}>
+        {sending ? 'Registrando tu reserva…' : DEMO_MODE ? `Confirmar reserva de prueba · ${formatUSD(ben.total)}` : `Confirmar y pagar ${formatUSD(ben.total)}`}
       </button>
     </form>
   );

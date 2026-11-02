@@ -60,8 +60,13 @@ service cloud.firestore {
             'contactName', 'contactPhone', 'contactEmail', 'paymentMethod',
             'subtotal', 'fee', 'iva', 'total', 'consentMarketing', 'demo',
             'pricingVersion', 'pricing', 'visit', 'safetyAccepted', 'photos', 'surcharge', 'surchargeKind', 'noiseAccepted',
-            'taxRegime', 'visitIva',
+            'taxRegime', 'visitIva', 'beneficio',
             'status', 'consentPrivacy', 'privacyVersion', 'createdAt'])
+        // Beneficio del cliente (reserva sin cargo de plataforma o saldo a favor): el servidor lo valida y lo descuenta.
+        && (!('beneficio' in request.resource.data) || (request.resource.data.beneficio is map
+            && request.resource.data.beneficio.keys().hasOnly(['tipo', 'monto'])
+            && request.resource.data.beneficio.tipo in ['cargo_gratis', 'credito']
+            && num(request.resource.data.beneficio.monto, 0, 1000)))
         && (!('pricingVersion' in request.resource.data) || request.resource.data.pricingVersion == 2)
         && request.resource.data.source in ['web', 'app']
         // Web y app reservan solo con cuenta, y a nombre propio (desde V5.2: la app
@@ -129,7 +134,9 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
       // El saldo pendiente (cargos por cancelar tarde) lo escribe solo el servidor.
       allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'consentMarketing', 'consentPrivacy', 'privacyVersion', 'createdAt', 'updatedAt', 'balance', 'credit', 'noShows', 'legal'])
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'email', 'consentMarketing', 'consentPrivacy', 'privacyVersion', 'createdAt', 'updatedAt', 'balance', 'credit', 'noShows', 'legal', 'perks'])
+        // Beneficios (reservas sin cargo de plataforma): solo los da y descuenta el servidor.
+        && request.resource.data.get('perks', null) == resource.data.get('perks', null)
         // La prueba de aceptación (versión de los términos) la escribe solo el servidor.
         && request.resource.data.get('legal', null) == resource.data.get('legal', null)
         && request.resource.data.get('balance', 0) == resource.data.get('balance', 0)

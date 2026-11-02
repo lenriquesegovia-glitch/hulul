@@ -119,3 +119,29 @@ export function visitLabel(rate: number | undefined): string {
 
 /** V2: a special rate replaces the normal visit. Zero keeps the normal rate. */
 export function quoteVisit(visitRate:number,specialRate=0,regime?:TaxRegime):Quote {return quote(specialRate>0?specialRate:visitRate,0,regime);}
+
+/* ------------------------------ Beneficios del cliente ------------------------------ */
+
+export type BenefitChoice = 'cargo_gratis' | 'credito' | 'ninguno';
+export interface ClientBenefits { credit?: number; perks?: { cargosGratis?: number } }
+
+/** Qué beneficios puede usar el cliente en esta reserva y cuál se aplica por defecto. */
+export function benefitOptions(b: ClientBenefits | null | undefined): { cargosGratis: number; credit: number; default: BenefitChoice } {
+  const cargosGratis = Math.max(0, Math.floor(Number(b?.perks?.cargosGratis ?? 0)));
+  const credit = Math.max(0, round2(Number(b?.credit ?? 0)));
+  return { cargosGratis, credit, default: cargosGratis > 0 ? 'cargo_gratis' : credit > 0 ? 'credito' : 'ninguno' };
+}
+
+/** Aplica el beneficio elegido: descuento, total a pagar y lo que se guarda en la reserva. */
+export function applyBenefit(q: Quote, b: ClientBenefits | null | undefined, choice: BenefitChoice): { disc: number; total: number; beneficio?: { tipo: 'cargo_gratis' | 'credito'; monto: number } } {
+  const o = benefitOptions(b);
+  if (choice === 'cargo_gratis' && o.cargosGratis > 0) {
+    const disc = q.platformInvoice.total;
+    return { disc, total: round2(q.total - disc), beneficio: { tipo: 'cargo_gratis', monto: disc } };
+  }
+  if (choice === 'credito' && o.credit > 0) {
+    const disc = round2(Math.min(o.credit, q.total));
+    return { disc, total: round2(q.total - disc), beneficio: { tipo: 'credito', monto: disc } };
+  }
+  return { disc: 0, total: q.total };
+}

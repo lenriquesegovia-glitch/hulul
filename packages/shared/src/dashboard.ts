@@ -33,6 +33,8 @@ export interface DashBooking {
   delay: { minutes: number; status: string } | null; rings: number; outcome: string;
   rating: number | null; clientStars: number | null; photos: number;
   claim: DashClaimRef | null;
+  /** Beneficio aplicado por el cliente (reserva sin cargo de plataforma o saldo a favor). */
+  beneficio?: { tipo: 'cargo_gratis' | 'credito'; monto: number } | null;
 }
 
 export interface DashLedger {
@@ -56,6 +58,8 @@ export interface DashProvider {
 
 export interface DashClient {
   uid: string; name: string; phone: string; email: string; balance: number; noShows: number; strikes: number; createdAt: number | null;
+  /** Saldo a favor y reservas sin cargo de plataforma que tiene sin usar. */
+  credit?: number; cargosGratis?: number;
 }
 
 export interface DashClaim {
@@ -260,7 +264,9 @@ export function bookingMoney(b: DashBooking) {
     const base = r2(b.visit + b.surcharge);
     const extra = extraPaid(b);
     const commission = r2((base + extra) * COMMISSION);
-    return { gross: r2(b.total + extra), hulul: r2(b.fee + commission), pro: r2(base + extra - commission), extra, commission };
+    // Reserva sin cargo de plataforma: HULUL no cobra el cargo (b.total ya viene con el descuento).
+    const fee = b.beneficio?.tipo === 'cargo_gratis' ? 0 : b.fee;
+    return { gross: r2(b.total + extra), hulul: r2(fee + commission), pro: r2(base + extra - commission), extra, commission };
   }
   if (b.status === 'cancelada') {
     const fee = r2(b.cancelFee);
@@ -380,6 +386,7 @@ export const KIND_LABEL: Record<string, string> = {
   cargo_cancelacion: 'Cancelación / ausente (profesional)', cargo_cancelacion_hulul: 'Cancelación / ausente (HULUL)', multa: 'Multa al profesional',
   credito_cliente: 'Crédito al cliente', retencion_renta: 'Retención de renta', retencion_iva: 'Retención de IVA',
   abono_profesional: 'Pago recibido del profesional (deuda de efectivo)',
+  credito_aplicado: 'Saldo a favor usado por el cliente', credito_promocional: 'Saldo a favor regalado (incentivo)',
 };
 
 export interface Accounting {
@@ -875,7 +882,11 @@ export function journal(data: Pick<DashData, 'ledger' | 'payouts' | 'bookings' |
       case 'ingreso_hulul': push(date, entry, payer, INCOME_ACCOUNT[e.kind] ?? 'servicios', e.amount, payerName, label); break;
       case 'iva_por_pagar': push(date, entry, payer, 'sri', e.amount, payerName, label); break;
       case 'retenciones_por_pagar': push(date, entry, 'terceros', 'sri', e.amount, proName, label); break;
-      case 'pasivo_cliente': push(date, entry, 'gasto', 'pasivoCliente', e.amount, b?.clientName || 'Cliente', label); break;
+      case 'pasivo_cliente':
+        // Saldo a favor usado: baja la deuda con el cliente (cobró menos la tarjeta, o el profesional cobró menos y HULUL se lo reconoce).
+        if (e.kind === 'credito_aplicado') push(date, entry, 'pasivoCliente', e.proDelta > 0 ? 'terceros' : 'cxcClientes', -e.amount, b?.clientName || 'Cliente', label);
+        else push(date, entry, 'gasto', 'pasivoCliente', e.amount, b?.clientName || 'Cliente', label);
+        break;
       default: break;
     }
   }

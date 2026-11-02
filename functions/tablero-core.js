@@ -81,6 +81,7 @@ export function bookingRow(id, b, claim = null, review = null) {
     proFault: str(b.proFault, 30),
     proFine: num(b.proFine),
     clientCredit: num(b.clientCredit),
+    beneficio: b.beneficioAplicado && b.beneficio && !b.beneficioDevuelto ? { tipo: b.beneficio.tipo === 'credito' ? 'credito' : 'cargo_gratis', monto: num(b.beneficio.monto) } : null,
     delay,
     rings: Array.isArray(b.rings) ? b.rings.length : 0,
     outcome: str(b.outcome, 20),
@@ -154,6 +155,7 @@ export function clientRow(uid, c) {
   return {
     uid, name: str(c.name, 80), phone: maskContact(c.phone), email: maskContact(c.email),
     balance: num(c.balance), noShows: Number(c.noShows) || 0, strikes: Number(c.strikes) || 0, createdAt: ms(c.createdAt),
+    credit: num(c.credit), cargosGratis: Number(c.perks?.cargosGratis) || 0,
   };
 }
 

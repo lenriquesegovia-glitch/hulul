@@ -45,6 +45,9 @@ await no('perfil con correo en lista', setDoc(doc(cli2, 'clients/cli2'), { ...pr
 await no('cambia su correo a una lista', updateDoc(doc(cli1, 'clients/cli1'), { email: 'a@x.com, b@y.com', updatedAt: serverTimestamp() }));
 await ok('cambia su nombre', updateDoc(doc(cli1, 'clients/cli1'), { name: 'Ana María Ruiz', updatedAt: serverTimestamp() }));
 await no('se marca la aceptación de términos desde la app', updateDoc(doc(cli1, 'clients/cli1'), { legal: { terminos: '2099-01-01' }, updatedAt: serverTimestamp() }));
+await no('se regala reservas sin cargo', updateDoc(doc(cli1, 'clients/cli1'), { perks: { cargosGratis: 10 }, updatedAt: serverTimestamp() }));
+await ok('reserva con beneficio (el servidor lo valida)', setDoc(doc(cli1, 'bookings/b9'), booking({ beneficio: { tipo: 'cargo_gratis', monto: 2.29 }, total: 18.86 })));
+await no('beneficio inventado', setDoc(doc(cli1, 'bookings/b10'), booking({ beneficio: { tipo: 'regalo', monto: 20 } })));
 await no('se pone saldo a favor', updateDoc(doc(cli1, 'clients/cli1'), { credit: 50, updatedAt: serverTimestamp() }));
 
 console.log('Datos privados');

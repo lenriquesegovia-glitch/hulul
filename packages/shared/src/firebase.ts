@@ -144,6 +144,8 @@ export interface NewBooking {
   /** Régimen tributario del profesional (define el IVA de la visita) e IVA de la visita. */
   taxRegime?: TaxRegime;
   visitIva?: number;
+  /** Beneficio del cliente aplicado (el servidor lo valida y lo descuenta de su cuenta). */
+  beneficio?: { tipo: 'cargo_gratis' | 'credito'; monto: number };
   consentMarketing: boolean;
   /** true mientras los profesionales sean de ejemplo. */
   demo: boolean;
@@ -211,6 +213,9 @@ export interface ClientProfile {
   consentMarketing: boolean;
   /** Versiones aceptadas (las escribe el servidor al registrar la aceptación). */
   legal?: LegalAccepted;
+  /** Saldo a favor y reservas sin cargo de plataforma (los da y descuenta el servidor). */
+  credit?: number;
+  perks?: { cargosGratis?: number };
 }
 
 export async function loadClientProfile(uid: string): Promise<ClientProfile | null> {
@@ -1024,6 +1029,10 @@ export async function adminReadCardStatement(input: { pdf?: string; text?: strin
 }
 export async function adminSaveExpenses(gastos: ExpenseInput[]): Promise<number> {
   return (await callable<{ gastos: ExpenseInput[] }, { ok: boolean; count: number }>('guardarGastosLote')({ gastos })).data.count;
+}
+/** Panel: da un beneficio a un cliente (reservas sin cargo de plataforma o saldo a favor). */
+export async function adminGrantBenefit(input: { clientId: string; tipo: 'cargo_gratis' | 'credito'; cantidad?: number; monto?: number; motivo: string }): Promise<void> {
+  await callable<typeof input, { ok: boolean }>('otorgarBeneficio')(input);
 }
 export async function adminSaveEmployee(input: EmployeeInput): Promise<string> {
   return (await callable<EmployeeInput, { ok: boolean; id: string }>('guardarEmpleado')(input)).data.id;

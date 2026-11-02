@@ -111,3 +111,8 @@ export function friendlyDate(date: string, now: Date = new Date()): string {
   if (diff === 1) return 'Mañana';
   return `${SHORT_DAYS[d.getDay()]} ${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`;
 }
+
+/** Formas de pago que se pueden elegir con este profesional. */
+export function paymentOptionsFor(pro: { payCard?: boolean; payDirect?: boolean }) {
+  return PAYMENT_OPTIONS.filter((m) => (m.value === 'tarjeta' ? pro.payCard !== false : pro.payDirect !== false));
+}

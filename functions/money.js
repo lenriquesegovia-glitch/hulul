@@ -92,6 +92,18 @@ const entry = (kind, bucket, amount, proDelta, extra = {}) => ({ kind, bucket, a
  * El servidor compara esto con lo ya registrado y agrega o revierte la
  * diferencia, así que se puede llamar cuantas veces sea.
  */
+/**
+ * Beneficio del cliente aplicado a una reserva: «cargo_gratis» (HULUL no cobra el cargo de plataforma)
+ * o «credito» (saldo a favor del cliente que se descuenta del total). Devuelve el descuento válido o error.
+ */
+export function benefitDiscount(beneficio, q) {
+  if (!beneficio) return { disc: 0 };
+  const m = r2(Number(beneficio.monto ?? 0));
+  if (beneficio.tipo === 'cargo_gratis') return Math.abs(m - q.platformInvoice.total) < 0.02 ? { disc: q.platformInvoice.total, tipo: 'cargo_gratis' } : { error: 'El descuento del cargo de plataforma no coincide.' };
+  if (beneficio.tipo === 'credito') return m > 0 && m <= q.total + 0.01 ? { disc: m, tipo: 'credito' } : { error: 'El saldo a favor aplicado no es válido.' };
+  return { error: 'Beneficio no válido.' };
+}
+
 export function ledgerEntriesFor(b) {
   if (!b || b.demo) return [];
   if (b.status === 'en_disputa') return null;
@@ -102,11 +114,20 @@ export function ledgerEntriesFor(b) {
     const regime = regimeOf(b.taxRegime);
     const visit = Number(b.visit ?? b.subtotal ?? 0);
     const q = priceOf(visit, Number(b.surcharge ?? 0), regime);
-    if (card) out.push(entry('recaudo_visita', 'recaudo', q.total, 0, { memo: 'Cobrado al cliente con tarjeta (visita + cargo de plataforma).' }));
+    // Beneficio ya validado y descontado por el servidor al crear la reserva.
+    const ben = b.beneficioAplicado ? benefitDiscount(b.beneficio, q) : { disc: 0 };
+    const feeFree = ben.tipo === 'cargo_gratis';
+    const credit = ben.tipo === 'credito' ? ben.disc : 0;
+    if (card) out.push(entry('recaudo_visita', 'recaudo', r2(q.total - (ben.disc ?? 0)), 0, { memo: feeFree ? 'Cobrado al cliente con tarjeta (visita; cargo de plataforma gratis por beneficio).' : credit ? 'Cobrado al cliente con tarjeta (visita + cargo, menos su saldo a favor).' : 'Cobrado al cliente con tarjeta (visita + cargo de plataforma).' }));
     out.push(entry('visita', 'terceros', q.proInvoice.total, card ? q.proInvoice.total : 0,
       { base: q.proInvoice.base, iva: q.proInvoice.iva, hold: card, memo: card ? 'Factura del profesional al cliente. Dinero del profesional retenido por HULUL.' : 'Factura del profesional al cliente. Cobrada por él directamente.' }));
-    out.push(entry('plataforma', 'ingreso_hulul', q.platformInvoice.base, card ? 0 : -q.platformInvoice.base, { memo: card ? 'Cargo de plataforma (factura de HULUL al cliente).' : 'Cargo de plataforma: lo cobró el profesional, lo debe a HULUL.' }));
-    out.push(entry('plataforma_iva', 'iva_por_pagar', q.platformInvoice.iva, card ? 0 : -q.platformInvoice.iva));
+    if (!feeFree) {
+      out.push(entry('plataforma', 'ingreso_hulul', q.platformInvoice.base, card ? 0 : -q.platformInvoice.base, { memo: card ? 'Cargo de plataforma (factura de HULUL al cliente).' : 'Cargo de plataforma: lo cobró el profesional, lo debe a HULUL.' }));
+      out.push(entry('plataforma_iva', 'iva_por_pagar', q.platformInvoice.iva, card ? 0 : -q.platformInvoice.iva));
+    }
+    // Saldo a favor usado: baja la deuda de HULUL con el cliente. Si pagó directo al profesional,
+    // él cobró menos y HULUL se lo reconoce en su liquidación.
+    if (credit) out.push(entry('credito_aplicado', 'pasivo_cliente', -credit, card ? 0 : credit, { memo: 'Saldo a favor del cliente usado en esta reserva.' }));
     out.push(entry('comision', 'ingreso_hulul', q.commission.base, -q.commission.base, { memo: 'Comisión de HULUL (factura al profesional).' }));
     out.push(entry('comision_iva', 'iva_por_pagar', q.commission.iva, -q.commission.iva));
 
