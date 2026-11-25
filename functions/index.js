@@ -30,7 +30,7 @@ import { safeMessage } from './mail-safety.js';
 import { claimAdvice, CLAIM_STATUS, CLIENT_KINDS, PRO_KINDS, RESOLVE_HOURS, RESPONSE_HOURS, REMIND_BEFORE_HOURS, claimBlocked, cleanClaimPhotos, decisionPatch, deadlines, dueActions, isAdminToken, maskContact, responseStats, timeline } from './reclamos-core.js';
 import { VERIFIED_DOCS, expectOf, submissionCheck, verifySelfie, verifyText } from './doc-verify.js';
 import { MAX_FILE_BYTES, PRO_UID, REVIEW_LIST_STATUSES, maskBank, providerFiles, reviewMessage, reviewPatch } from './pro-review.js';
-import { can, dashForRole, normEmail, roleFor, roleInput } from './roles-core.js';
+import { can, dashForRole, emailVerified, normEmail, roleFor, roleInput } from './roles-core.js';
 import { clientStatementPdf, statementData, statementPdf } from './statement-pdf.js';
 import { bankFile, BANK_FORMATS, DEFAULT_BANK_FORMAT, paymentLines } from './bank-files.js';
 import { cardPaymentInput, employeeInput, expenseInput, PAYROLL_PARAMS_2026, payrollExpenses, payrollLine, payrollTotals } from './gastos-core.js';
@@ -1827,7 +1827,7 @@ const BOOKING_ID = /^[A-Za-z0-9]{10,40}$/;
 async function requireAdmin(req, perm = 'tablero') {
   if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Inicia sesión.');
   const email = normEmail(req.auth.token?.email);
-  if (!email || req.auth.token?.email_verified !== true) throw new HttpsError('permission-denied', 'Entra con un correo verificado (Google u Outlook) autorizado por HULUL.');
+  if (!email || !emailVerified(req.auth.token)) throw new HttpsError('permission-denied', 'Para el panel entra con «Continuar con Google» o «Continuar con Outlook» usando el correo al que HULUL te dio acceso (con correo y contraseña no se puede).');
   const owner = isAdminToken(req.auth.token, ADMIN_EMAILS.value());
   const roleDoc = owner ? null : (await db().doc(`adminRoles/${email}`).get()).data() ?? null;
   const role = roleFor(req.auth.token, ADMIN_EMAILS.value(), roleDoc);

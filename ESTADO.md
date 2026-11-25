@@ -1,5 +1,11 @@
 # HULUL — Estado y registro de entregas
 
+## En PR — Acceso al panel con Outlook, 25 de noviembre de 2026 (Claude)
+
+- Problema: quien entraba con «Continuar con Outlook» quedaba «Sin acceso al panel» aunque tuviera rol, porque Firebase marca `email_verified = false` en todas las cuentas de Microsoft.
+- Arreglo: `emailVerified()` en functions/roles-core.js acepta el correo de cuentas personales de Microsoft (outlook, hotmail, live, msn) cuando se entra con Outlook. Cuentas de empresa con Microsoft y correo/contraseña sin verificar siguen sin acceso.
+- Publicar: Actions › Publicar HULUL con **Firebase** marcado.
+
 ## En PR — Beneficios dentro de la cuenta del cliente, pago con tarjeta solo con firma y control por cédula, 2 de noviembre de 2026 (Claude)
 
 - Incluye también el PR de efectividad y mejores clientes (rama `claude/mejores-clientes`): con fusionar este basta.

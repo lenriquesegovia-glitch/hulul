@@ -26,6 +26,21 @@ const EMAIL = /^[^\s@,;]+@[^\s@,;]+\.[a-z]{2,}$/i;
 export const normEmail = (e) => String(e ?? '').trim().toLowerCase();
 export const isEmail = (e) => EMAIL.test(normEmail(e)) && normEmail(e).length <= 120;
 
+/**
+ * Firebase marca email_verified = false en todas las cuentas que entran con Outlook (Microsoft
+ * no manda ese dato), aunque el correo sea de esa persona. Las cuentas personales de Microsoft
+ * (outlook, hotmail, live, msn) son del propio Microsoft, así que el correo está probado al entrar.
+ * Las cuentas de empresa con Microsoft NO se aceptan así: su correo lo escribe el administrador
+ * de esa empresa y podría ser cualquiera.
+ */
+const MS_PERSONAL = /@(outlook|hotmail|live|msn|passport)\.[a-z.]{2,8}$/i;
+export function emailVerified(token) {
+  const email = normEmail(token?.email);
+  if (!email) return false;
+  if (token?.email_verified === true) return true;
+  return token?.firebase?.sign_in_provider === 'microsoft.com' && MS_PERSONAL.test(email);
+}
+
 const ownersOf = (ownerEmails) => String(ownerEmails ?? '').toLowerCase().split(/[,;\s]+/).filter(Boolean);
 
 /**
@@ -34,7 +49,7 @@ const ownersOf = (ownerEmails) => String(ownerEmails ?? '').toLowerCase().split(
  */
 export function roleFor(token, ownerEmails, roleDoc) {
   const email = normEmail(token?.email);
-  if (!email || token?.email_verified !== true) return null;
+  if (!email || !emailVerified(token)) return null;
   if (ownersOf(ownerEmails).includes(email)) return 'dueno';
   if (roleDoc && roleDoc.active !== false && ASSIGNABLE_ROLES.includes(roleDoc.role)) return roleDoc.role;
   return null;
