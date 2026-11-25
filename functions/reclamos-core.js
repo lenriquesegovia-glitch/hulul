@@ -1,3 +1,4 @@
+import { emailVerified } from './roles-core.js';
 /**
  * Protocolo de reclamos de HULUL (lógica pura, sin Firebase; se prueba en
  * reclamos-core.test.js).
@@ -182,7 +183,7 @@ export function maskContact(v) {
 /** Lista de correos de administradores (variable ADMIN_EMAILS, separados por coma). */
 export function isAdminToken(token, adminEmails) {
   const email = String(token?.email ?? '').toLowerCase();
-  if (!email || token?.email_verified !== true) return false;
+  if (!email || !emailVerified(token)) return false;
   return String(adminEmails ?? '').toLowerCase().split(/[,;\s]+/).filter(Boolean).includes(email);
 }
 

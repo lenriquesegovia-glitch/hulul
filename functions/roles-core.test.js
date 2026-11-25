@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { can, dashForRole, roleFor, roleInput } from './roles-core.js';
+import { can, dashForRole, emailVerified, roleFor, roleInput } from './roles-core.js';
 
 const owners = 'lenriquesegovia@gmail.com';
 const tok = (email, v = true) => ({ email, email_verified: v });
@@ -44,4 +44,12 @@ test('datos del tablero por rol', () => {
   assert.deepEqual([c.claims.length, c.clients.length, c.ledger.length, c.bookings[0].claim.kindLabel], [0, 0, 1, '']);
   const u = dashForRole(data, 'cumplimiento');
   assert.deepEqual([u.claims.length, u.clients.length], [0, 1]);
+});
+
+test('Outlook: Firebase no marca el correo verificado, pero la cuenta personal de Microsoft sí lo prueba', () => {
+  const ms = (email) => ({ email, email_verified: false, firebase: { sign_in_provider: 'microsoft.com' } });
+  assert.equal(roleFor(ms('JavCentanaro@outlook.com'), owners, { role: 'contabilidad' }), 'contabilidad');
+  assert.ok(emailVerified(ms('x@hotmail.es')) && emailVerified(ms('x@live.com')));
+  assert.ok(!emailVerified(ms('ceo@empresa.com')), 'cuenta de empresa con Microsoft: el correo no está probado');
+  assert.ok(!emailVerified({ email: 'x@outlook.com', email_verified: false, firebase: { sign_in_provider: 'password' } }), 'correo y contraseña sin verificar');
 });
